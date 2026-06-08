@@ -38,6 +38,30 @@ const weekStart = (date = new Date()) => {
 const fmtDate = (date) => date.toLocaleDateString("he-IL");
 const activeWeek = weekStart();
 
+function parseCsvLine(line) {
+  const values = [];
+  let value = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        value += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      values.push(value.trim());
+      value = "";
+    } else {
+      value += ch;
+    }
+  }
+  values.push(value.trim());
+  return values;
+}
+
 function initScheduleFromTemplate() {
   state.schedule = state.baseTemplate.map((entry) => ({ ...entry, weekStart: fmtDate(activeWeek), oneTime: false, source: "base" }));
 }
@@ -48,7 +72,8 @@ function updateWeekLabels() {
   byId("weekLabel").textContent = `שבוע נוכחי: ${fmtDate(activeWeek)} - ${fmtDate(end)}`;
 
   const nextSunday = new Date();
-  nextSunday.setDate(nextSunday.getDate() + ((7 - nextSunday.getDay()) % 7));
+  const daysUntilNextSunday = ((7 - nextSunday.getDay()) % 7) || 7;
+  nextSunday.setDate(nextSunday.getDate() + daysUntilNextSunday);
   byId("meetingDate").textContent = `הישיבה הקרובה: ${fmtDate(nextSunday)} (יום ראשון)`;
 }
 
@@ -214,9 +239,9 @@ function loadScheduleFile(file) {
         records = JSON.parse(text);
       } else {
         const [header, ...rows] = text.split(/\r?\n/).filter(Boolean);
-        const columns = header.split(",").map((c) => c.trim());
+        const columns = parseCsvLine(header);
         records = rows.map((line) => {
-          const values = line.split(",").map((v) => v.trim());
+          const values = parseCsvLine(line);
           return Object.fromEntries(columns.map((col, idx) => [col, values[idx]]));
         });
       }
@@ -230,8 +255,8 @@ function loadScheduleFile(file) {
       }));
       renderOccupancy();
       addNotification("נטען לו\"ז בסיס חדש מקובץ.");
-    } catch (_e) {
-      alert("פורמט קובץ לא תקין. יש להשתמש ב-CSV/JSON תקניים.");
+    } catch (e) {
+      alert(`פורמט קובץ לא תקין. יש להשתמש ב-CSV/JSON תקניים. פרטים: ${e.message || "שגיאה לא ידועה"}`);
     }
   };
   reader.readAsText(file);
