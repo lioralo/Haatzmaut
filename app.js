@@ -1,1058 +1,1174 @@
-const STORAGE_KEY = "haatzmaut_state_v2";
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+
+const STORAGE_KEY = "haatzmaut_v4";
 
 const DAY_DEFS = [
-  { key: 0, label: "ראשון" },
-  { key: 1, label: "שני" },
-  { key: 2, label: "שלישי" },
-  { key: 3, label: "רביעי" },
-  { key: 4, label: "חמישי" }
+  { key: 0, label: "ראשון",  short: "א׳" },
+  { key: 1, label: "שני",    short: "ב׳" },
+  { key: 2, label: "שלישי", short: "ג׳" },
+  { key: 3, label: "רביעי", short: "ד׳" },
+  { key: 4, label: "חמישי", short: "ה׳" }
 ];
 
 const WORK_START = 8 * 60;
-const WORK_END = 20 * 60;
-const SLOT_MINUTES = 30;
-const SLOT_COUNT = (WORK_END - WORK_START) / SLOT_MINUTES;
+const WORK_END   = 20 * 60;
+const SLOT_MIN   = 30;
+const SLOT_COUNT = (WORK_END - WORK_START) / SLOT_MIN;  // 24
 
-const DEFAULT_USERS = [
-  { fullName: "מנהל מערכת", phone: "0500000000", email: "admin@clinic.org", chatShortcut: "@admin", role: "מנהל", team: "אדמיניסטרציה" },
-  { fullName: "ד" + '"' + "ר לוי", phone: "0500000001", email: "levy@clinic.org", chatShortcut: "@levy", role: "פסיכולוג", team: "מבוגרים" }
+const TEAMS = ["מבוגרים", "ילדים", "נוער", "זוגות", "אדמיניסטרציה"];
+
+const DEFAULT_ROOMS = [
+  { id: "r1",  name: "חדר 1",  tags: ["טיפול ילדים", "ציוד אבחוני"] },
+  { id: "r2",  name: "חדר 2",  tags: ["טיפול קבוצתי"] },
+  { id: "r3",  name: "חדר 3",  tags: ["טיפול מבוגרים", "ציוד אבחוני"] },
+  { id: "r4",  name: "חדר 4",  tags: ["חדר משחק"] },
+  { id: "r5",  name: "חדר 5",  tags: ["טיפול זוגות"] },
+  { id: "r6",  name: "חדר 6",  tags: ["טיפול נוער"] },
+  { id: "r7",  name: "חדר 7",  tags: ["ישיבות", "הדרכה"] },
+  { id: "r8",  name: "חדר 8",  tags: ["טיפול ילדים"] },
+  { id: "r9",  name: "חדר 9",  tags: ["ציוד אבחוני", "הדרכה"] },
+  { id: "r10", name: "חדר 10", tags: ["טיפול מבוגרים"] },
+  { id: "r11", name: "חדר 11", tags: ["טיפול קבוצתי", "ישיבות"] },
+  { id: "r12", name: "חדר 12", tags: ["אדמיניסטרציה"] }
+];
+
+const DEFAULT_STAFF = [
+  { id: "s1", fullName: "מנהל מערכת",  phone: "0500000000", email: "admin@clinic.org",  role: "מנהל",              team: "אדמיניסטרציה" },
+  { id: "s2", fullName: 'ד"ר לוי',      phone: "0500000001", email: "levy@clinic.org",   role: "פסיכולוג",           team: "מבוגרים"      },
+  { id: "s3", fullName: "נועה כהן",     phone: "0500000002", email: "noa@clinic.org",    role: "מטפלת",              team: "ילדים"         },
+  { id: "s4", fullName: "יואב בר",      phone: "0500000003", email: "yoav@clinic.org",   role: "פסיכולוג",           team: "מבוגרים"      },
+  { id: "s5", fullName: "מאיה לוי",     phone: "0500000004", email: "maya@clinic.org",   role: "מטפלת",              team: "מבוגרים"      },
+  { id: "s6", fullName: "עדי רוזן",     phone: "0500000005", email: "adi@clinic.org",    role: "עובדת סוציאלית",     team: "ילדים"         },
+  { id: "s7", fullName: "שרון מזרחי",   phone: "0500000006", email: "sharon@clinic.org", role: "פסיכולוגית",         team: "נוער"          },
+  { id: "s8", fullName: "רן כהן",       phone: "0500000007", email: "ran@clinic.org",    role: "מטפל זוגות",         team: "זוגות"         }
 ];
 
 const DEFAULT_CREDENTIALS = {
   admin: { password: "admin123", role: "admin", label: "מנהל מערכת" },
-  staff: { password: "staff123", role: "staff", label: "צוות" }
+  staff: { password: "staff123", role: "staff", label: "צוות"        }
 };
 
-const DEFAULT_ROOMS = [
-  { id: "room-1", name: "חדר 1", tags: ["טיפול ילדים", "ציוד אבחוני"] },
-  { id: "room-2", name: "חדר 2", tags: ["טיפול קבוצתי"] },
-  { id: "room-3", name: "חדר 3", tags: ["טיפול מבוגרים", "ציוד אבחוני"] },
-  { id: "room-4", name: "חדר 4", tags: ["חדר משחק"] }
-];
+/* ============================================================
+   UTILITIES
+   ============================================================ */
 
-const DEFAULT_TEMPLATE = [
-  { day: 0, roomId: "room-1", start: "08:30", staff: "נועה כהן", duration: 60, team: "ילדים", source: "base" },
-  { day: 1, roomId: "room-2", start: "10:00", staff: "יואב בר", duration: 90, team: "מבוגרים", source: "base" },
-  { day: 2, roomId: "room-3", start: "11:30", staff: "מאיה לוי", duration: 60, team: "מבוגרים", source: "base" },
-  { day: 3, roomId: "room-4", start: "13:00", staff: "הילה סלע", duration: 120, team: "ילדים", source: "base" }
-];
+const byId = id => document.getElementById(id);
 
-const byId = (id) => document.getElementById(id);
+function pad2(n) { return String(n).padStart(2, "0"); }
 
-function weekStart(date = new Date()) {
+function minToTime(m) {
+  const n = ((m % 1440) + 1440) % 1440;
+  return `${pad2(Math.floor(n / 60))}:${pad2(n % 60)}`;
+}
+
+function timeToMin(t) {
+  const [h, m] = String(t).split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+function slotOf(t)        { return Math.floor((timeToMin(t) - WORK_START) / SLOT_MIN); }
+function slotStart(i)     { return WORK_START + i * SLOT_MIN; }
+function slotsFor(dur)    { return Math.max(1, Math.ceil(dur / SLOT_MIN)); }
+
+function makeId(prefix = "id") {
+  if (window.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function sundayISO(date = new Date()) {
   const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? 0 : -day;
-  d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
-  return d;
+  d.setDate(d.getDate() - d.getDay());
+  return d.toISOString().slice(0, 10);
 }
 
-function weekKey(date) {
-  return weekStart(date).toISOString().slice(0, 10);
+function isoDate(iso) {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  return new Date(y, m - 1, d);
 }
 
-function parseDateKey(key) {
-  const [year, month, day] = key.split("-").map(Number);
-  return new Date(year, month - 1, day);
+function addDays(date, n) {
+  const r = new Date(date);
+  r.setDate(r.getDate() + n);
+  return r;
 }
 
-function addDays(date, amount) {
-  const next = new Date(date);
-  next.setDate(next.getDate() + amount);
-  return next;
+function shiftWeek(isoStr, weeks) {
+  const d = isoDate(isoStr);
+  d.setDate(d.getDate() + weeks * 7);
+  return d.toISOString().slice(0, 10);
 }
 
-function minutesToTime(totalMinutes) {
-  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
-  const hours = Math.floor(normalized / 60).toString().padStart(2, "0");
-  const minutes = (normalized % 60).toString().padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
-function timeToMinutes(value) {
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function slotIndexFromTime(value) {
-  return Math.floor((timeToMinutes(value) - WORK_START) / SLOT_MINUTES);
-}
-
-function slotStartMinutes(index) {
-  return WORK_START + index * SLOT_MINUTES;
-}
-
-function slotCountForDuration(duration) {
-  return Math.max(1, Math.ceil(duration / SLOT_MINUTES));
-}
-
-function formatDateLabel(date) {
+function fmtDate(date) {
   return new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "long", year: "numeric" }).format(date);
 }
-
-function formatShortDate(date) {
+function fmtShort(date) {
   return new Intl.DateTimeFormat("he-IL", { day: "numeric", month: "numeric" }).format(date);
 }
 
-function formatDayLabel(dayKey, startDate) {
-  const dayDef = DAY_DEFS.find((entry) => entry.key === dayKey);
-  return `${dayDef.label} ${formatShortDate(addDays(startDate, dayKey))}`;
+function todayDayIdx() { const d = new Date().getDay(); return d <= 4 ? d : 0; }
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function parseCsvLine(line) {
-  const values = [];
-  let value = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        value += '"';
-        i += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === "," && !inQuotes) {
-      values.push(value.trim());
-      value = "";
-    } else {
-      value += ch;
-    }
+/* ============================================================
+   NORMALIZATION
+   ============================================================ */
+
+function normalizeRoom(r) {
+  return {
+    id:   r.id   || makeId("room"),
+    name: String(r.name || "").trim() || "חדר ללא שם",
+    tags: Array.isArray(r.tags)
+      ? r.tags.map(t => String(t).trim()).filter(Boolean)
+      : String(r.tags || "").split(",").map(t => t.trim()).filter(Boolean)
+  };
+}
+
+function normalizeStaff(s) {
+  return {
+    id:       s.id       || makeId("staff"),
+    fullName: String(s.fullName || "").trim(),
+    phone:    String(s.phone    || "").trim(),
+    email:    String(s.email    || "").trim(),
+    role:     String(s.role     || "").trim(),
+    team:     String(s.team     || TEAMS[0])
+  };
+}
+
+function normalizeEntry(e, weekISO, roomsList) {
+  const week = e.weekISO || e.weekStartISO || e.weekStart || weekISO || sundayISO();
+  const rooms = roomsList || DEFAULT_ROOMS;
+  let roomId = String(e.roomId || e.room || "");
+  if (!rooms.find(r => r.id === roomId)) {
+    const byName = rooms.find(r => r.name === roomId);
+    roomId = byName?.id || rooms[0]?.id || "";
   }
-  values.push(value.trim());
-  return values;
-}
-
-function uniqueId(prefix = "id") {
-  if (window.crypto?.randomUUID) {
-    return `${prefix}-${crypto.randomUUID()}`;
-  }
-  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-function normalizeRoom(room) {
   return {
-    id: room.id || uniqueId("room"),
-    name: room.name || "חדר ללא שם",
-    tags: Array.isArray(room.tags) ? room.tags : String(room.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean)
+    id:       e.id       || makeId("entry"),
+    weekISO:  week,
+    day:      Number(e.day ?? 0),
+    roomId,
+    start:    e.start    || e.startTime || e.hour || "08:00",
+    duration: Math.max(30, Number(e.duration || 60)),
+    staff:    String(e.staff  || "").trim(),
+    team:     String(e.team   || TEAMS[0]),
+    oneTime:  Boolean(e.oneTime),
+    note:     String(e.note   || e.notes || "").trim(),
+    source:   String(e.source || "manual")
   };
 }
 
-function normalizeEntry(entry, fallbackWeekStartISO = defaultWeekStartISO(), rooms = DEFAULT_ROOMS) {
-  const week = entry.weekStartISO || entry.weekStart ? weekKey(entry.weekStartISO || entry.weekStart) : fallbackWeekStartISO;
-  const start = entry.start || entry.hour || "08:00";
+/* ============================================================
+   STATE
+   ============================================================ */
+
+function loadStoredState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+}
+
+function buildDefaultSchedule(weekISO, rooms) {
+  const samples = [
+    { day: 0, roomId: rooms[0]?.id, start: "08:30", duration: 60,  staff: "נועה כהן",   team: "ילדים",         note: "קבלת בוקר"   },
+    { day: 0, roomId: rooms[2]?.id, start: "10:00", duration: 90,  staff: 'ד"ר לוי',     team: "מבוגרים",       note: "אבחון"        },
+    { day: 0, roomId: rooms[1]?.id, start: "13:00", duration: 60,  staff: "מאיה לוי",   team: "מבוגרים",       note: ""             },
+    { day: 1, roomId: rooms[4]?.id, start: "09:00", duration: 60,  staff: "שרון מזרחי", team: "נוער",          note: ""             },
+    { day: 1, roomId: rooms[1]?.id, start: "11:00", duration: 120, staff: "יואב בר",    team: "טיפול קבוצתי",  note: "קבוצה שבועית" },
+    { day: 2, roomId: rooms[3]?.id, start: "08:00", duration: 120, staff: "עדי רוזן",   team: "ילדים",         note: "קבוצת ילדים"  },
+    { day: 2, roomId: rooms[6]?.id, start: "14:00", duration: 60,  staff: "מנהל מערכת", team: "אדמיניסטרציה",  note: "ישיבת צוות"   },
+    { day: 3, roomId: rooms[5]?.id, start: "10:30", duration: 90,  staff: "רן כהן",     team: "זוגות",         note: ""             },
+    { day: 4, roomId: rooms[0]?.id, start: "09:00", duration: 60,  staff: 'ד"ר לוי',    team: "מבוגרים",       note: "הדרכה"        },
+    { day: 4, roomId: rooms[8]?.id, start: "15:00", duration: 60,  staff: "נועה כהן",   team: "ילדים",         note: ""             }
+  ].filter(s => s.roomId);
+  return samples.map(s => normalizeEntry(s, weekISO, rooms));
+}
+
+function hydrateState() {
+  const src   = loadStoredState() || {};
+  const rooms = Array.isArray(src.rooms) && src.rooms.length
+    ? src.rooms.map(normalizeRoom)
+    : DEFAULT_ROOMS.map(r => ({ ...r }));
+  const staff = Array.isArray(src.staff) && src.staff.length
+    ? src.staff.map(normalizeStaff)
+    : DEFAULT_STAFF.map(s => ({ ...s }));
+  const weekISO = src.weekISO || sundayISO();
+  const schedule = Array.isArray(src.schedule) && src.schedule.length
+    ? src.schedule.map(e => normalizeEntry(e, weekISO, rooms))
+    : buildDefaultSchedule(weekISO, rooms);
+
   return {
-    id: entry.id || uniqueId("entry"),
-    weekStartISO: week,
-    weekStart: week,
-    day: Number(entry.day ?? 0),
-    roomId: entry.roomId || resolveRoomId(entry.room, rooms) || rooms[0]?.id || DEFAULT_ROOMS[0].id,
-    start,
-    duration: Number(entry.duration || 60),
-    staff: entry.staff || "",
-    team: entry.team || "מבוגרים",
-    oneTime: Boolean(entry.oneTime),
-    source: entry.source || "manual",
-    note: entry.note || ""
+    currentUser:   null,
+    credentials:   DEFAULT_CREDENTIALS,
+    rooms,
+    staff,
+    schedule,
+    requests:      src.requests      || [],
+    meetings:      src.meetings      || [],
+    resources:     src.resources     || [],
+    issues:        src.issues        || [],
+    notifications: src.notifications || [],
+    selectedTags:  new Set(Array.isArray(src.selectedTags) ? src.selectedTags : []),
+    weekISO,
+    activeDay:     todayDayIdx(),
+    activeTab:     src.activeTab || "dashboardTab",
+    drag:          null
   };
 }
 
-function loadState() {
-  const stored = (() => {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    } catch {
-      return null;
-    }
-  })();
+const state = hydrateState();
 
-  const todayWeek = weekKey(new Date());
-  const stateFromStorage = stored || {};
-  const loadedRooms = (stateFromStorage.rooms || DEFAULT_ROOMS).map(normalizeRoom);
-  const loadedViewWeek = stateFromStorage.viewWeekStart || todayWeek;
-  const loadedSchedule = (stateFromStorage.schedule || []).map((entry) => normalizeEntry({ ...entry, weekStart: entry.weekStart || loadedViewWeek }, loadedViewWeek, loadedRooms));
-
-  return {
-    currentUser: null,
-    users: stateFromStorage.users || DEFAULT_USERS,
-    credentials: DEFAULT_CREDENTIALS,
-    rooms: loadedRooms,
-    schedule: loadedSchedule.length ? loadedSchedule : DEFAULT_TEMPLATE.map((entry) => normalizeEntry({ ...entry, weekStart: todayWeek }, todayWeek, loadedRooms)),
-    requests: stateFromStorage.requests || [],
-    meetings: stateFromStorage.meetings || [],
-    resources: stateFromStorage.resources || [],
-    issues: stateFromStorage.issues || [],
-    notifications: stateFromStorage.notifications || [],
-    selectedDays: new Set(stateFromStorage.selectedDays || DAY_DEFS.map((day) => day.key)),
-    selectedTags: new Set(stateFromStorage.selectedTags || []),
-    viewWeekStart: stateFromStorage.viewWeekStart || todayWeek,
-    activeTab: stateFromStorage.activeTab || "dashboardTab"
-  };
+function persistState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      rooms:         state.rooms,
+      staff:         state.staff,
+      schedule:      state.schedule,
+      requests:      state.requests,
+      meetings:      state.meetings,
+      resources:     state.resources,
+      issues:        state.issues,
+      notifications: state.notifications,
+      selectedTags:  [...state.selectedTags],
+      weekISO:       state.weekISO,
+      activeTab:     state.activeTab
+    }));
+  } catch {}
 }
 
-const state = loadState();
+/* ============================================================
+   SELECTORS
+   ============================================================ */
 
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({
-    users: state.users,
-    rooms: state.rooms,
-    schedule: state.schedule,
-    requests: state.requests,
-    meetings: state.meetings,
-    resources: state.resources,
-    issues: state.issues,
-    notifications: state.notifications,
-    selectedDays: [...state.selectedDays],
-    selectedTags: [...state.selectedTags],
-    viewWeekStart: state.viewWeekStart,
-    activeTab: state.activeTab
-  }));
+const isAdmin     = () => state.currentUser?.role === "admin";
+const getRoomById = id  => state.rooms.find(r => r.id === id);
+const getRoomName = id  => getRoomById(id)?.name || id;
+const getEntryById = id => state.schedule.find(e => e.id === id);
+const weekStart   = ()  => isoDate(state.weekISO);
+
+function weekRange() {
+  const s = weekStart();
+  return `${fmtDate(s)} – ${fmtDate(addDays(s, 4))}`;
 }
 
-function currentWeekDate() {
-  return parseDateKey(state.viewWeekStart);
-}
+function activeDayDate() { return addDays(weekStart(), state.activeDay); }
 
-function currentWeekRange() {
-  const start = currentWeekDate();
-  const end = addDays(start, 4);
-  return `${formatDateLabel(start)} - ${formatDateLabel(end)}`;
-}
+function dayLabel(key) { return DAY_DEFS.find(d => d.key === Number(key))?.label || ""; }
 
-function resolveRoomId(roomValue, rooms = DEFAULT_ROOMS) {
-  const byIdMatch = rooms.find((room) => room.id === roomValue);
-  if (byIdMatch) return byIdMatch.id;
-  const byNameMatch = rooms.find((room) => room.name === roomValue);
-  return byNameMatch?.id || "";
-}
-
-function getRoomName(roomId) {
-  return state.rooms.find((room) => room.id === roomId)?.name || roomId;
-}
-
-function getRoom(roomId) {
-  return state.rooms.find((room) => room.id === roomId);
-}
-
-function getWeekEntries(weekStartKey = state.viewWeekStart) {
+function activeDayEntries() {
   return state.schedule
-    .filter((entry) => entry.weekStartISO === weekStartKey || entry.weekStart === weekStartKey)
-    .sort((left, right) => {
-      if (left.day !== right.day) return left.day - right.day;
-      if (left.start !== right.start) return left.start.localeCompare(right.start);
-      return getRoomName(left.roomId).localeCompare(getRoomName(right.roomId), "he");
-    });
-}
-
-function getEntriesByCell(weekEntries) {
-  const cells = new Map();
-  weekEntries.forEach((entry) => {
-    const key = `${entry.day}|${entry.roomId}`;
-    const list = cells.get(key) || [];
-    list.push(entry);
-    cells.set(key, list);
-  });
-  return cells;
-}
-
-function updateWeekLabels() {
-  byId("weekLabel").textContent = `שבוע עבודה: ${currentWeekRange()}`;
-  byId("meetingDate").textContent = `הישיבה הקרובה: ${formatDateLabel(addDays(currentWeekDate(), 0))} (יום ראשון)`;
-  byId("adminWeekLabel").textContent = `השבוע הנוכחי בתצוגה: ${currentWeekRange()}`;
-}
-
-function showTab(tabId) {
-  state.activeTab = tabId;
-  saveState();
-  document.querySelectorAll(".tab-content").forEach((tab) => tab.classList.add("hidden"));
-  document.querySelectorAll(".tabs button").forEach((btn) => btn.classList.remove("active"));
-  byId(tabId).classList.remove("hidden");
-  const activeButton = document.querySelector(`[data-tab='${tabId}']`);
-  if (activeButton) activeButton.classList.add("active");
-}
-
-function addNotification(text, critical = false) {
-  state.notifications.unshift({ id: uniqueId("note"), text, critical, at: new Date().toLocaleString("he-IL") });
-  saveState();
-  renderNotifications();
-}
-
-function isAdmin() {
-  return state.currentUser?.role === "admin";
-}
-
-function setCurrentUser(username) {
-  const account = state.credentials[username];
-  if (!account) return;
-  state.currentUser = { username, role: account.role, label: account.label };
-  sessionStorage.setItem("clinic_user", JSON.stringify(state.currentUser));
-}
-
-function clearCurrentUser() {
-  state.currentUser = null;
-  sessionStorage.removeItem("clinic_user");
-}
-
-function setWeekStartDate(nextDate) {
-  state.viewWeekStart = weekKey(nextDate);
-  saveState();
-  renderAll();
-}
-
-function renderTagFilters() {
-  const container = byId("tagFilters");
-  if (!container) return;
-  const tags = [...new Set(state.rooms.flatMap((room) => room.tags))];
-  container.innerHTML = "";
-  tags.forEach((tag) => {
-    const label = document.createElement("label");
-    label.className = `chip ${state.selectedTags.has(tag) ? "chip-active" : ""}`;
-    const cb = document.createElement("input");
-    cb.type = "checkbox";
-    cb.checked = state.selectedTags.has(tag);
-    cb.addEventListener("change", () => {
-      cb.checked ? state.selectedTags.add(tag) : state.selectedTags.delete(tag);
-      saveState();
-      renderRoomOptions();
-      renderOccupancy();
-      renderAdminRooms();
-    });
-    label.append(cb, document.createTextNode(` ${tag}`));
-    container.append(label);
-  });
-}
-
-function roomAllowed(room) {
-  if (state.selectedTags.size === 0) return true;
-  return [...state.selectedTags].every((tag) => room.tags.includes(tag));
+    .filter(e => e.weekISO === state.weekISO && e.day === state.activeDay)
+    .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
 }
 
 function filteredRooms() {
-  return state.rooms.filter((room) => roomAllowed(room));
+  if (!state.selectedTags.size) return state.rooms;
+  return state.rooms.filter(r => [...state.selectedTags].every(t => r.tags.includes(t)));
 }
 
-function renderRoomOptions() {
-  const requestRoom = byId("requestRoom");
-  const scheduleRoom = byId("scheduleRoom");
-  const rooms = filteredRooms();
-  const options = rooms.length
-    ? rooms.map((room) => `<option value="${room.id}">${room.name}</option>`).join("")
-    : "<option value=\"\">אין חדר זמין</option>";
-  if (requestRoom) requestRoom.innerHTML = options;
-  if (scheduleRoom) scheduleRoom.innerHTML = rooms.length ? state.rooms.map((room) => `<option value="${room.id}">${room.name}</option>`).join("") : "<option value=\"\">אין חדר זמין</option>";
-}
+/* ============================================================
+   GRID BUILDER  (for the single-day table)
+   ============================================================ */
 
-function renderDayFilters() {
-  const container = byId("dayFilters");
-  if (!container) return;
-  container.innerHTML = "";
-  DAY_DEFS.forEach((day) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `chip day-chip ${state.selectedDays.has(day.key) ? "chip-active" : ""}`;
-    button.textContent = day.label;
-    button.addEventListener("click", () => {
-      if (state.selectedDays.has(day.key)) {
-        state.selectedDays.delete(day.key);
-      } else {
-        state.selectedDays.add(day.key);
+function buildDayGrid(rooms) {
+  // returns: rooms × SLOT_COUNT 2D structure
+  const entries = activeDayEntries();
+  return rooms.map(room => {
+    const arr = Array(SLOT_COUNT).fill(null);
+    entries.filter(e => e.roomId === room.id).forEach(entry => {
+      const si   = slotOf(entry.start);
+      const span = slotsFor(entry.duration);
+      for (let i = 0; i < span && si + i < SLOT_COUNT; i++) {
+        arr[si + i] = { entry, isStart: i === 0, span, si };
       }
-      if (state.selectedDays.size === 0) {
-        DAY_DEFS.forEach((entry) => state.selectedDays.add(entry.key));
-      }
-      saveState();
-      renderDayFilters();
-      renderOccupancy();
-      renderAdminEntries();
     });
-    container.append(button);
+    return { room, arr };
   });
 }
 
-function renderWeekControls() {
-  const weekLabel = byId("weekLabel");
-  const adminWeekLabel = byId("adminWeekLabel");
-  if (weekLabel) weekLabel.textContent = `שבוע עבודה: ${currentWeekRange()}`;
-  if (adminWeekLabel) adminWeekLabel.textContent = `השבוע הנוכחי בתצוגה: ${currentWeekRange()}`;
-}
-
-function buildMatrix(weekEntries) {
-  const matrix = {};
-  DAY_DEFS.forEach((day) => {
-    matrix[day.key] = {};
-    state.rooms.forEach((room) => {
-      matrix[day.key][room.id] = Array.from({ length: SLOT_COUNT }, () => null);
-    });
-  });
-
-  weekEntries.forEach((entry) => {
-    if (!matrix[entry.day]?.[entry.roomId]) return;
-    const startIndex = slotIndexFromTime(entry.start);
-    const span = slotCountForDuration(entry.duration);
-    for (let offset = 0; offset < span; offset += 1) {
-      const slotIndex = startIndex + offset;
-      if (slotIndex < 0 || slotIndex >= SLOT_COUNT) continue;
-      matrix[entry.day][entry.roomId][slotIndex] = {
-        id: entry.id,
-        entry,
-        startIndex,
-        span,
-        isStart: offset === 0
-      };
-    }
-  });
-
-  return matrix;
-}
+/* ============================================================
+   OCCUPANCY TABLE
+   ============================================================ */
 
 function renderOccupancy() {
   const table = byId("occupancyTable");
   if (!table) return;
   const rooms = filteredRooms();
-  const visibleDays = DAY_DEFS.filter((day) => state.selectedDays.has(day.key));
-  const weekEntries = getWeekEntries();
-  const matrix = buildMatrix(weekEntries);
-
-  if (rooms.length === 0) {
-    table.innerHTML = `<tbody><tr><td class="empty-state">אין חדרים שתואמים לסינון הנוכחי.</td></tr></tbody>`;
+  if (!rooms.length) {
+    table.innerHTML = `<tbody><tr><td class="empty-state" colspan="2">אין חדרים המתאימים לסינון.</td></tr></tbody>`;
     return;
   }
 
-  const headerRows = [
-    `<tr><th class="time-head sticky-col">שעה</th>${visibleDays.map((day) => `<th class="day-head" colspan="${rooms.length}">${day.label}<small>${formatShortDate(addDays(currentWeekDate(), day.key))}</small></th>`).join("")}</tr>`,
-    `<tr><th class="time-head sticky-col subhead">&nbsp;</th>${visibleDays.flatMap((day) => rooms.map((room) => `<th class="room-head" data-room-id="${room.id}">${room.name}<small>${room.tags.join(" • ")}</small></th>`)).join("")}</tr>`
-  ];
+  const grid  = buildDayGrid(rooms);
+  const admin = isAdmin();
 
-  const bodyRows = Array.from({ length: SLOT_COUNT }, (_, slotIndex) => {
-    const slotMinutes = slotStartMinutes(slotIndex);
-    const slotLabel = minutesToTime(slotMinutes);
-    const rowClass = slotIndex % 2 === 0 ? "hour-row" : "half-row";
-    const cells = visibleDays.flatMap((day) => rooms.map((room) => {
-      const cell = matrix[day.key][room.id][slotIndex];
-      if (cell?.entry) {
-        if (!cell.isStart) return "";
-        const entry = cell.entry;
-        const room = getRoom(entry.roomId);
-        const start = minutesToTime(timeToMinutes(entry.start));
-        const end = minutesToTime(timeToMinutes(entry.start) + entry.duration);
-        return `
-          <td class="booking-cell booking-${entry.source || "manual"}" rowspan="${cell.span}">
-            <article class="booking-card" data-entry-id="${entry.id}">
-              <div class="booking-card__top">
-                <span class="room-badge">${room?.name || entry.roomId}</span>
-                <span class="booking-team">${entry.team}</span>
-              </div>
-              <strong>${entry.staff}</strong>
-              <div class="booking-time">${start} - ${end}</div>
-              <div class="booking-duration">${entry.duration} דקות</div>
-              ${entry.note ? `<p class="booking-note">${entry.note}</p>` : ""}
-              ${isAdmin() ? `
-                <div class="booking-actions">
-                  <button type="button" class="edit-entry" data-entry-id="${entry.id}">עריכה</button>
-                  <button type="button" class="delete-entry danger" data-entry-id="${entry.id}">מחיקה</button>
-                </div>
-              ` : ""}
-            </article>
-          </td>`;
+  /* ---- HEADER ---- */
+  const thRooms = rooms.map(r =>
+    `<th class="room-col-head" data-room-id="${r.id}">
+       <span class="rcol-name">${esc(r.name)}</span>
+       <small class="rcol-tags">${r.tags.map(t => esc(t)).join(" · ")}</small>
+     </th>`
+  ).join("");
+  const thead = `<thead><tr><th class="time-col-head">שעה</th>${thRooms}</tr></thead>`;
+
+  /* ---- BODY ---- */
+  const skipSet = new Set(); // "roomId:slotIndex" cells consumed by a rowspan
+
+  const rows = Array.from({ length: SLOT_COUNT }, (_, si) => {
+    const slotMin  = slotStart(si);
+    const timeLabel = minToTime(slotMin);
+    const isHour   = slotMin % 60 === 0;
+
+    const cells = grid.map(({ room, arr }) => {
+      const key = `${room.id}:${si}`;
+      if (skipSet.has(key)) return "";   // consumed by rowspan
+
+      const cell = arr[si];
+
+      if (!cell) {
+        // Truly empty slot
+        const clickAttrs = `data-room-id="${room.id}" data-slot="${si}"`;
+        if (admin) {
+          return `<td class="slot-empty slot-droptarget" ${clickAttrs}
+                    tabindex="0" role="button"
+                    aria-label="הוסף ב${esc(room.name)} ${timeLabel}">
+                    <span class="slot-plus" aria-hidden="true">+</span>
+                  </td>`;
+        }
+        return `<td class="slot-empty" ${clickAttrs}></td>`;
       }
-      if (cell) return "";
-      return `
-        <td class="empty-cell${isAdmin() ? " empty-cell--admin" : ""}" data-day="${day.key}" data-room-id="${room.id}" data-slot="${slotIndex}">
-          ${isAdmin() ? `<button type="button" class="add-entry" data-day="${day.key}" data-room-id="${room.id}" data-slot="${slotIndex}">+</button>` : ""}
-        </td>`;
-    })).join("");
-    return `<tr class="${rowClass}"><th class="time-slot sticky-col">${slotLabel}</th>${cells}</tr>`;
+
+      if (!cell.isStart) return "";  // shouldn't happen given skipSet but safety guard
+
+      const { entry, span } = cell;
+      // Mark the cells this entry spans
+      for (let k = 1; k < span; k++) {
+        if (si + k < SLOT_COUNT) skipSet.add(`${room.id}:${si + k}`);
+      }
+
+      const endTime = minToTime(timeToMin(entry.start) + entry.duration);
+      const teamColor = teamColorClass(entry.team);
+
+      return `<td class="slot-booked" rowspan="${span}" data-entry-id="${entry.id}">
+        <div class="bcard ${teamColor}${entry.oneTime ? " bcard-onetime" : ""}"
+             draggable="${admin}"
+             data-entry-id="${entry.id}"
+             data-room-id="${entry.roomId}"
+             data-start-slot="${slotOf(entry.start)}">
+          <div class="bcard-head">
+            <strong class="bcard-staff">${esc(entry.staff)}</strong>
+            ${entry.oneTime ? `<span class="bcard-badge">חד-פעמי</span>` : ""}
+          </div>
+          <div class="bcard-time">${esc(entry.start)} – ${endTime}</div>
+          <div class="bcard-dur">${entry.duration} דק׳</div>
+          ${entry.note ? `<div class="bcard-note">${esc(entry.note)}</div>` : ""}
+        </div>
+      </td>`;
+    }).join("");
+
+    return `<tr class="slot-row${isHour ? " slot-full-hour" : ""}" data-slot="${si}">
+      <th class="time-cell${isHour ? " time-hour" : ""}">${timeLabel}</th>
+      ${cells}
+    </tr>`;
   }).join("");
 
-  table.innerHTML = `<thead>${headerRows.join("")}</thead><tbody>${bodyRows}</tbody>`;
+  table.innerHTML = `${thead}<tbody>${rows}</tbody>`;
+  bindTableInteractions(table, admin);
+}
 
-  table.querySelectorAll(".add-entry").forEach((button) => {
-    button.addEventListener("click", () => {
-      openScheduleEditor({
-        day: Number(button.dataset.day),
-        roomId: button.dataset.roomId,
-        start: minutesToTime(WORK_START + Number(button.dataset.slot) * SLOT_MINUTES)
-      });
+function teamColorClass(team) {
+  const map = {
+    "ילדים":         "tc-green",
+    "מבוגרים":       "tc-blue",
+    "נוער":          "tc-purple",
+    "זוגות":         "tc-amber",
+    "אדמיניסטרציה":  "tc-gray"
+  };
+  return map[team] || "tc-default";
+}
+
+function bindTableInteractions(table, admin) {
+  /* Click on empty slot */
+  table.querySelectorAll(".slot-empty").forEach(td => {
+    const open = () => openBookingModal({ roomId: td.dataset.roomId, slot: Number(td.dataset.slot) });
+    td.addEventListener("click", open);
+    td.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
     });
   });
 
-  table.querySelectorAll(".edit-entry").forEach((button) => {
-    button.addEventListener("click", () => openScheduleEditor(getEntryById(button.dataset.entryId)));
-  });
-
-  table.querySelectorAll(".delete-entry").forEach((button) => {
-    button.addEventListener("click", () => removeEntry(button.dataset.entryId));
-  });
-
-  table.querySelectorAll(".booking-card").forEach((card) => {
-    card.addEventListener("click", (event) => {
-      if (event.target.closest("button")) return;
+  /* Click on booking card */
+  table.querySelectorAll(".bcard").forEach(card => {
+    card.addEventListener("click", () => {
       const entry = getEntryById(card.dataset.entryId);
-      if (entry && isAdmin()) openScheduleEditor(entry);
+      if (entry) openBookingModal({ entry });
+    });
+  });
+
+  if (!admin) return;
+
+  /* Drag start */
+  table.querySelectorAll(".bcard[draggable='true']").forEach(card => {
+    card.addEventListener("dragstart", e => {
+      state.drag = { entryId: card.dataset.entryId };
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", card.dataset.entryId);
+    });
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      table.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+      state.drag = null;
+    });
+  });
+
+  /* Drop targets */
+  table.querySelectorAll(".slot-droptarget").forEach(td => {
+    td.addEventListener("dragover", e => { e.preventDefault(); td.classList.add("drag-over"); });
+    td.addEventListener("dragleave", ()  => td.classList.remove("drag-over"));
+    td.addEventListener("drop", e => {
+      e.preventDefault();
+      td.classList.remove("drag-over");
+      const { entryId } = state.drag || {};
+      if (!entryId) return;
+      const entry = getEntryById(entryId);
+      if (!entry) return;
+
+      const newRoomId = td.dataset.roomId;
+      const newSlot   = Number(td.dataset.slot);
+      const newStart  = minToTime(slotStart(newSlot));
+
+      /* Conflict check */
+      const conflict = state.schedule.find(ex =>
+        ex.id !== entry.id &&
+        ex.weekISO === state.weekISO &&
+        ex.day === state.activeDay &&
+        ex.roomId === newRoomId &&
+        timeToMin(ex.start) < timeToMin(newStart) + entry.duration &&
+        timeToMin(ex.start) + ex.duration > timeToMin(newStart)
+      );
+      if (conflict) {
+        showToast(`התנגשות עם ${conflict.staff} – לא ניתן להעביר לכאן.`, "error");
+        return;
+      }
+
+      entry.roomId = newRoomId;
+      entry.start  = newStart;
+      persistState();
+      renderOccupancy();
+      renderStats();
+      addNotification(`${entry.staff} הועבר/ה ל${getRoomName(newRoomId)} בשעה ${entry.start}.`);
     });
   });
 }
 
-function getEntryById(entryId) {
-  return state.schedule.find((entry) => entry.id === entryId);
+/* ============================================================
+   BOOKING MODAL
+   ============================================================ */
+
+function openBookingModal({ roomId, slot, entry } = {}) {
+  const modal  = byId("bookingModal");
+  const isEdit = Boolean(entry?.id);
+  const admin  = isAdmin();
+
+  byId("bookingModalTitle").textContent = isEdit ? "עריכת הזמנה" : (admin ? "הוספת הזמנה" : "פרטי הזמנה");
+  byId("bookingEntryId").value = entry?.id  || "";
+  byId("bookingDay").value     = String(entry?.day ?? state.activeDay);
+
+  /* Room select */
+  const roomSel = byId("bookingRoomSel");
+  const targetRoom = entry?.roomId || roomId || state.rooms[0]?.id || "";
+  roomSel.innerHTML = state.rooms.map(r =>
+    `<option value="${r.id}"${r.id === targetRoom ? " selected" : ""}>${esc(r.name)}</option>`
+  ).join("");
+
+  /* Start time select */
+  const startSel = byId("bookingStart");
+  const targetStart = entry?.start || minToTime(slotStart(slot ?? 0));
+  startSel.innerHTML = Array.from({ length: SLOT_COUNT }, (_, i) => {
+    const t = minToTime(slotStart(i));
+    return `<option value="${t}"${t === targetStart ? " selected" : ""}>${t}</option>`;
+  }).join("");
+
+  /* Team select */
+  const teamSel = byId("bookingTeam");
+  teamSel.innerHTML = TEAMS.map(t =>
+    `<option value="${t}"${entry?.team === t ? " selected" : ""}>${t}</option>`
+  ).join("");
+
+  /* Staff datalist */
+  byId("bookingStaffList").innerHTML = state.staff.map(p =>
+    `<option value="${esc(p.fullName)}">`
+  ).join("");
+
+  byId("bookingStaff").value    = entry?.staff    || "";
+  byId("bookingDuration").value = String(entry?.duration || 60);
+  byId("bookingNote").value     = entry?.note     || "";
+  byId("bookingOneTime").checked = Boolean(entry?.oneTime);
+
+  /* Read-only for staff users */
+  const fields = ["bookingStaff", "bookingDuration", "bookingStart", "bookingRoomSel", "bookingTeam", "bookingNote", "bookingOneTime"];
+  fields.forEach(id => { const el = byId(id); if (el) el.disabled = !admin; });
+  byId("bookingSubmit").classList.toggle("hidden", !admin);
+  byId("bookingDelete").classList.toggle("hidden", !(admin && isEdit));
+
+  modal.showModal();
 }
 
-function openScheduleEditor(entry) {
-  if (!isAdmin()) return;
-  const form = byId("scheduleForm");
-  if (!form) return;
-  byId("scheduleEntryId").value = entry?.id || "";
-  byId("scheduleWeek").textContent = currentWeekRange();
-  byId("scheduleDay").value = String(entry?.day ?? 0);
-  byId("scheduleRoom").value = entry?.roomId || entry?.room || state.rooms[0]?.id || "";
-  byId("scheduleStart").value = entry?.start || "08:00";
-  byId("scheduleDuration").value = String(entry?.duration || 60);
-  byId("scheduleStaff").value = entry?.staff || "";
-  byId("scheduleTeam").value = entry?.team || "מבוגרים";
-  byId("scheduleNote").value = entry?.note || "";
-  byId("scheduleDeleteAction").classList.toggle("hidden", !entry?.id);
-  form.scrollIntoView({ behavior: "smooth", block: "start" });
+function closeBookingModal() { byId("bookingModal").close(); }
+
+/* ============================================================
+   DAY TABS
+   ============================================================ */
+
+function renderDayTabs() {
+  const container = byId("dayTabs");
+  if (!container) return;
+  const ws = weekStart();
+  container.innerHTML = DAY_DEFS.map(d => {
+    const date   = addDays(ws, d.key);
+    const active = d.key === state.activeDay;
+    const count  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === d.key).length;
+    return `<button type="button" class="day-tab${active ? " active" : ""}" data-day="${d.key}">
+      <span class="dt-short">${d.short}</span>
+      <span class="dt-label">${d.label}</span>
+      <span class="dt-date">${fmtShort(date)}</span>
+      ${count ? `<span class="dt-count">${count}</span>` : ""}
+    </button>`;
+  }).join("");
+
+  container.querySelectorAll(".day-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.activeDay = Number(btn.dataset.day);
+      renderDayTabs();
+      renderWeekHeader();
+      renderOccupancy();
+      renderStats();
+    });
+  });
 }
 
-function clearScheduleEditor() {
-  byId("scheduleEntryId").value = "";
-  byId("scheduleForm").reset();
-  byId("scheduleWeek").textContent = currentWeekRange();
-  byId("scheduleDeleteAction").classList.add("hidden");
-  byId("scheduleDuration").value = "60";
-  byId("scheduleStart").value = "08:00";
+/* ============================================================
+   WEEK HEADER
+   ============================================================ */
+
+function renderWeekHeader() {
+  const wl = byId("weekLabel");
+  if (wl) wl.textContent = `שבוע עבודה: ${weekRange()}`;
+  const dh = byId("dayHeading");
+  if (dh) {
+    const d = DAY_DEFS[state.activeDay];
+    dh.textContent = `${d?.label || ""} · ${fmtDate(activeDayDate())}`;
+  }
+  const awl = byId("adminWeekLabel");
+  if (awl) awl.textContent = `שבוע: ${weekRange()}`;
 }
 
-function removeEntry(entryId) {
-  if (!isAdmin()) return;
-  const entry = getEntryById(entryId);
-  if (!entry) return;
-  if (!confirm(`למחוק את ${entry.staff} ב${formatDayLabel(entry.day, currentWeekDate())} ${entry.start}?`)) return;
-  state.schedule = state.schedule.filter((item) => item.id !== entryId);
-  addNotification(`הוסרה משבצת לו"ז עבור ${entry.staff}.`, true);
-  saveState();
-  renderAll();
-  clearScheduleEditor();
+/* ============================================================
+   STATS
+   ============================================================ */
+
+function renderStats() {
+  const box = byId("dashboardStats");
+  if (!box) return;
+  const today  = activeDayEntries().length;
+  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
+  box.innerHTML = `
+    <div class="stat-card"><span>חדרים</span>          <strong>${state.rooms.length}</strong></div>
+    <div class="stat-card"><span>הזמנות היום</span>    <strong>${today}</strong></div>
+    <div class="stat-card"><span>הזמנות בשבוע</span>  <strong>${weekly}</strong></div>
+    <div class="stat-card"><span>בקשות פתוחות</span>  <strong>${state.requests.length}</strong></div>
+  `;
 }
+
+/* ============================================================
+   TAG FILTERS
+   ============================================================ */
+
+function renderTagFilters() {
+  const container = byId("tagFilters");
+  if (!container) return;
+  const tags = [...new Set(state.rooms.flatMap(r => r.tags))].sort((a, b) => a.localeCompare(b, "he"));
+  container.innerHTML = tags.map(tag => `
+    <label class="chip${state.selectedTags.has(tag) ? " chip-active" : ""}">
+      <input type="checkbox" value="${esc(tag)}"${state.selectedTags.has(tag) ? " checked" : ""} />
+      <span>${esc(tag)}</span>
+    </label>
+  `).join("");
+  container.querySelectorAll("input").forEach(cb => {
+    cb.addEventListener("change", () => {
+      cb.checked ? state.selectedTags.add(cb.value) : state.selectedTags.delete(cb.value);
+      persistState();
+      renderTagFilters();
+      renderOccupancy();
+    });
+  });
+}
+
+/* ============================================================
+   REQUESTS
+   ============================================================ */
 
 function renderRequests() {
   const list = byId("requestsList");
   if (!list) return;
-
-  if (state.requests.length === 0) {
-    list.innerHTML = "<p>אין בקשות ממתינות.</p>";
+  if (!state.requests.length) {
+    list.innerHTML = `<p class="empty-state">אין בקשות ממתינות.</p>`;
     return;
   }
+  list.innerHTML = state.requests.map(req => {
+    const dl  = dayLabel(req.day);
+    const t   = req.startTime || req.start || "—";
+    const rn  = getRoomName(req.roomId || req.room) || req.room || "—";
+    const btns = isAdmin()
+      ? `<div class="notice-actions">
+           <button class="btn-sm" data-req-id="${req.id}" data-action="approve">אישור</button>
+           <button class="btn-sm secondary" data-req-id="${req.id}" data-action="deny">דחייה</button>
+         </div>`
+      : `<div class="muted small">ממתין לאישור מנהל</div>`;
+    return `<div class="notice">
+      <div><strong>${esc(req.staff)}</strong> ביקש/ה ${esc(rn)} · יום ${dl} · ${t} (${req.duration} דק׳)</div>
+      <div class="muted small">${esc(req.team)} | ${esc(req.reason)}</div>
+      ${btns}
+    </div>`;
+  }).join("");
 
-  list.innerHTML = state.requests.map((request) => `
-    <div class="notice request-card">
-      <div><strong>${request.staff}</strong> ביקש/ה ${getRoomName(request.roomId || request.room)} ביום ${DAY_DEFS.find((day) => day.key === Number(request.day))?.label || request.day} בשעה ${request.startTime || request.start} (${request.duration} דק')</div>
-      <div>צוות: ${request.team} | ${request.reason}</div>
-      ${isAdmin() ? `
-        <div class="request-actions">
-          <button type="button" data-id="${request.id}" data-action="approve">אישור</button>
-          <button type="button" data-id="${request.id}" data-action="deny" class="danger">דחייה</button>
-        </div>
-      ` : "<div class='muted'>הבקשה תטופל על ידי מנהל/ת.</div>"}
-    </div>
-  `).join("");
-
-  list.querySelectorAll("button[data-id]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const request = state.requests.find((item) => item.id === button.dataset.id);
-      if (!request) return;
-      const approved = button.dataset.action === "approve";
-      state.requests = state.requests.filter((item) => item.id !== request.id);
-      if (approved) {
+  list.querySelectorAll("button[data-req-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const req = state.requests.find(r => r.id === btn.dataset.reqId);
+      if (!req) return;
+      state.requests = state.requests.filter(r => r.id !== req.id);
+      if (btn.dataset.action === "approve") {
         state.schedule.push(normalizeEntry({
-          weekStart: state.viewWeekStart,
-          day: request.day,
-          roomId: request.roomId || request.room,
-          start: request.startTime || request.start,
-          duration: request.duration,
-          staff: request.staff,
-          team: request.team,
-          oneTime: request.oneTime,
-          source: "request",
-          note: request.reason
-        }));
+          weekISO:  state.weekISO,
+          day:      req.day,
+          roomId:   req.roomId || req.room,
+          start:    req.startTime || req.start,
+          duration: req.duration,
+          staff:    req.staff,
+          team:     req.team,
+          oneTime:  req.oneTime,
+          note:     req.reason,
+          source:   "request"
+        }, state.weekISO, state.rooms));
+        addNotification(`בקשת ${req.staff} אושרה.`, true);
+      } else {
+        addNotification(`בקשת ${req.staff} נדחתה.`);
       }
-      addNotification(`בקשת השינוי של ${request.staff} ${approved ? "אושרה" : "נדחתה"}.`, true);
-      saveState();
+      persistState();
       renderAll();
     });
   });
 }
 
-function renderUsers() {
-  const box = byId("usersTable");
-  if (!box) return;
-  box.innerHTML = `
-    <table>
-      <thead><tr><th>שם מלא</th><th>טלפון</th><th>דוא"ל</th><th>קיצור תקשורת</th><th>תפקיד</th><th>צוות</th></tr></thead>
-      <tbody>${state.users.map((user) => `<tr><td>${user.fullName}</td><td>${user.phone}</td><td>${user.email}</td><td>${user.chatShortcut}</td><td>${user.role}</td><td>${user.team}</td></tr>`).join("")}</tbody>
-    </table>
-  `;
-}
+/* ============================================================
+   MEETINGS / RESOURCES / ISSUES / NOTIFICATIONS
+   ============================================================ */
 
 function renderMeetings() {
   const box = byId("meetingList");
   if (!box) return;
   box.innerHTML = state.meetings.length
-    ? state.meetings.map((meeting) => `<div class="notice"><strong>${meeting.team}</strong>: ${meeting.agenda}<br><small>קבצים: ${meeting.files.join(", ") || "ללא"}</small></div>`).join("")
-    : "<p>לא נוספו ישיבות עדיין.</p>";
+    ? state.meetings.map(m =>
+        `<div class="notice"><strong>${esc(m.team)}</strong>: ${esc(m.agenda)}<br>
+         <small>קבצים: ${(m.files || []).map(f => esc(f)).join(", ") || "ללא"}</small></div>`
+      ).join("")
+    : `<p class="empty-state">לא נוספו ישיבות עדיין.</p>`;
 }
 
 function renderResources() {
   const box = byId("resourceList");
   if (!box) return;
   box.innerHTML = state.resources.length
-    ? state.resources.map((resource) => `<div class="notice"><strong>${resource.title}</strong> (${resource.type})<br>${resource.content}</div>`).join("")
-    : "<p>אין משאבים משותפים כרגע.</p>";
+    ? state.resources.map(r =>
+        `<div class="notice"><strong>${esc(r.title)}</strong> (${esc(r.type)})<br>${esc(r.content)}</div>`
+      ).join("")
+    : `<p class="empty-state">אין משאבים משותפים.</p>`;
 }
 
 function renderIssues() {
   const box = byId("issueQueue");
   if (!box) return;
   box.innerHTML = state.issues.length
-    ? state.issues.map((issue) => `<div class="notice"><strong>${issue.room}</strong> (${issue.hour}) - ${issue.details}<br><small>${issue.createdAt}</small></div>`).join("")
-    : "<p>אין תקלות פתוחות.</p>";
+    ? state.issues.map(i =>
+        `<div class="notice"><strong>${esc(i.room)}</strong> (${esc(i.hour || i.time || "")}) – ${esc(i.details)}<br><small>${esc(i.createdAt)}</small></div>`
+      ).join("")
+    : `<p class="empty-state">אין תקלות פתוחות.</p>`;
 }
 
 function renderNotifications() {
   const box = byId("notificationsList");
   if (!box) return;
   box.innerHTML = state.notifications.length
-    ? state.notifications.map((notification) => `<div class="notice ${notification.critical ? "notice-critical" : ""}">${notification.critical ? "הודעה חשובה: " : ""}${notification.text}<br><small>${notification.at}</small></div>`).join("")
-    : "<p>אין התראות.</p>";
+    ? state.notifications.map(n =>
+        `<div class="notice${n.critical ? " notice-critical" : ""}">
+           ${n.critical ? "🔔 " : ""}${esc(n.text)}<br><small>${esc(n.at)}</small>
+         </div>`
+      ).join("")
+    : `<p class="empty-state">אין התראות.</p>`;
 }
 
-function renderAdminEntries() {
-  const box = byId("adminEntryList");
-  if (!box) return;
-  if (!isAdmin()) {
-    box.innerHTML = "<p>אזור זה זמין למנהלי מערכת בלבד.</p>";
-    return;
-  }
-  const entries = getWeekEntries();
-  box.innerHTML = entries.length
-    ? entries.map((entry) => {
-      const room = getRoom(entry.roomId);
-      const end = minutesToTime(timeToMinutes(entry.start) + entry.duration);
-      return `
-        <div class="notice admin-entry" data-entry-id="${entry.id}">
-          <div><strong>${entry.staff}</strong> · ${DAY_DEFS.find((day) => day.key === entry.day)?.label} · ${entry.start} - ${end}</div>
-          <div>${room?.name || entry.roomId} · ${entry.duration} דק' · ${entry.team}${entry.note ? ` · ${entry.note}` : ""}</div>
-          <div class="request-actions">
-            <button type="button" class="edit-entry" data-entry-id="${entry.id}">עריכה</button>
-            <button type="button" class="delete-entry danger" data-entry-id="${entry.id}">מחיקה</button>
-          </div>
-        </div>
-      `;
-    }).join("")
-    : "<p>אין משבצות בשבוע המוצג. אפשר להוסיף מהטופס או ללחוץ על תאים ריקים בטבלה.</p>";
-
-  box.querySelectorAll(".edit-entry").forEach((button) => {
-    button.addEventListener("click", () => openScheduleEditor(getEntryById(button.dataset.entryId)));
-  });
-
-  box.querySelectorAll(".delete-entry").forEach((button) => {
-    button.addEventListener("click", () => removeEntry(button.dataset.entryId));
-  });
-}
+/* ============================================================
+   ADMIN – ROOMS
+   ============================================================ */
 
 function renderAdminRooms() {
-  const box = byId("adminRoomList");
-  if (!box) return;
-  if (!isAdmin()) {
-    box.innerHTML = "<p>אזור זה זמין למנהלי מערכת בלבד.</p>";
-    return;
-  }
-  box.innerHTML = state.rooms.length
-    ? state.rooms.map((room) => `
-      <div class="notice room-card" data-room-id="${room.id}">
-        <div><strong>${room.name}</strong></div>
-        <div class="room-tags">${room.tags.map((tag) => `<span class="chip chip-static">${tag}</span>`).join("")}</div>
-        <div class="request-actions">
-          <button type="button" class="edit-room" data-room-id="${room.id}">עריכה</button>
-          <button type="button" class="delete-room danger" data-room-id="${room.id}">מחיקה</button>
-        </div>
+  const list = byId("adminRoomList");
+  if (!list) return;
+  list.innerHTML = state.rooms.map(room => `
+    <div class="admin-row">
+      <div class="admin-row-info">
+        <strong>${esc(room.name)}</strong>
+        <div class="tag-row">${room.tags.map(t => `<span class="tag-pill">${esc(t)}</span>`).join("")}</div>
       </div>
-    `).join("")
-    : "<p>אין חדרים זמינים כרגע.</p>";
+      <div class="admin-row-acts">
+        <button class="btn-sm" data-action="edit-room" data-room-id="${room.id}">עריכה</button>
+        <button class="btn-sm danger" data-action="del-room" data-room-id="${room.id}">מחיקה</button>
+      </div>
+    </div>
+  `).join("") || `<p class="empty-state">אין חדרים.</p>`;
 
-  box.querySelectorAll(".edit-room").forEach((button) => {
-    button.addEventListener("click", () => openRoomEditor(getRoom(button.dataset.roomId)));
-  });
-
-  box.querySelectorAll(".delete-room").forEach((button) => {
-    button.addEventListener("click", () => removeRoom(button.dataset.roomId));
-  });
-}
-
-function renderAdminPanels() {
-  const adminTab = byId("adminTab");
-  const adminButton = document.querySelector("[data-tab='adminTab']");
-  const usersTabButton = document.querySelector("[data-tab='usersTab']");
-  const usersTab = byId("usersTab");
-  const adminOnlyElements = document.querySelectorAll(".admin-only");
-
-  if (isAdmin()) {
-    adminTab?.classList.remove("hidden");
-    adminButton?.classList.remove("hidden");
-    usersTab?.classList.remove("hidden");
-    usersTabButton?.classList.remove("hidden");
-    adminOnlyElements.forEach((element) => element.classList.remove("hidden"));
-  } else {
-    adminTab?.classList.add("hidden");
-    adminButton?.classList.add("hidden");
-    if (state.activeTab === "adminTab") showTab("dashboardTab");
-    usersTab?.classList.add("hidden");
-    usersTabButton?.classList.add("hidden");
-    adminOnlyElements.forEach((element) => element.classList.add("hidden"));
-  }
-}
-
-function openRoomEditor(room) {
-  if (!isAdmin() || !room) return;
-  byId("roomId").value = room.id;
-  byId("roomName").value = room.name;
-  byId("roomTags").value = room.tags.join(", ");
-  byId("roomFormTitle").textContent = `עריכת ${room.name}`;
-  byId("roomFormReset").classList.remove("hidden");
-}
-
-function clearRoomEditor() {
-  byId("roomId").value = "";
-  byId("roomName").value = "";
-  byId("roomTags").value = "";
-  byId("roomFormTitle").textContent = "הוספת חדר";
-  byId("roomFormReset").classList.add("hidden");
-}
-
-function removeRoom(roomId) {
-  if (!isAdmin()) return;
-  const room = getRoom(roomId);
-  if (!room) return;
-  const hasEntries = state.schedule.some((entry) => entry.roomId === roomId);
-  const message = hasEntries
-    ? `מחיקת ${room.name} תסיר גם את כל משבצות הלוח המקושרות אליו. להמשיך?`
-    : `למחוק את ${room.name}?`;
-  if (!confirm(message)) return;
-  state.rooms = state.rooms.filter((item) => item.id !== roomId);
-  state.schedule = state.schedule.filter((entry) => entry.roomId !== roomId);
-  saveState();
-  renderAll();
-  addNotification(`החדר ${room.name} נמחק מהמערכת.`, true);
-}
-
-function renderStats() {
-  const box = byId("dashboardStats");
-  if (!box) return;
-  const weekEntries = getWeekEntries();
-  box.innerHTML = `
-    <div class="stat-card"><span>חדרים</span><strong>${state.rooms.length}</strong></div>
-    <div class="stat-card"><span>משבצות פעילות</span><strong>${weekEntries.length}</strong></div>
-    <div class="stat-card"><span>בקשות פתוחות</span><strong>${state.requests.length}</strong></div>
-    <div class="stat-card"><span>תקלות</span><strong>${state.issues.length}</strong></div>
-  `;
-}
-
-function renderAdminForms() {
-  if (!isAdmin()) return;
-  byId("scheduleWeek").textContent = currentWeekRange();
-  const roomSelects = [byId("scheduleRoom"), byId("requestRoom")].filter(Boolean);
-  roomSelects.forEach((select) => {
-    if (!select.value && select.options.length) select.value = select.options[0].value;
-  });
-}
-
-function loadScheduleFile(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const text = String(reader.result || "").trim();
-      let records = [];
-      if (file.name.toLowerCase().endsWith(".json")) {
-        records = JSON.parse(text);
+  list.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const room = getRoomById(btn.dataset.roomId);
+      if (!room) return;
+      if (btn.dataset.action === "edit-room") {
+        byId("adminRoomId").value   = room.id;
+        byId("adminRoomName").value = room.name;
+        byId("adminRoomTags").value = room.tags.join(", ");
+        byId("adminRoomSaveBtn").textContent = "עדכון חדר";
+        byId("adminRoomClearBtn").classList.remove("hidden");
+        byId("adminRoomName").focus();
       } else {
-        const [header, ...rows] = text.split(/\r?\n/).filter(Boolean);
-        const columns = parseCsvLine(header);
-        records = rows.map((line) => {
-          const values = parseCsvLine(line);
-          return Object.fromEntries(columns.map((column, index) => [column, values[index]]));
-        });
+        if (!confirm(`למחוק את ${room.name}? כל המשבצות יוסרו.`)) return;
+        state.rooms    = state.rooms.filter(r => r.id !== room.id);
+        state.schedule = state.schedule.filter(e => e.roomId !== room.id);
+        persistState();
+        renderAll();
+        addNotification(`${room.name} נמחק.`);
       }
-
-      const week = state.viewWeekStart;
-      state.schedule = records.map((record) => normalizeEntry({
-        weekStart: record.weekStart || week,
-        day: record.day ?? record.weekday ?? record.dayKey ?? 0,
-        roomId: record.roomId || record.room,
-        start: record.start || record.hour || "08:00",
-        staff: record.staff || record.fullName || "",
-        duration: record.duration || 60,
-        team: record.team || "מבוגרים",
-        oneTime: String(record.oneTime || false) === "true",
-        source: record.source || "import",
-        note: record.note || ""
-      }, week, state.rooms));
-      saveState();
-      renderAll();
-      addNotification("נוצר/עודכן לוח שבועי מקובץ CSV/JSON.");
-    } catch (error) {
-      alert(`פורמט קובץ לא תקין. יש להשתמש ב-CSV/JSON תקניים. פרטים: ${error.message || "שגיאה לא ידועה"}`);
-    }
-  };
-  reader.readAsText(file);
+    });
+  });
 }
 
-function renderSessionState() {
-  const storedUser = sessionStorage.getItem("clinic_user");
-  if (!storedUser) return;
-  state.currentUser = {
-    username: storedUser,
-    role: storedUser === "admin" ? "admin" : "staff"
-  };
+/* ============================================================
+   ADMIN – STAFF
+   ============================================================ */
+
+function renderAdminStaff() {
+  const list = byId("adminStaffList");
+  if (!list) return;
+  list.innerHTML = state.staff.map(p => `
+    <div class="admin-row">
+      <div class="admin-row-info">
+        <strong>${esc(p.fullName)}</strong>
+        <span class="muted small">${esc(p.role)} · ${esc(p.team)}</span>
+        <span class="muted small">${esc(p.phone)} | ${esc(p.email)}</span>
+      </div>
+      <div class="admin-row-acts">
+        <button class="btn-sm" data-action="edit-staff" data-staff-id="${p.id}">עריכה</button>
+        <button class="btn-sm danger" data-action="del-staff" data-staff-id="${p.id}">מחיקה</button>
+      </div>
+    </div>
+  `).join("") || `<p class="empty-state">אין צוות.</p>`;
+
+  list.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const person = state.staff.find(p => p.id === btn.dataset.staffId);
+      if (!person) return;
+      if (btn.dataset.action === "edit-staff") {
+        byId("adminStaffId").value    = person.id;
+        byId("adminStaffName").value  = person.fullName;
+        byId("adminStaffPhone").value = person.phone;
+        byId("adminStaffEmail").value = person.email;
+        byId("adminStaffRole").value  = person.role;
+        byId("adminStaffTeam").value  = person.team;
+        byId("adminStaffSaveBtn").textContent = "עדכון איש צוות";
+        byId("adminStaffClearBtn").classList.remove("hidden");
+        byId("adminStaffName").focus();
+      } else {
+        if (!confirm(`למחוק את ${person.fullName}?`)) return;
+        state.staff = state.staff.filter(p => p.id !== person.id);
+        persistState();
+        renderAdminStaff();
+        addNotification(`${person.fullName} הוסר/ה.`);
+      }
+    });
+  });
+}
+
+/* ============================================================
+   SESSION BAR + ACCESS CONTROL
+   ============================================================ */
+
+function renderSessionBar() {
+  const bar = byId("sessionBar");
+  if (!state.currentUser) { bar.classList.add("hidden"); return; }
+  bar.classList.remove("hidden");
   byId("activeUser").textContent = `מחובר: ${state.currentUser.username}`;
   byId("activeRole").textContent = state.currentUser.role === "admin" ? "מנהל מערכת" : "צוות";
-  byId("loginSection").classList.add("hidden");
-  byId("appSection").classList.remove("hidden");
-  byId("sessionBar").classList.remove("hidden");
 }
 
-function bindEvents() {
-  byId("loginForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const username = byId("username").value.trim();
-    const password = byId("password").value;
-    const account = state.credentials[username];
-    if (account && account.password === password) {
-      setCurrentUser(username);
-      byId("activeUser").textContent = `מחובר: ${username} · ${account.label}`;
-      byId("loginSection").classList.add("hidden");
-      byId("appSection").classList.remove("hidden");
-      byId("sessionBar").classList.remove("hidden");
-      byId("loginError").classList.add("hidden");
-      renderAdminPanels();
-      renderAll();
-      showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
-      return;
-    }
-    byId("loginError").classList.remove("hidden");
-  });
-
-  byId("logoutBtn").addEventListener("click", () => {
-    clearCurrentUser();
-    byId("appSection").classList.add("hidden");
-    byId("sessionBar").classList.add("hidden");
-    byId("loginSection").classList.remove("hidden");
-  });
-
-  document.querySelectorAll(".tabs button").forEach((button) => {
-    button.addEventListener("click", () => {
-      const tabId = button.dataset.tab;
-      if (button.classList.contains("hidden")) return;
-      showTab(tabId);
-    });
-  });
-
-  byId("weekPrev").addEventListener("click", () => setWeekStartDate(addDays(currentWeekDate(), -7)));
-  byId("weekNext").addEventListener("click", () => setWeekStartDate(addDays(currentWeekDate(), 7)));
-
-  byId("scheduleUpload").addEventListener("change", (event) => {
-    const file = event.target.files?.[0];
-    if (file) loadScheduleFile(file);
-  });
-
-  byId("requestForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const request = {
-      id: uniqueId("request"),
-      team: byId("requestTeam").value,
-      room: byId("requestRoom").value,
-      roomId: byId("requestRoom").value,
-      day: Number(byId("requestDay").value),
-      startTime: byId("requestStart").value,
-      staff: byId("requestStaff").value.trim(),
-      duration: Number(byId("requestDuration").value),
-      oneTime: byId("requestOneTime").checked,
-      reason: byId("requestReason").value.trim()
-    };
-    state.requests.unshift(request);
-    saveState();
-    byId("requestForm").reset();
-    byId("requestDay").value = "0";
-    byId("requestStart").value = "08:00";
-    renderRequests();
-    addNotification("נוצרה בקשת שינוי חדשה לאישור מנהל.", true);
-  });
-
-  byId("scheduleForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!isAdmin()) return;
-    const entryId = byId("scheduleEntryId").value;
-    const payload = normalizeEntry({
-      id: entryId || uniqueId("entry"),
-      weekStart: state.viewWeekStart,
-      day: Number(byId("scheduleDay").value),
-      roomId: byId("scheduleRoom").value,
-      start: byId("scheduleStart").value,
-      duration: Number(byId("scheduleDuration").value),
-      staff: byId("scheduleStaff").value.trim(),
-      team: byId("scheduleTeam").value,
-      note: byId("scheduleNote").value.trim(),
-      source: entryId ? getEntryById(entryId)?.source || "manual" : "manual"
-    });
-
-    const conflict = state.schedule.find((entry) => {
-      if (entry.id === payload.id) return false;
-      if (entry.weekStart !== payload.weekStart || entry.day !== payload.day || entry.roomId !== payload.roomId) return false;
-      const entryStart = timeToMinutes(entry.start);
-      const entryEnd = entryStart + entry.duration;
-      const payloadStart = timeToMinutes(payload.start);
-      const payloadEnd = payloadStart + payload.duration;
-      return payloadStart < entryEnd && payloadEnd > entryStart;
-    });
-
-    if (conflict) {
-      alert(`יש התנגשות עם ${conflict.staff} ב${getRoomName(conflict.roomId)}.`);
-      return;
-    }
-
-    const index = state.schedule.findIndex((entry) => entry.id === entryId);
-    if (index >= 0) {
-      state.schedule[index] = payload;
-      addNotification(`משבצת הלו"ז של ${payload.staff} עודכנה.`, true);
-    } else {
-      state.schedule.push(payload);
-      addNotification(`נוספה משבצת חדשה עבור ${payload.staff}.`, true);
-    }
-    saveState();
-    renderAll();
-    clearScheduleEditor();
-  });
-
-  byId("scheduleCancel").addEventListener("click", () => clearScheduleEditor());
-  byId("scheduleDeleteAction").addEventListener("click", () => {
-    const entryId = byId("scheduleEntryId").value;
-    if (entryId) removeEntry(entryId);
-  });
-
-  byId("roomForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!isAdmin()) return;
-    const roomId = byId("roomId").value;
-    const room = normalizeRoom({
-      id: roomId || uniqueId("room"),
-      name: byId("roomName").value.trim(),
-      tags: byId("roomTags").value
-    });
-    if (!room.name) return;
-
-    const existingIndex = state.rooms.findIndex((item) => item.id === room.id);
-    if (existingIndex >= 0) {
-      state.rooms[existingIndex] = room;
-      addNotification(`החדר ${room.name} עודכן.`, true);
-    } else {
-      state.rooms.push(room);
-      addNotification(`החדר ${room.name} נוסף למערכת.`, true);
-    }
-    saveState();
-    renderAll();
-    clearRoomEditor();
-  });
-
-  byId("roomFormReset").addEventListener("click", () => clearRoomEditor());
-
-  byId("userForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    if (!isAdmin()) return;
-    state.users.push({
-      fullName: byId("fullName").value.trim(),
-      phone: byId("phone").value.trim(),
-      email: byId("email").value.trim(),
-      chatShortcut: byId("chatShortcut").value.trim(),
-      role: byId("role").value.trim(),
-      team: byId("team").value
-    });
-    saveState();
-    byId("userForm").reset();
-    renderUsers();
-  });
-
-  byId("meetingForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const files = [...byId("meetingFiles").files].map((file) => file.name);
-    const meeting = { team: byId("meetingTeam").value, agenda: byId("meetingAgenda").value.trim(), files };
-    state.meetings.unshift(meeting);
-    saveState();
-    byId("meetingForm").reset();
-    renderMeetings();
-    addNotification("הועלה סדר יום/חומר חדש למודול ישיבות צוות.", true);
-  });
-
-  byId("resourceForm").addEventListener("submit", (event) => {
-    event.preventDefault();
-    state.resources.unshift({ title: byId("resourceTitle").value.trim(), type: byId("resourceType").value, content: byId("resourceUrl").value.trim() });
-    saveState();
-    byId("resourceForm").reset();
-    renderResources();
-  });
+function applyAccessControl() {
+  const admin = isAdmin();
+  document.querySelectorAll(".admin-only").forEach(el => el.classList.toggle("hidden", !admin));
+  const adminBtn = document.querySelector("[data-tab='adminTab']");
+  if (adminBtn) adminBtn.classList.toggle("hidden", !admin);
+  if (!admin && state.activeTab === "adminTab") state.activeTab = "dashboardTab";
 }
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+
+function showToast(text, type = "info") {
+  const toast = byId("toast");
+  if (!toast) return;
+  toast.textContent  = text;
+  toast.className    = `toast toast-${type} show`;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => toast.classList.remove("show"), 3200);
+}
+
+function addNotification(text, critical = false) {
+  state.notifications.unshift({ id: makeId("note"), text, critical, at: new Date().toLocaleString("he-IL") });
+  persistState();
+  renderNotifications();
+  showToast(text, critical ? "warn" : "info");
+}
+
+/* ============================================================
+   TAB ROUTING
+   ============================================================ */
+
+function showTab(tabId) {
+  const btn = document.querySelector(`[data-tab='${tabId}']`);
+  if (!btn || btn.classList.contains("hidden")) return;
+  state.activeTab = tabId;
+  document.querySelectorAll(".tab-content").forEach(t => t.classList.add("hidden"));
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.remove("active"));
+  byId(tabId)?.classList.remove("hidden");
+  btn.classList.add("active");
+}
+
+/* ============================================================
+   RENDER ALL
+   ============================================================ */
 
 function renderAll() {
-  updateWeekLabels();
-  renderSessionState();
-  renderAdminPanels();
+  renderSessionBar();
+  applyAccessControl();
+  renderWeekHeader();
+  renderDayTabs();
   renderStats();
   renderTagFilters();
-  renderDayFilters();
-  renderRoomOptions();
-  renderWeekControls();
-  byId("requestDay").innerHTML = DAY_DEFS.map((day) => `<option value="${day.key}">${day.label}</option>`).join("");
-  byId("requestStart").innerHTML = Array.from({ length: SLOT_COUNT }, (_, index) => `<option value="${minutesToTime(slotStartMinutes(index))}">${minutesToTime(slotStartMinutes(index))}</option>`).join("");
-  byId("scheduleDay").innerHTML = DAY_DEFS.map((day) => `<option value="${day.key}">${day.label}</option>`).join("");
-  byId("scheduleStart").innerHTML = Array.from({ length: SLOT_COUNT }, (_, index) => `<option value="${minutesToTime(slotStartMinutes(index))}">${minutesToTime(slotStartMinutes(index))}</option>`).join("");
-  if (byId("scheduleRoom").options.length === 0 && state.rooms.length) {
-    byId("scheduleRoom").innerHTML = state.rooms.map((room) => `<option value="${room.id}">${room.name}</option>`).join("");
-  }
   renderOccupancy();
   renderRequests();
-  renderUsers();
   renderMeetings();
   renderResources();
   renderIssues();
   renderNotifications();
-  renderAdminEntries();
-  renderAdminRooms();
-  renderAdminForms();
+  if (isAdmin()) {
+    renderAdminRooms();
+    renderAdminStaff();
+  }
 }
 
+/* ============================================================
+   BIND EVENTS
+   ============================================================ */
+
+function populateStaticSelects() {
+  const dayOpts   = DAY_DEFS.map(d => `<option value="${d.key}">${d.label}</option>`).join("");
+  const timeOpts  = Array.from({ length: SLOT_COUNT }, (_, i) => {
+    const t = minToTime(slotStart(i));
+    return `<option value="${t}">${t}</option>`;
+  }).join("");
+  const teamOpts  = TEAMS.map(t => `<option>${t}</option>`).join("");
+  const roomOpts  = state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
+
+  byId("requestDay").innerHTML   = dayOpts;
+  byId("requestStart").innerHTML = timeOpts;
+  byId("requestTeam").innerHTML  = teamOpts;
+  byId("requestRoom").innerHTML  = roomOpts;
+  byId("meetingTeam").innerHTML  = teamOpts;
+  byId("adminStaffTeam").innerHTML = teamOpts;
+}
+
+function bindEvents() {
+
+  /* Login */
+  byId("loginForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const u = byId("username").value.trim();
+    const p = byId("password").value;
+    const acct = state.credentials[u];
+    if (acct && acct.password === p) {
+      state.currentUser = { username: u, role: acct.role, label: acct.label };
+      sessionStorage.setItem("clinic_user", u);
+      byId("loginSection").classList.add("hidden");
+      byId("appSection").classList.remove("hidden");
+      byId("loginError").classList.add("hidden");
+      renderAll();
+      showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
+    } else {
+      byId("loginError").classList.remove("hidden");
+    }
+  });
+
+  byId("logoutBtn").addEventListener("click", () => {
+    state.currentUser = null;
+    sessionStorage.removeItem("clinic_user");
+    byId("appSection").classList.add("hidden");
+    byId("loginSection").classList.remove("hidden");
+    renderSessionBar();
+  });
+
+  /* Tab navigation */
+  document.querySelectorAll(".tabs button").forEach(btn =>
+    btn.addEventListener("click", () => showTab(btn.dataset.tab))
+  );
+
+  /* Week navigation */
+  byId("weekPrev").addEventListener("click", () => {
+    state.weekISO = shiftWeek(state.weekISO, -1);
+    persistState(); renderAll();
+  });
+  byId("weekNext").addEventListener("click", () => {
+    state.weekISO = shiftWeek(state.weekISO, 1);
+    persistState(); renderAll();
+  });
+  byId("weekToday").addEventListener("click", () => {
+    state.weekISO = sundayISO();
+    state.activeDay = todayDayIdx();
+    persistState(); renderAll();
+  });
+
+  /* Booking modal submit */
+  byId("bookingForm").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+
+    const entryId = byId("bookingEntryId").value;
+    const day     = Number(byId("bookingDay").value);
+    const roomId  = byId("bookingRoomSel").value;
+    const start   = byId("bookingStart").value;
+    const dur     = Number(byId("bookingDuration").value);
+    const staff   = byId("bookingStaff").value.trim();
+
+    if (!staff)                              { showToast("יש להזין שם איש צוות.", "error"); return; }
+    if (timeToMin(start) + dur > WORK_END)   { showToast("המשבצת חורגת משעות העבודה.", "error"); return; }
+
+    const conflict = state.schedule.find(ex =>
+      ex.id !== entryId &&
+      ex.weekISO === state.weekISO &&
+      ex.day === day && ex.roomId === roomId &&
+      timeToMin(ex.start) < timeToMin(start) + dur &&
+      timeToMin(ex.start) + ex.duration > timeToMin(start)
+    );
+    if (conflict) { showToast(`התנגשות עם ${conflict.staff}.`, "error"); return; }
+
+    const payload = normalizeEntry({
+      id:      entryId || makeId("entry"),
+      weekISO: state.weekISO,
+      day, roomId, start,
+      duration: dur,
+      staff,
+      team:    byId("bookingTeam").value,
+      note:    byId("bookingNote").value.trim(),
+      oneTime: byId("bookingOneTime").checked,
+      source:  entryId ? (getEntryById(entryId)?.source || "manual") : "manual"
+    }, state.weekISO, state.rooms);
+
+    const idx = state.schedule.findIndex(ex => ex.id === entryId);
+    if (idx >= 0) state.schedule[idx] = payload;
+    else          state.schedule.push(payload);
+
+    addNotification(`${staff} ${entryId ? "עודכן" : "נוסף"} ב${getRoomName(roomId)}.`, true);
+    persistState();
+    closeBookingModal();
+    renderOccupancy();
+    renderStats();
+    renderDayTabs();
+  });
+
+  byId("bookingClose").addEventListener("click", closeBookingModal);
+  byId("bookingDelete").addEventListener("click", () => {
+    const entryId = byId("bookingEntryId").value;
+    if (!entryId || !isAdmin()) return;
+    const entry = getEntryById(entryId);
+    if (!entry || !confirm(`למחוק את ${entry.staff}?`)) return;
+    state.schedule = state.schedule.filter(e => e.id !== entryId);
+    addNotification(`${entry.staff} הוסר/ה.`, true);
+    persistState();
+    closeBookingModal();
+    renderOccupancy();
+    renderStats();
+    renderDayTabs();
+  });
+  /* Click backdrop to close */
+  byId("bookingModal").addEventListener("click", e => {
+    if (e.target === byId("bookingModal")) closeBookingModal();
+  });
+
+  /* CSV/JSON upload */
+  byId("scheduleUpload")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "").trim();
+        let records;
+        if (file.name.toLowerCase().endsWith(".json")) {
+          records = JSON.parse(text);
+        } else {
+          const [header, ...rows] = text.split(/\r?\n/).filter(Boolean);
+          const cols = header.split(",").map(c => c.trim());
+          records = rows.map(line => {
+            const vals = line.split(",").map(v => v.trim());
+            return Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
+          });
+        }
+        state.schedule = records.map(r => normalizeEntry(r, state.weekISO, state.rooms));
+        persistState(); renderAll();
+        addNotification("לוח הזמנים עודכן מקובץ.");
+      } catch (err) {
+        showToast(`שגיאה: ${err.message}`, "error");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  /* Requests form */
+  const reqRoomSel = byId("requestRoom");
+  byId("requestForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const staff = byId("requestStaff").value.trim();
+    if (!staff) { showToast("יש להזין שם איש צוות.", "error"); return; }
+    state.requests.unshift({
+      id:        makeId("req"),
+      team:      byId("requestTeam").value,
+      room:      reqRoomSel.value,
+      roomId:    reqRoomSel.value,
+      day:       Number(byId("requestDay").value),
+      startTime: byId("requestStart").value,
+      start:     byId("requestStart").value,
+      staff,
+      duration:  Number(byId("requestDuration").value),
+      oneTime:   byId("requestOneTime").checked,
+      reason:    byId("requestReason").value.trim()
+    });
+    persistState();
+    byId("requestForm").reset();
+    renderRequests();
+    addNotification("נשלחה בקשת שינוי לאישור מנהל.", true);
+  });
+
+  /* Meetings form */
+  byId("meetingForm").addEventListener("submit", e => {
+    e.preventDefault();
+    state.meetings.unshift({
+      team:   byId("meetingTeam").value,
+      agenda: byId("meetingAgenda").value.trim(),
+      files:  [...byId("meetingFiles").files].map(f => f.name)
+    });
+    persistState(); byId("meetingForm").reset(); renderMeetings();
+    addNotification("נוסף סדר יום לישיבת צוות.");
+  });
+
+  /* Resources form */
+  byId("resourceForm").addEventListener("submit", e => {
+    e.preventDefault();
+    state.resources.unshift({
+      title:   byId("resourceTitle").value.trim(),
+      type:    byId("resourceType").value,
+      content: byId("resourceUrl").value.trim()
+    });
+    persistState(); byId("resourceForm").reset(); renderResources();
+  });
+
+  /* Admin – room form */
+  byId("adminRoomForm").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+    const id   = byId("adminRoomId").value;
+    const room = normalizeRoom({ id: id || makeId("room"), name: byId("adminRoomName").value, tags: byId("adminRoomTags").value });
+    if (!room.name) { showToast("יש להזין שם חדר.", "error"); return; }
+    const idx = state.rooms.findIndex(r => r.id === room.id);
+    if (idx >= 0) state.rooms[idx] = room;
+    else          state.rooms.push(room);
+    persistState(); renderAll();
+    addNotification(`${room.name} עודכן/נוסף.`);
+    byId("adminRoomForm").reset();
+    byId("adminRoomId").value = "";
+    byId("adminRoomSaveBtn").textContent = "הוסף חדר";
+    byId("adminRoomClearBtn").classList.add("hidden");
+  });
+  byId("adminRoomClearBtn").addEventListener("click", () => {
+    byId("adminRoomForm").reset();
+    byId("adminRoomId").value = "";
+    byId("adminRoomSaveBtn").textContent = "הוסף חדר";
+    byId("adminRoomClearBtn").classList.add("hidden");
+  });
+
+  /* Admin – staff form */
+  byId("adminStaffForm").addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+    const id     = byId("adminStaffId").value;
+    const person = normalizeStaff({
+      id:       id || makeId("staff"),
+      fullName: byId("adminStaffName").value,
+      phone:    byId("adminStaffPhone").value,
+      email:    byId("adminStaffEmail").value,
+      role:     byId("adminStaffRole").value,
+      team:     byId("adminStaffTeam").value
+    });
+    if (!person.fullName) { showToast("יש להזין שם מלא.", "error"); return; }
+    const idx = state.staff.findIndex(p => p.id === person.id);
+    if (idx >= 0) state.staff[idx] = person;
+    else          state.staff.push(person);
+    persistState(); renderAdminStaff();
+    addNotification(`${person.fullName} עודכן/נוסף.`);
+    byId("adminStaffForm").reset();
+    byId("adminStaffId").value = "";
+    byId("adminStaffSaveBtn").textContent = "הוסף איש צוות";
+    byId("adminStaffClearBtn").classList.add("hidden");
+  });
+  byId("adminStaffClearBtn").addEventListener("click", () => {
+    byId("adminStaffForm").reset();
+    byId("adminStaffId").value = "";
+    byId("adminStaffSaveBtn").textContent = "הוסף איש צוות";
+    byId("adminStaffClearBtn").classList.add("hidden");
+  });
+}
+
+/* ============================================================
+   INITIALIZE
+   ============================================================ */
+
 function initialize() {
+  /* Restore session */
+  const stored = sessionStorage.getItem("clinic_user");
+  if (stored) {
+    state.currentUser = { username: stored, role: stored === "admin" ? "admin" : "staff", label: "" };
+    byId("loginSection").classList.add("hidden");
+    byId("appSection").classList.remove("hidden");
+  }
+
+  populateStaticSelects();
   bindEvents();
   renderAll();
 
-  const storedUser = sessionStorage.getItem("clinic_user");
-  if (storedUser) {
-    try {
-      state.currentUser = JSON.parse(storedUser);
-      byId("activeUser").textContent = `מחובר: ${state.currentUser.username} · ${state.currentUser.label}`;
-      byId("loginSection").classList.add("hidden");
-      byId("appSection").classList.remove("hidden");
-      byId("sessionBar").classList.remove("hidden");
-    } catch {
-      clearCurrentUser();
-    }
+  if (state.currentUser) {
+    showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
   }
-
-  renderAdminPanels();
-  if (state.activeTab === "adminTab" && !isAdmin()) {
-    state.activeTab = "dashboardTab";
-  }
-  showTab(state.activeTab);
-  renderAll();
 }
 
+window.addEventListener("beforeunload", persistState);
 initialize();

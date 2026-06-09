@@ -4,15 +4,66 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0f766e" />
-  <title>מערכת ניהול מרפאה חכמה</title>
+  <title>מערכת ניהול מרפאה</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast" aria-live="assertive" role="status"></div>
+
+  <!-- Booking modal (native <dialog>) -->
+  <dialog id="bookingModal" class="booking-dialog">
+    <form id="bookingForm" novalidate>
+      <input type="hidden" id="bookingEntryId" />
+      <input type="hidden" id="bookingDay" />
+      <datalist id="bookingStaffList"></datalist>
+
+      <div class="dialog-head">
+        <h3 id="bookingModalTitle">הוספת הזמנה</h3>
+        <button type="button" id="bookingClose" class="dialog-close-btn" aria-label="סגור">✕</button>
+      </div>
+
+      <div class="dialog-body">
+        <div class="dialog-grid">
+          <label>חדר
+            <select id="bookingRoomSel" required></select>
+          </label>
+          <label>שעת התחלה
+            <select id="bookingStart" required></select>
+          </label>
+          <label>משך (דקות)
+            <input id="bookingDuration" type="number" min="30" step="30" value="60" required />
+          </label>
+          <label>צוות
+            <select id="bookingTeam" required></select>
+          </label>
+          <label class="d-full">איש/ת צוות
+            <input id="bookingStaff" list="bookingStaffList" autocomplete="off" required />
+          </label>
+          <label class="d-full">הערות
+            <textarea id="bookingNote" rows="2"></textarea>
+          </label>
+          <label class="d-full checkbox-label">
+            <input id="bookingOneTime" type="checkbox" />
+            <span>משבצת חד-פעמית</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button id="bookingSubmit" type="submit">שמירה</button>
+        <button id="bookingClose2" type="button" class="secondary">ביטול</button>
+        <button id="bookingDelete" type="button" class="danger hidden">מחיקה</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Site header -->
   <header class="site-header">
     <div class="brand-block">
       <p class="eyebrow">מערכת ניהול מרפאה פנימית</p>
-      <h1>מערכת ניהול מרפאה</h1>
-      <p class="hero-copy">RTL, לוח עבודה שבועי, ניהול אדמין חכם וחוויית שימוש נעימה לצוות דובר עברית.</p>
+      <h1>מרפאה</h1>
     </div>
     <div id="sessionBar" class="session-bar hidden">
       <div class="session-text">
@@ -24,225 +75,175 @@
   </header>
 
   <main class="shell">
+
+    <!-- Login -->
     <section id="loginSection" class="card auth-card">
-      <div class="section-head">
-        <div>
-          <h2>כניסה מאובטחת</h2>
-          <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
-        </div>
-      </div>
-      <form id="loginForm" class="grid-form auth-form">
+      <h2>כניסה מאובטחת</h2>
+      <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
+      <form id="loginForm" class="auth-form">
         <label>שם משתמש <input id="username" autocomplete="username" required /></label>
-        <label>סיסמה <input id="password" type="password" autocomplete="current-password" required /></label>
+        <label>סיסמה     <input id="password" type="password" autocomplete="current-password" required /></label>
         <button type="submit">כניסה</button>
       </form>
       <p id="loginError" class="error hidden">שם משתמש או סיסמה שגויים</p>
-      <div class="demo-credentials">
+      <div class="demo-creds">
         <span>admin / admin123</span>
         <span>staff / staff123</span>
       </div>
     </section>
 
+    <!-- App shell -->
     <section id="appSection" class="hidden">
+
+      <!-- Tab bar -->
       <nav class="card tabs">
-        <button data-tab="dashboardTab" class="active">לוח תפוסת חדרים</button>
-        <button data-tab="requestsTab">בקשות שינויים</button>
-        <button data-tab="adminTab" class="admin-only hidden">מרחב אדמין</button>
-        <button data-tab="meetingsTab">ישיבות צוות</button>
-        <button data-tab="resourcesTab">מרכז ידע ומשאבים</button>
-        <button data-tab="issuesTab">תקלות תחזוקה</button>
+        <button data-tab="dashboardTab" class="active">לוח הזמנות</button>
+        <button data-tab="requestsTab">בקשות</button>
+        <button data-tab="adminTab" class="admin-only hidden">אדמין</button>
+        <button data-tab="meetingsTab">ישיבות</button>
+        <button data-tab="resourcesTab">מרכז ידע</button>
+        <button data-tab="issuesTab">תקלות</button>
         <button data-tab="notificationsTab">התראות</button>
       </nav>
 
+      <!-- ======== DASHBOARD TAB ======== -->
       <section id="dashboardTab" class="card tab-content">
+
+        <!-- Week header -->
         <div class="section-head">
           <div>
-            <h2>מטריצת תפוסת חדרים</h2>
+            <h2>לוח הזמנות</h2>
             <p id="weekLabel" class="muted"></p>
-            <p id="dayLabel" class="muted"></p>
           </div>
-          <div class="week-controls">
-            <button id="weekPrev" type="button" class="secondary">שבוע קודם</button>
-            <button id="currentWeekBtn" type="button">שבוע נוכחי</button>
-            <button id="weekNext" type="button" class="secondary">שבוע הבא</button>
-          </div>
-        </div>
-
-        <div class="stats-grid" id="dashboardStats"></div>
-
-        <div class="control-grid">
-          <div class="control-card">
-            <h3>ימי עבודה מוצגים</h3>
-            <div id="dayFilters" class="chips"></div>
-          </div>
-          <div class="control-card">
-            <h3>יום פעיל לטפסים</h3>
-            <div id="workdayTabs" class="chips"></div>
-          </div>
-          <div class="control-card">
-            <h3>סינון חדרים לפי התאמה קלינית</h3>
-            <div id="tagFilters" class="chips"></div>
+          <div class="week-nav">
+            <button id="weekPrev"  type="button" class="secondary icon-btn" title="שבוע קודם">&#8250;</button>
+            <button id="weekToday" type="button">שבוע נוכחי</button>
+            <button id="weekNext"  type="button" class="secondary icon-btn" title="שבוע הבא">&#8249;</button>
           </div>
         </div>
 
-        <div class="table-wrap">
-          <table id="occupancyTable"></table>
+        <!-- Stats row -->
+        <div id="dashboardStats" class="stats-row"></div>
+
+        <!-- Day tabs -->
+        <div id="dayTabs" class="day-tabs"></div>
+
+        <!-- Active day heading -->
+        <p id="dayHeading" class="day-heading"></p>
+
+        <!-- Tag filters -->
+        <details class="filter-collapsible" open>
+          <summary>סינון לפי תגית</summary>
+          <div id="tagFilters" class="chips"></div>
+        </details>
+
+        <!-- Occupancy table -->
+        <div class="table-scroll">
+          <table id="occupancyTable" class="occ-table"></table>
         </div>
       </section>
 
+      <!-- ======== REQUESTS TAB ======== -->
       <section id="requestsTab" class="card tab-content hidden">
         <div class="section-head">
           <div>
-            <h2>בקשת שינוי חד-פעמי</h2>
-            <p class="muted">הבקשה תועבר לאישור מנהל, כולל יום ושעת התחלה.</p>
+            <h2>בקשות שינוי</h2>
+            <p class="muted">שלחו בקשה לשינוי הזמנה – תועבר לאישור מנהל.</p>
           </div>
         </div>
         <form id="requestForm" class="grid-form">
-          <label>צוות
-            <select id="requestTeam" required></select>
-          </label>
-          <label>חדר
-            <select id="requestRoom" required></select>
-          </label>
-          <label>יום עבודה
-            <select id="requestDay" required></select>
-          </label>
-          <label>שעת התחלה
-            <select id="requestStart" required></select>
-          </label>
-          <label>איש צוות
-            <input id="requestStaff" required />
-          </label>
-          <label>משך (דקות)
-            <input id="requestDuration" type="number" min="30" step="30" value="60" required />
-          </label>
-          <label><input id="requestOneTime" type="checkbox" checked /> שינוי חד-פעמי</label>
-          <label class="full">סיבת בקשה
-            <textarea id="requestReason" required></textarea>
-          </label>
-          <button type="submit">שליחת בקשה</button>
+          <label>צוות          <select id="requestTeam"     required></select></label>
+          <label>חדר           <select id="requestRoom"     required></select></label>
+          <label>יום           <select id="requestDay"      required></select></label>
+          <label>שעת התחלה    <select id="requestStart"    required></select></label>
+          <label>איש/ת צוות   <input  id="requestStaff"    required /></label>
+          <label>משך (דקות)   <input  id="requestDuration" type="number" min="30" step="30" value="60" required /></label>
+          <label class="checkbox-label"><input id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
+          <label class="full">סיבת בקשה <textarea id="requestReason" required></textarea></label>
+          <button type="submit">שלח בקשה</button>
         </form>
         <h3>בקשות ממתינות</h3>
         <div id="requestsList"></div>
       </section>
 
+      <!-- ======== ADMIN TAB (admin only) ======== -->
       <section id="adminTab" class="card tab-content hidden admin-only">
+
         <div class="section-head">
           <div>
             <h2>מרחב אדמין</h2>
             <p id="adminWeekLabel" class="muted"></p>
           </div>
+          <label class="file-upload-label">
+            טעינת לו"ז (CSV/JSON)
+            <input type="file" id="scheduleUpload" accept=".csv,.json" />
+          </label>
         </div>
 
-        <div class="admin-grid">
+        <div class="admin-two-col">
+
+          <!-- Rooms panel -->
           <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h3 id="scheduleFormTitle">הוספת משבצת ללוח</h3>
-                <p id="scheduleWeek" class="muted"></p>
-              </div>
-            </div>
-            <form id="scheduleForm" class="grid-form">
-              <input type="hidden" id="scheduleEntryId" />
-              <label>יום עבודה
-                <select id="scheduleDay" required></select>
+            <h3 class="panel-title">חדרים</h3>
+
+            <form id="adminRoomForm" class="grid-form compact-form">
+              <input type="hidden" id="adminRoomId" />
+              <label>שם החדר
+                <input id="adminRoomName" required placeholder="לדוגמה: חדר 5" />
               </label>
-              <label>חדר
-                <select id="scheduleRoom" required></select>
-              </label>
-              <label>שעת התחלה
-                <select id="scheduleStart" required></select>
-              </label>
-              <label>משך (דקות)
-                <input id="scheduleDuration" type="number" min="30" step="30" value="60" required />
-              </label>
-              <label>איש צוות
-                <input id="scheduleStaff" required />
-              </label>
-              <label>צוות
-                <select id="scheduleTeam" required></select>
-              </label>
-              <label><input id="scheduleOneTime" type="checkbox" /> משבצת חד-פעמית</label>
-              <label class="full">הערות
-                <textarea id="scheduleNote"></textarea>
+              <label class="full">תגיות קליניות
+                <input id="adminRoomTags" placeholder="טיפול ילדים, ציוד אבחוני" />
               </label>
               <div class="form-actions full">
-                <button id="scheduleSubmitBtn" type="submit">שמירה</button>
-                <button id="scheduleCancel" type="button" class="secondary">ניקוי</button>
-                <button id="scheduleDeleteAction" type="button" class="danger hidden">מחיקת משבצת</button>
+                <button id="adminRoomSaveBtn" type="submit">הוסף חדר</button>
+                <button id="adminRoomClearBtn" type="button" class="secondary hidden">ניקוי</button>
               </div>
             </form>
-            <div id="scheduleAdminList" class="stack"></div>
+
+            <div id="adminRoomList" class="admin-list"></div>
           </article>
 
+          <!-- Staff panel -->
           <article class="panel">
-            <div class="panel-head">
-              <div>
-                <h3 id="roomFormTitle">ניהול חדרים</h3>
-                <p class="muted">עריכת חדרים, תגיות ושמות שיופיעו בלוח.</p>
-              </div>
-            </div>
-            <form id="roomForm" class="grid-form">
-              <input type="hidden" id="roomOriginalName" />
-              <input type="hidden" id="roomId" />
-              <label>שם החדר <input id="roomName" required /></label>
-              <label class="full">תגיות קליניות <input id="roomTags" placeholder="טיפול ילדים, ציוד אבחוני" required /></label>
+            <h3 class="panel-title">צוות</h3>
+
+            <form id="adminStaffForm" class="grid-form compact-form">
+              <input type="hidden" id="adminStaffId" />
+              <label>שם מלא   <input id="adminStaffName"  required placeholder='לדוגמה: ד"ר כהן' /></label>
+              <label>טלפון    <input id="adminStaffPhone" type="tel"   placeholder="050-0000000" /></label>
+              <label>דוא"ל    <input id="adminStaffEmail" type="email" placeholder="dr@clinic.org" /></label>
+              <label>תפקיד   <input id="adminStaffRole"  placeholder="פסיכולוג/ית" /></label>
+              <label>צוות    <select id="adminStaffTeam"></select></label>
               <div class="form-actions full">
-                <button id="roomSubmitBtn" type="submit">שמירה</button>
-                <button id="roomFormReset" type="button" class="secondary hidden">ניקוי</button>
+                <button id="adminStaffSaveBtn" type="submit">הוסף איש צוות</button>
+                <button id="adminStaffClearBtn" type="button" class="secondary hidden">ניקוי</button>
               </div>
             </form>
-            <div id="roomAdminList" class="stack"></div>
+
+            <div id="adminStaffList" class="admin-list"></div>
           </article>
 
-          <article class="panel full-span admin-only">
-            <div class="panel-head">
-              <h3>ניהול משתמשים</h3>
-            </div>
-            <form id="userForm" class="grid-form">
-              <label>שם מלא <input id="fullName" required /></label>
-              <label>טלפון <input id="phone" required /></label>
-              <label>דוא"ל ארגוני <input id="email" type="email" required /></label>
-              <label>קיצור תקשורת פנימי <input id="chatShortcut" required /></label>
-              <label>תפקיד <input id="role" required /></label>
-              <label>צוות
-                <select id="team" required></select>
-              </label>
-              <button type="submit">הוספת משתמש</button>
-            </form>
-            <div id="usersTable"></div>
-          </article>
         </div>
       </section>
 
+      <!-- ======== MEETINGS TAB ======== -->
       <section id="meetingsTab" class="card tab-content hidden">
         <div class="section-head">
-          <div>
-            <h2>ישיבות צוות שבועיות</h2>
-            <p id="meetingDate" class="muted"></p>
-          </div>
+          <h2>ישיבות צוות שבועיות</h2>
         </div>
         <form id="meetingForm" class="grid-form">
-          <label>צוות
-            <select id="meetingTeam"></select>
-          </label>
-          <label class="full">נושאים וסדר יום
-            <textarea id="meetingAgenda" required></textarea>
-          </label>
-          <label>העלאת קבצים
-            <input id="meetingFiles" type="file" multiple />
-          </label>
+          <label>צוות <select id="meetingTeam"></select></label>
+          <label class="full">נושאים וסדר יום <textarea id="meetingAgenda" required></textarea></label>
+          <label>קבצים <input id="meetingFiles" type="file" multiple /></label>
           <button type="submit">שמירה</button>
         </form>
         <div id="meetingList"></div>
       </section>
 
+      <!-- ======== RESOURCES TAB ======== -->
       <section id="resourcesTab" class="card tab-content hidden">
         <div class="section-head">
-          <div>
-            <h2>מרכז שיתוף ידע</h2>
-            <p class="muted">חומרים, נהלים וקישורים לתמיכה בעבודה השוטפת.</p>
-          </div>
+          <h2>מרכז שיתוף ידע</h2>
         </div>
         <form id="resourceForm" class="grid-form">
           <label>כותרת <input id="resourceTitle" required /></label>
@@ -253,36 +254,40 @@
               <option>קישור חיצוני</option>
             </select>
           </label>
-          <label class="full">תיאור/קישור
-            <textarea id="resourceUrl" required></textarea>
-          </label>
+          <label class="full">תיאור/קישור <textarea id="resourceUrl" required></textarea></label>
           <button type="submit">הוספת משאב</button>
         </form>
         <div id="resourceList"></div>
       </section>
 
+      <!-- ======== ISSUES TAB ======== -->
       <section id="issuesTab" class="card tab-content hidden">
         <div class="section-head">
-          <div>
-            <h2>תקלות חדרים</h2>
-            <p class="muted">כל דיווח תקלה נשלח לתור האדמיניסטרציה ומופיע כאן.</p>
-          </div>
+          <h2>תקלות חדרים</h2>
+          <p class="muted">כל דיווח תקלה מועבר לתור האדמיניסטרציה.</p>
         </div>
         <div id="issueQueue"></div>
       </section>
 
+      <!-- ======== NOTIFICATIONS TAB ======== -->
       <section id="notificationsTab" class="card tab-content hidden">
         <div class="section-head">
-          <div>
-            <h2>התראות מערכת</h2>
-            <p class="muted">עדכונים פנימיים, אישורים והודעות ארגוניות.</p>
-          </div>
+          <h2>התראות מערכת</h2>
         </div>
         <div id="notificationsList"></div>
       </section>
-    </section>
+
+    </section><!-- /appSection -->
   </main>
 
+  <script>
+    /* Close second "ביטול" button inside booking modal */
+    document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("bookingClose2")?.addEventListener("click", () => {
+        document.getElementById("bookingModal")?.close();
+      });
+    });
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
