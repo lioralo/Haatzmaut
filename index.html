@@ -213,6 +213,11 @@
                   <option value="admin">מנהל (Admin)</option>
                 </select>
               </label>
+              <label>שיוך לאיש צוות
+                <select id="adminUserStaff">
+                  <option value="">ללא שיוך</option>
+                </select>
+              </label>
               <div class="form-actions full">
                 <button id="adminUserSaveBtn" type="submit">צור משתמש</button>
                 <button id="adminUserClearBtn" type="button" class="secondary hidden">ניקוי</button>
@@ -269,7 +274,8 @@
         </div><!-- /admin-three-col -->
       </section>
 
-      <!-- ======== MEETINGS TAB class="card tab-content hidden">
+      <!-- ======== MEETINGS TAB ======== -->
+      <section id="meetingsTab" class="card tab-content hidden">
         <div class="section-head">
           <h2>ישיבות צוות שבועיות</h2>
           <label class="file-upload-label">

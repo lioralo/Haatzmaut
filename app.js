@@ -146,6 +146,7 @@ function normalizeUser(u) {
     username:  String(u.username || "").trim().toLowerCase(),
     password:  String(u.password || ""),
     role:      ["admin","staff"].includes(u.role) ? u.role : "staff",
+    staffId:   String(u.staffId || ""),
     active:    u.active !== false,
     createdAt: u.createdAt || new Date().toLocaleString("he-IL")
   };
@@ -444,6 +445,7 @@ const isAdmin     = () => state.currentUser?.role === "admin";
 const getRoomById = id  => state.rooms.find(r => r.id === id);
 const getRoomName = id  => getRoomById(id)?.name || id;
 const getEntryById = id => state.schedule.find(e => e.id === id);
+const getStaffById = id => state.staff.find(s => s.id === id);
 const weekStart   = ()  => isoDate(state.weekISO);
 
 function weekRange() {
@@ -1034,6 +1036,7 @@ function renderAdminUsers() {
       <div class="admin-row-info">
         <strong>${esc(u.username)}</strong>
         <span class="user-role-badge ${u.role === "admin" ? "role-admin" : "role-staff"}">${u.role === "admin" ? "מנהל" : "צוות"}</span>
+        <span class="muted small">${u.staffId ? `משויך: ${esc(getStaffById(u.staffId)?.fullName || "לא נמצא")}` : "ללא שיוך לאיש צוות"}</span>
         ${!u.active ? `<span class="muted small">מושבת פעולה</span>` : ""}
       </div>
       <div class="admin-row-acts">
@@ -1195,8 +1198,11 @@ function renderAdminStaff() {
       } else {
         if (!confirm(`למחוק את ${person.fullName}?`)) return;
         state.staff = state.staff.filter(p => p.id !== person.id);
+        state.users = state.users.map(u => u.staffId === person.id ? { ...u, staffId: "" } : u);
         persistState();
         renderAdminStaff();
+        renderAdminUsers();
+        repopulateSelects();
         addNotification(`${person.fullName} הוסר/ה.`);
       }
     });
@@ -1295,6 +1301,7 @@ function repopulateSelects() {
   const roomOpts = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
   const teamOpts = TEAMS.map(t => `<option>${t}</option>`).join("");
   const staffDatalist = state.staff.map(p => `<option value="${esc(p.fullName)}">`).join("");
+  const userStaffOpts = `<option value="">ללא שיוך</option>${state.staff.map(p => `<option value="${p.id}">${esc(p.fullName)}</option>`).join("")}`;
 
   ["requestRoom", "issueRoom"].forEach(id => {
     const sel = byId(id); if (!sel) return;
@@ -1337,6 +1344,13 @@ function repopulateSelects() {
   // Update staff datalist for request form
   const dl = byId("requestStaffList");
   if (dl) dl.innerHTML = staffDatalist;
+
+  const userStaffSel = byId("adminUserStaff");
+  if (userStaffSel) {
+    const cur = userStaffSel.value;
+    userStaffSel.innerHTML = userStaffOpts;
+    if (state.staff.some(s => s.id === cur)) userStaffSel.value = cur;
+  }
 }
 
 /* One-time population of selects that never change (day names, time slots) */
@@ -1365,19 +1379,26 @@ function bindEvents() {
     // check state.users first, then fall back to DEFAULT_CREDENTIALS
     const sysUser = state.users.find(x => x.username === u.toLowerCase() && x.active);
     const legacyAcct = state.credentials[u];
-    let role, label;
+    let role, label, staffId = "";
     if (sysUser && sysUser.password === p) {
+      if (sysUser.role === "staff" && sysUser.staffId && !getStaffById(sysUser.staffId)) {
+        byId("loginError").textContent = "המשתמש משויך לאיש צוות שלא קיים.";
+        byId("loginError").classList.remove("hidden");
+        return;
+      }
       role = sysUser.role;
       label = sysUser.username;
+      staffId = sysUser.staffId || "";
     } else if (!sysUser && legacyAcct && legacyAcct.password === p) {
       role = legacyAcct.role;
       label = legacyAcct.label;
     } else {
+      byId("loginError").textContent = "שם משתמש או סיסמה שגויים";
       byId("loginError").classList.remove("hidden");
       return;
     }
-    state.currentUser = { username: u, role, label };
-    sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role }));
+    state.currentUser = { username: u, role, label, staffId };
+    sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
     byId("loginError").classList.add("hidden");
@@ -1660,13 +1681,18 @@ function bindEvents() {
     e.preventDefault();
     if (!isAdmin()) return;
     const uname = byId("adminUserName").value.trim().toLowerCase();
+    const role = byId("adminUserRole").value;
+    const staffId = byId("adminUserStaff").value;
     if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
     if (state.users.find(u => u.username === uname)) { showToast("שם משתמש תפוס.", "error"); return; }
+    if (role === "staff" && !staffId) { showToast("יש לשייך משתמש צוות לאיש צוות.", "error"); return; }
+    if (staffId && state.users.some(u => u.staffId === staffId)) { showToast("איש צוות זה כבר משויך למשתמש אחר.", "error"); return; }
     const pwd = generatePassword();
     const newUser = normalizeUser({
       username: uname,
       password: pwd,
-      role: byId("adminUserRole").value,
+      role,
+      staffId,
       active: true
     });
     state.users.push(newUser);
@@ -1722,7 +1748,7 @@ function bindEvents() {
     const idx = state.staff.findIndex(p => p.id === person.id);
     if (idx >= 0) state.staff[idx] = person;
     else          state.staff.push(person);
-    persistState(); renderAdminStaff();
+    persistState(); renderAdminStaff(); repopulateSelects(); renderAdminUsers();
     addNotification(`${person.fullName} עודכן/נוסף.`);
     byId("adminStaffForm").reset();
     byId("adminStaffId").value = "";
@@ -1747,7 +1773,12 @@ function initialize() {
   if (storedSession) {
     try {
       const parsed = JSON.parse(storedSession);
-      state.currentUser = { username: parsed.username, role: parsed.role, label: parsed.username };
+      state.currentUser = {
+        username: parsed.username,
+        role: parsed.role,
+        label: parsed.username,
+        staffId: parsed.staffId || ""
+      };
     } catch {
       // legacy plain string
       const u = storedSession;
