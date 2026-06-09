@@ -156,7 +156,8 @@
           <label>חדר           <select id="requestRoom"     required></select></label>
           <label>יום           <select id="requestDay"      required></select></label>
           <label>שעת התחלה    <select id="requestStart"    required></select></label>
-          <label>איש/ת צוות   <input  id="requestStaff"    required /></label>
+          <datalist id="requestStaffList"></datalist>
+          <label>איש/ת צוות   <input  id="requestStaff" list="requestStaffList" autocomplete="off" required /></label>
           <label>משך (דקות)   <input  id="requestDuration" type="number" min="30" step="30" value="60" required /></label>
           <label class="checkbox-label"><input id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
           <label class="full">סיבת בקשה <textarea id="requestReason" required></textarea></label>

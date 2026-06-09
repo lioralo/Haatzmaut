@@ -58,6 +58,11 @@ const byId = id => document.getElementById(id);
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 
+// Timezone-safe ISO date string from a local Date (avoids UTC offset issues for UTC+ timezones)
+function localISO(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
 function minToTime(m) {
   const n = ((m % 1440) + 1440) % 1440;
   return `${pad2(Math.floor(n / 60))}:${pad2(n % 60)}`;
@@ -81,7 +86,7 @@ function sundayISO(date = new Date()) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - d.getDay());
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 function isoDate(iso) {
@@ -98,7 +103,7 @@ function addDays(date, n) {
 function shiftWeek(isoStr, weeks) {
   const d = isoDate(isoStr);
   d.setDate(d.getDate() + weeks * 7);
-  return d.toISOString().slice(0, 10);
+  return localISO(d);
 }
 
 function fmtDate(date) {
@@ -872,6 +877,7 @@ function renderAll() {
   renderResources();
   renderIssues();
   renderNotifications();
+  repopulateSelects();
   if (isAdmin()) {
     renderAdminRooms();
     renderAdminStaff();
@@ -882,21 +888,42 @@ function renderAll() {
    BIND EVENTS
    ============================================================ */
 
+
+function repopulateSelects() {
+  // Refresh selects that depend on mutable state (rooms, staff, week).
+  // Safe to call any time – preserves current selection when possible.
+  const roomOpts = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+  const teamOpts = TEAMS.map(t => `<option>${t}</option>`).join("");
+  const staffDatalist = state.staff.map(p => `<option value="${esc(p.fullName)}">`).join("");
+
+  ["requestRoom"].forEach(id => {
+    const sel = byId(id); if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = roomOpts;
+    if (state.rooms.find(r => r.id === cur)) sel.value = cur;
+  });
+
+  ["adminStaffTeam", "requestTeam", "meetingTeam"].forEach(id => {
+    const sel = byId(id); if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = teamOpts;
+    if (cur) sel.value = cur;
+  });
+
+  // Update staff datalist for request form
+  const dl = byId("requestStaffList");
+  if (dl) dl.innerHTML = staffDatalist;
+}
+
+/* One-time population of selects that never change (day names, time slots) */
 function populateStaticSelects() {
-  const dayOpts   = DAY_DEFS.map(d => `<option value="${d.key}">${d.label}</option>`).join("");
-  const timeOpts  = Array.from({ length: SLOT_COUNT }, (_, i) => {
+  const dayOpts  = DAY_DEFS.map(d => `<option value="${d.key}">${d.label}</option>`).join("");
+  const timeOpts = Array.from({ length: SLOT_COUNT }, (_, i) => {
     const t = minToTime(slotStart(i));
     return `<option value="${t}">${t}</option>`;
   }).join("");
-  const teamOpts  = TEAMS.map(t => `<option>${t}</option>`).join("");
-  const roomOpts  = state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join("");
-
   byId("requestDay").innerHTML   = dayOpts;
   byId("requestStart").innerHTML = timeOpts;
-  byId("requestTeam").innerHTML  = teamOpts;
-  byId("requestRoom").innerHTML  = roomOpts;
-  byId("meetingTeam").innerHTML  = teamOpts;
-  byId("adminStaffTeam").innerHTML = teamOpts;
 }
 
 function bindEvents() {
@@ -1067,6 +1094,7 @@ function bindEvents() {
     byId("requestForm").reset();
     renderRequests();
     addNotification("נשלחה בקשת שינוי לאישור מנהל.", true);
+    repopulateSelects();
   });
 
   /* Meetings form */
