@@ -497,6 +497,12 @@ textarea { min-height: 90px; resize: vertical; }
   outline: 2px dashed var(--primary) !important;
 }
 
+.move-mode .slot-droptarget { cursor: pointer; }
+.move-target {
+  background: rgba(217,119,6,.10) !important;
+  outline: 2px dashed var(--accent) !important;
+}
+
 /* Booked slot */
 .slot-booked {
   padding: 3px;
@@ -544,6 +550,23 @@ textarea { min-height: 90px; resize: vertical; }
 }
 .bcard-time { font-size: .78rem; opacity: .85; }
 .bcard-dur  { font-size: .74rem; opacity: .7; }
+.bcard-move-btn {
+  margin-top: .18rem;
+  align-self: flex-start;
+  padding: .2rem .52rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: rgba(255,255,255,.72);
+  color: inherit;
+  box-shadow: none;
+  font-size: .72rem;
+  font-weight: 700;
+}
+.bcard-move-btn:hover {
+  transform: none;
+  box-shadow: none;
+  background: rgba(255,255,255,.9);
+}
 .bcard-note {
   font-size: .74rem; opacity: .72;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -718,7 +741,7 @@ details > summary::-webkit-details-marker { display: none; }
   .auth-form     { grid-template-columns: 1fr; }
   .stats-row     { grid-template-columns: 1fr 1fr; }
   .tabs          { overflow-x: auto; flex-wrap: nowrap; }
-  .tabs button   { flex: 0 0 auto; }
+  .tabs button   { flex: 0 0 auto; white-space: nowrap; }
   .day-tab       { min-width: 110px; }
   .dialog-grid   { grid-template-columns: 1fr; }
 }

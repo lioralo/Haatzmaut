@@ -115,6 +115,11 @@ function fmtShort(date) {
 
 function todayDayIdx() { const d = new Date().getDay(); return d <= 4 ? d : 0; }
 
+function clampDay(day) {
+  const n = Number(day);
+  return Number.isFinite(n) ? Math.min(4, Math.max(0, n)) : 0;
+}
+
 function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -157,7 +162,7 @@ function normalizeEntry(e, weekISO, roomsList) {
   return {
     id:       e.id       || makeId("entry"),
     weekISO:  week,
-    day:      Number(e.day ?? 0),
+    day:      clampDay(e.day ?? 0),
     roomId,
     start:    e.start    || e.startTime || e.hour || "08:00",
     duration: Math.max(30, Number(e.duration || 60)),
@@ -219,7 +224,7 @@ function hydrateState() {
     notifications: src.notifications || [],
     selectedTags:  new Set(Array.isArray(src.selectedTags) ? src.selectedTags : []),
     weekISO,
-    activeDay:     todayDayIdx(),
+    activeDay:     clampDay(src.activeDay ?? todayDayIdx()),
     activeTab:     src.activeTab || "dashboardTab",
     drag:          null
   };
@@ -240,6 +245,7 @@ function persistState() {
       notifications: state.notifications,
       selectedTags:  [...state.selectedTags],
       weekISO:       state.weekISO,
+      activeDay:     state.activeDay,
       activeTab:     state.activeTab
     }));
   } catch {}
@@ -370,6 +376,7 @@ function renderOccupancy() {
           </div>
           <div class="bcard-time">${esc(entry.start)} – ${endTime}</div>
           <div class="bcard-dur">${entry.duration} דק׳</div>
+          ${admin ? `<button type="button" class="bcard-move-btn" data-entry-id="${entry.id}">העבר</button>` : ""}
           ${entry.note ? `<div class="bcard-note">${esc(entry.note)}</div>` : ""}
         </div>
       </td>`;
@@ -397,9 +404,22 @@ function teamColorClass(team) {
 }
 
 function bindTableInteractions(table, admin) {
+  const pendingMoveEntryId = () => state.drag?.entryId || null;
+
+  const handleMove = (roomId, slot) => {
+    const entryId = pendingMoveEntryId();
+    if (!entryId) return false;
+    moveEntryToSlot(entryId, roomId, Number(slot));
+    clearMoveMode(table);
+    return true;
+  };
+
   /* Click on empty slot */
   table.querySelectorAll(".slot-empty").forEach(td => {
-    const open = () => openBookingModal({ roomId: td.dataset.roomId, slot: Number(td.dataset.slot) });
+    const open = () => {
+      if (handleMove(td.dataset.roomId, td.dataset.slot)) return;
+      openBookingModal({ roomId: td.dataset.roomId, slot: Number(td.dataset.slot) });
+    };
     td.addEventListener("click", open);
     td.addEventListener("keydown", e => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
@@ -416,6 +436,18 @@ function bindTableInteractions(table, admin) {
 
   if (!admin) return;
 
+  table.querySelectorAll(".bcard-move-btn").forEach(btn => {
+    btn.addEventListener("click", e => {
+      e.stopPropagation();
+      const entryId = btn.dataset.entryId;
+      if (!entryId) return;
+      state.drag = { entryId, touchFallback: true };
+      table.classList.add("move-mode");
+      table.querySelectorAll(".slot-droptarget").forEach(el => el.classList.add("move-target"));
+      showToast("בחרו משבצת יעד להעברת ההזמנה.");
+    });
+  });
+
   /* Drag start */
   table.querySelectorAll(".bcard[draggable='true']").forEach(card => {
     card.addEventListener("dragstart", e => {
@@ -426,8 +458,7 @@ function bindTableInteractions(table, admin) {
     });
     card.addEventListener("dragend", () => {
       card.classList.remove("dragging");
-      table.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
-      state.drag = null;
+      clearMoveMode(table);
     });
   });
 
@@ -440,35 +471,54 @@ function bindTableInteractions(table, admin) {
       td.classList.remove("drag-over");
       const { entryId } = state.drag || {};
       if (!entryId) return;
-      const entry = getEntryById(entryId);
-      if (!entry) return;
-
-      const newRoomId = td.dataset.roomId;
-      const newSlot   = Number(td.dataset.slot);
-      const newStart  = minToTime(slotStart(newSlot));
-
-      /* Conflict check */
-      const conflict = state.schedule.find(ex =>
-        ex.id !== entry.id &&
-        ex.weekISO === state.weekISO &&
-        ex.day === state.activeDay &&
-        ex.roomId === newRoomId &&
-        timeToMin(ex.start) < timeToMin(newStart) + entry.duration &&
-        timeToMin(ex.start) + ex.duration > timeToMin(newStart)
-      );
-      if (conflict) {
-        showToast(`התנגשות עם ${conflict.staff} – לא ניתן להעביר לכאן.`, "error");
-        return;
-      }
-
-      entry.roomId = newRoomId;
-      entry.start  = newStart;
-      persistState();
-      renderOccupancy();
-      renderStats();
-      addNotification(`${entry.staff} הועבר/ה ל${getRoomName(newRoomId)} בשעה ${entry.start}.`);
+      moveEntryToSlot(entryId, td.dataset.roomId, Number(td.dataset.slot));
     });
   });
+
+  table.addEventListener("keydown", e => {
+    if (e.key === "Escape" && pendingMoveEntryId()) {
+      clearMoveMode(table);
+      showToast("העברת ההזמנה בוטלה.");
+    }
+  });
+}
+
+function clearMoveMode(table) {
+  table.querySelectorAll(".drag-over").forEach(el => el.classList.remove("drag-over"));
+  table.querySelectorAll(".move-target").forEach(el => el.classList.remove("move-target"));
+  table.classList.remove("move-mode");
+  state.drag = null;
+}
+
+function moveEntryToSlot(entryId, newRoomId, newSlot) {
+  const entry = getEntryById(entryId);
+  if (!entry) return;
+
+  const newStart = minToTime(slotStart(newSlot));
+  if (timeToMin(newStart) + entry.duration > WORK_END) {
+    showToast("המשבצת חורגת משעות העבודה.", "error");
+    return;
+  }
+
+  const conflict = state.schedule.find(ex =>
+    ex.id !== entry.id &&
+    ex.weekISO === state.weekISO &&
+    ex.day === state.activeDay &&
+    ex.roomId === newRoomId &&
+    timeToMin(ex.start) < timeToMin(newStart) + entry.duration &&
+    timeToMin(ex.start) + ex.duration > timeToMin(newStart)
+  );
+  if (conflict) {
+    showToast(`התנגשות עם ${conflict.staff} – לא ניתן להעביר לכאן.`, "error");
+    return;
+  }
+
+  entry.roomId = newRoomId;
+  entry.start  = newStart;
+  persistState();
+  renderOccupancy();
+  renderStats();
+  addNotification(`${entry.staff} הועבר/ה ל${getRoomName(newRoomId)} בשעה ${entry.start}.`);
 }
 
 /* ============================================================
@@ -549,10 +599,13 @@ function renderDayTabs() {
   container.querySelectorAll(".day-tab").forEach(btn => {
     btn.addEventListener("click", () => {
       state.activeDay = Number(btn.dataset.day);
+      persistState();
       renderDayTabs();
       renderWeekHeader();
       renderOccupancy();
       renderStats();
+      const requestDay = byId("requestDay");
+      if (requestDay) requestDay.value = String(state.activeDay);
     });
   });
 }
@@ -910,6 +963,9 @@ function repopulateSelects() {
     if (cur) sel.value = cur;
   });
 
+  const requestDay = byId("requestDay");
+  if (requestDay) requestDay.value = String(clampDay(state.activeDay));
+
   // Update staff datalist for request form
   const dl = byId("requestStaffList");
   if (dl) dl.innerHTML = staffDatalist;
@@ -1024,6 +1080,7 @@ function bindEvents() {
   });
 
   byId("bookingClose").addEventListener("click", closeBookingModal);
+  byId("bookingClose2").addEventListener("click", closeBookingModal);
   byId("bookingDelete").addEventListener("click", () => {
     const entryId = byId("bookingEntryId").value;
     if (!entryId || !isAdmin()) return;
