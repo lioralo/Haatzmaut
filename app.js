@@ -2,7 +2,7 @@
    CONSTANTS
    ============================================================ */
 
-const STORAGE_KEY = "haatzmaut_v4";
+const STORAGE_KEY = "haatzmaut_v5";
 
 const DAY_DEFS = [
   { key: 0, label: "ראשון",  short: "א׳" },
@@ -49,6 +49,11 @@ const DEFAULT_CREDENTIALS = {
   admin: { password: "admin123", role: "admin", label: "מנהל מערכת" },
   staff: { password: "staff123", role: "staff", label: "צוות"        }
 };
+
+const DEFAULT_USERS = [
+  { id: "u1", username: "admin", password: "admin123", role: "admin", active: true, createdAt: "איפוס" },
+  { id: "u2", username: "staff", password: "staff123", role: "staff", active: true, createdAt: "איפוס" }
+];
 
 /* ============================================================
    UTILITIES
@@ -124,6 +129,26 @@ function esc(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;")
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function generatePassword(len = 10) {
+  const chars = "abcdefghjkmnpqrstuvwxyz23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+  let pwd = "";
+  const arr = new Uint8Array(len);
+  crypto.getRandomValues(arr);
+  arr.forEach(b => pwd += chars[b % chars.length]);
+  return pwd;
+}
+
+function normalizeUser(u) {
+  return {
+    id:        u.id       || makeId("user"),
+    username:  String(u.username || "").trim().toLowerCase(),
+    password:  String(u.password || ""),
+    role:      ["admin","staff"].includes(u.role) ? u.role : "staff",
+    active:    u.active !== false,
+    createdAt: u.createdAt || new Date().toLocaleString("he-IL")
+  };
 }
 
 /* ============================================================
@@ -377,7 +402,11 @@ function hydrateState() {
     weekISO,
     activeDay:     clampDay(src.activeDay ?? todayDayIdx()),
     activeTab:     src.activeTab || "dashboardTab",
-    drag:          null
+    drag:          null,
+    users:         Array.isArray(src.users) && src.users.length
+                     ? src.users.map(normalizeUser)
+                     : DEFAULT_USERS.map(u => ({ ...u })),
+    passwordResets: src.passwordResets || []
   };
 }
 
@@ -397,6 +426,8 @@ function persistState() {
       resources:     state.resources,
       issues:        state.issues,
       notifications: state.notifications,
+      users:         state.users,
+      passwordResets: state.passwordResets,
       selectedTags:  [...state.selectedTags],
       weekISO:       state.weekISO,
       activeDay:     state.activeDay,
@@ -524,8 +555,8 @@ function renderOccupancy() {
       const teamColor = teamColorClass(entry.team);
       const roomBand = roomColorClass(entry.roomId);
 
-      return `<td class="slot-booked" rowspan="${span}" data-entry-id="${entry.id}">
-        <div class="bcard ${teamColor} ${roomBand}${entry.oneTime ? " bcard-onetime" : ""}"
+      return `<td class="slot-booked ${roomBand}" rowspan="${span}" data-entry-id="${entry.id}">
+        <div class="bcard ${teamColor}${entry.oneTime ? " bcard-onetime" : ""}"
              draggable="${admin}"
              data-entry-id="${entry.id}"
              data-room-id="${entry.roomId}"
@@ -710,6 +741,26 @@ function openBookingModal({ roomId, slot, entry } = {}) {
     return `<option value="${t}"${t === targetStart ? " selected" : ""}>${t}</option>`;
   }).join("");
 
+  /* End time select */
+  const endSel = byId("bookingEnd");
+  const targetEnd = entry
+    ? minToTime(timeToMin(entry.start) + entry.duration)
+    : minToTime(slotStart((slot ?? 0) + 2)); // default: start + 1 hour
+  const populateEndTimes = (startVal) => {
+    const startMin = timeToMin(startVal);
+    endSel.innerHTML = Array.from({ length: SLOT_COUNT + 1 }, (_, i) => {
+      const m = slotStart(i);
+      if (m <= startMin) return "";
+      const t = minToTime(m);
+      return `<option value="${t}"${t === targetEnd ? " selected" : ""}>${t}</option>`;
+    }).join("");
+    if (!endSel.value || timeToMin(endSel.value) <= timeToMin(startSel.value)) {
+      endSel.value = minToTime(Math.min(timeToMin(startSel.value) + 60, WORK_END));
+    }
+  };
+  populateEndTimes(targetStart);
+  startSel.onchange = () => populateEndTimes(startSel.value);
+
   /* Team select */
   const teamSel = byId("bookingTeam");
   teamSel.innerHTML = TEAMS.map(t =>
@@ -722,12 +773,11 @@ function openBookingModal({ roomId, slot, entry } = {}) {
   ).join("");
 
   byId("bookingStaff").value    = entry?.staff    || "";
-  byId("bookingDuration").value = String(entry?.duration || 60);
   byId("bookingNote").value     = entry?.note     || "";
   byId("bookingOneTime").checked = Boolean(entry?.oneTime);
 
   /* Read-only for staff users */
-  const fields = ["bookingStaff", "bookingDuration", "bookingStart", "bookingRoomSel", "bookingTeam", "bookingNote", "bookingOneTime"];
+  const fields = ["bookingStaff", "bookingEnd", "bookingStart", "bookingRoomSel", "bookingTeam", "bookingNote", "bookingOneTime"];
   fields.forEach(id => { const el = byId(id); if (el) el.disabled = !admin; });
   byId("bookingSubmit").classList.toggle("hidden", !admin);
   byId("bookingSuggestChange")?.classList.toggle("hidden", !isEdit);
@@ -973,6 +1023,98 @@ function renderNotifications() {
 }
 
 /* ============================================================
+   ADMIN – USERS
+   ============================================================ */
+
+function renderAdminUsers() {
+  const list = byId("adminUserList");
+  if (!list) return;
+  list.innerHTML = state.users.map(u => `
+    <div class="admin-row">
+      <div class="admin-row-info">
+        <strong>${esc(u.username)}</strong>
+        <span class="user-role-badge ${u.role === "admin" ? "role-admin" : "role-staff"}">${u.role === "admin" ? "מנהל" : "צוות"}</span>
+        ${!u.active ? `<span class="muted small">מושבת פעולה</span>` : ""}
+      </div>
+      <div class="admin-row-acts">
+        <button class="btn-sm" data-action="reset-pwd" data-user-id="${u.id}">איפוס סיסמה</button>
+        <button class="btn-sm ${u.active ? "secondary" : ""}" data-action="toggle-user" data-user-id="${u.id}">${u.active ? "השבת" : "אפשר"}</button>
+      </div>
+    </div>
+  `).join("") || `<p class="empty-state">אין משתמשים.</p>`;
+
+  list.querySelectorAll("[data-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const user = state.users.find(u => u.id === btn.dataset.userId);
+      if (!user) return;
+      if (btn.dataset.action === "reset-pwd") {
+        const newPwd = generatePassword();
+        user.password = newPwd;
+        persistState();
+        showNewPassword(user.username, newPwd);
+        addNotification(`סיסמת ${user.username} אופסה.`);
+      } else if (btn.dataset.action === "toggle-user") {
+        user.active = !user.active;
+        persistState();
+        renderAdminUsers();
+      }
+    });
+  });
+}
+
+function renderAdminResetRequests() {
+  const box = byId("adminResetRequests");
+  if (!box) return;
+  if (!state.passwordResets.length) {
+    box.innerHTML = `<p class="empty-state">אין בקשות.</p>`;
+    return;
+  }
+  box.innerHTML = state.passwordResets.map(r => `
+    <div class="reset-req-banner">
+      <strong>${esc(r.username)}</strong> בקש/ה איפוס סיסמה &middot; <small>${esc(r.requestedAt)}</small>
+      <div class="notice-actions">
+        <button class="btn-sm" data-req-reset-id="${r.id}" data-action="do-reset">אפס והצג סיסמא</button>
+        <button class="btn-sm secondary" data-req-reset-id="${r.id}" data-action="dismiss-reset">בטל</button>
+      </div>
+    </div>
+  `).join("");
+
+  box.querySelectorAll("[data-req-reset-id]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const req = state.passwordResets.find(r => r.id === btn.dataset.reqResetId);
+      if (!req) return;
+      if (btn.dataset.action === "do-reset") {
+        const user = state.users.find(u => u.username === req.username);
+        if (!user) { showToast("משתמש לא נמצא.", "error"); }
+        else {
+          const newPwd = generatePassword();
+          user.password = newPwd;
+          showNewPassword(user.username, newPwd);
+          addNotification(`סיסמת ${user.username} אופסה לפי בקשה.`);
+        }
+      }
+      state.passwordResets = state.passwordResets.filter(r => r.id !== req.id);
+      persistState();
+      renderAdminResetRequests();
+    });
+  });
+}
+
+function showNewPassword(username, pwd) {
+  const box = byId("adminUserNewPwd");
+  if (!box) return;
+  box.classList.remove("hidden");
+  box.innerHTML = `
+    <div class="generated-pwd">
+      <span>משתמש: <strong>${esc(username)}</strong> &nbsp;&nbsp; סיסמא חדשה:</span>
+      <strong id="pwdDisplay">${esc(pwd)}</strong>
+      <button class="btn-sm pwd-copy" onclick="navigator.clipboard.writeText('${esc(pwd)}').then(()=>this.textContent='הועתקו').catch(()=>{}); this.textContent='הועתק'">העתק</button>
+    </div>
+    <p class="muted small">חשוף סיסמא זו למשתמש בלבד – לא תוצג שוב.</p>
+  `;
+}
+
+/* ============================================================
    ADMIN – ROOMS
    ============================================================ */
 
@@ -1137,6 +1279,8 @@ function renderAll() {
   if (isAdmin()) {
     renderAdminRooms();
     renderAdminStaff();
+    renderAdminUsers();
+    renderAdminResetRequests();
   }
 }
 
@@ -1171,6 +1315,25 @@ function repopulateSelects() {
   const requestDay = byId("requestDay");
   if (requestDay) requestDay.value = String(clampDay(state.activeDay));
 
+  /* Sync requestEnd options relative to requestStart */
+  const reqStart = byId("requestStart");
+  const reqEnd   = byId("requestEnd");
+  if (reqStart && reqEnd) {
+    const refreshReqEnd = () => {
+      const startMin = timeToMin(reqStart.value);
+      const prevEnd  = reqEnd.value;
+      reqEnd.innerHTML = Array.from({ length: SLOT_COUNT + 1 }, (_, i) => {
+        const m = slotStart(i);
+        if (m <= startMin) return "";
+        const t = minToTime(m);
+        return `<option value="${t}"${t === prevEnd ? " selected" : ""}>${t}</option>`;
+      }).join("");
+      if (!reqEnd.value) reqEnd.value = minToTime(Math.min(startMin + 60, WORK_END));
+    };
+    refreshReqEnd();
+    reqStart.onchange = refreshReqEnd;
+  }
+
   // Update staff datalist for request form
   const dl = byId("requestStaffList");
   if (dl) dl.innerHTML = staffDatalist;
@@ -1185,6 +1348,7 @@ function populateStaticSelects() {
   }).join("");
   byId("requestDay").innerHTML   = dayOpts;
   byId("requestStart").innerHTML = timeOpts;
+  byId("requestEnd").innerHTML   = timeOpts;
   const meetingDate = byId("meetingDate");
   if (meetingDate && !meetingDate.value) meetingDate.value = localISO(new Date());
   const meetingTime = byId("meetingTime");
@@ -1198,18 +1362,27 @@ function bindEvents() {
     e.preventDefault();
     const u = byId("username").value.trim();
     const p = byId("password").value;
-    const acct = state.credentials[u];
-    if (acct && acct.password === p) {
-      state.currentUser = { username: u, role: acct.role, label: acct.label };
-      sessionStorage.setItem("clinic_user", u);
-      byId("loginSection").classList.add("hidden");
-      byId("appSection").classList.remove("hidden");
-      byId("loginError").classList.add("hidden");
-      renderAll();
-      showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
+    // check state.users first, then fall back to DEFAULT_CREDENTIALS
+    const sysUser = state.users.find(x => x.username === u.toLowerCase() && x.active);
+    const legacyAcct = state.credentials[u];
+    let role, label;
+    if (sysUser && sysUser.password === p) {
+      role = sysUser.role;
+      label = sysUser.username;
+    } else if (!sysUser && legacyAcct && legacyAcct.password === p) {
+      role = legacyAcct.role;
+      label = legacyAcct.label;
     } else {
       byId("loginError").classList.remove("hidden");
+      return;
     }
+    state.currentUser = { username: u, role, label };
+    sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role }));
+    byId("loginSection").classList.add("hidden");
+    byId("appSection").classList.remove("hidden");
+    byId("loginError").classList.add("hidden");
+    renderAll();
+    showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
   });
 
   byId("logoutBtn").addEventListener("click", () => {
@@ -1218,6 +1391,23 @@ function bindEvents() {
     byId("appSection").classList.add("hidden");
     byId("loginSection").classList.remove("hidden");
     renderSessionBar();
+  });
+
+  /* Password reset request */
+  byId("requestResetBtn")?.addEventListener("click", () => {
+    byId("resetRequestForm").classList.toggle("hidden");
+  });
+  byId("submitResetRequest")?.addEventListener("click", () => {
+    const uname = byId("resetUsername").value.trim().toLowerCase();
+    if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
+    if (state.passwordResets.some(r => r.username === uname)) {
+      showToast("בקשה כבר נשלחה.", "info"); return;
+    }
+    state.passwordResets.push({ id: makeId("rst"), username: uname, requestedAt: new Date().toLocaleString("he-IL") });
+    persistState();
+    byId("resetRequestForm").classList.add("hidden");
+    byId("resetUsername").value = "";
+    showToast("בקשת איפוס נשלחה למנהל.", "info");
   });
 
   /* Tab navigation */
@@ -1252,11 +1442,13 @@ function bindEvents() {
     const day     = Number(byId("bookingDay").value);
     const roomId  = byId("bookingRoomSel").value;
     const start   = byId("bookingStart").value;
-    const dur     = Number(byId("bookingDuration").value);
+    const end     = byId("bookingEnd").value;
+    const dur     = timeToMin(end) - timeToMin(start);
     const staff   = byId("bookingStaff").value.trim();
 
-    if (!staff)                              { showToast("יש להזין שם איש צוות.", "error"); return; }
-    if (timeToMin(start) + dur > WORK_END)   { showToast("המשבצת חורגת משעות העבודה.", "error"); return; }
+    if (!staff)        { showToast("יש להזין שם איש צוות.", "error"); return; }
+    if (dur < 30)      { showToast("שעת הסיום חייבת להיות לאחר שעת ההתחלה.", "error"); return; }
+    if (timeToMin(end) > WORK_END)   { showToast("המשבצת חורגת משעות העבודה.", "error"); return; }
 
     const conflict = state.schedule.find(ex =>
       ex.id !== entryId &&
@@ -1314,13 +1506,17 @@ function bindEvents() {
   byId("bookingSuggestChange")?.addEventListener("click", () => {
     const entryId = byId("bookingEntryId").value;
     const staff = byId("bookingStaff").value.trim();
+    const start = byId("bookingStart").value;
+    const end   = byId("bookingEnd").value;
     if (!entryId || !staff) return;
+    const dur = timeToMin(end) - timeToMin(start);
+    if (dur < 30) { showToast("שעת הסיום לא תקינה.", "error"); return; }
     state.requests.unshift(normalizeRequest({
       team: byId("bookingTeam").value,
       roomId: byId("bookingRoomSel").value,
       day: Number(byId("bookingDay").value),
       start: byId("bookingStart").value,
-      duration: Number(byId("bookingDuration").value),
+      duration: dur,
       staff,
       oneTime: byId("bookingOneTime").checked,
       reason: byId("bookingNote").value.trim() || "בקשת שינוי מתוך הזמנה",
@@ -1367,17 +1563,21 @@ function bindEvents() {
   byId("requestForm").addEventListener("submit", e => {
     e.preventDefault();
     const staff = byId("requestStaff").value.trim();
+    const reqStart = byId("requestStart").value;
+    const reqEnd   = byId("requestEnd").value;
+    const dur = timeToMin(reqEnd) - timeToMin(reqStart);
     if (!staff) { showToast("יש להזין שם איש צוות.", "error"); return; }
+    if (dur < 30) { showToast("שעת הסיום חייבת להיות לאחר שעת ההתחלה.", "error"); return; }
     state.requests.unshift(normalizeRequest({
       id:        makeId("req"),
       team:      byId("requestTeam").value,
       room:      reqRoomSel.value,
       roomId:    reqRoomSel.value,
       day:       Number(byId("requestDay").value),
-      startTime: byId("requestStart").value,
-      start:     byId("requestStart").value,
+      startTime: reqStart,
+      start:     reqStart,
       staff,
-      duration:  Number(byId("requestDuration").value),
+      duration:  dur,
       oneTime:   byId("requestOneTime").checked,
       reason:    byId("requestReason").value.trim(),
       targetEntryId: byId("requestTargetEntry")?.value || "",
@@ -1455,6 +1655,32 @@ function bindEvents() {
     persistState(); byId("resourceForm").reset(); renderResources();
   });
 
+  /* Admin – user form */
+  byId("adminUserForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+    const uname = byId("adminUserName").value.trim().toLowerCase();
+    if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
+    if (state.users.find(u => u.username === uname)) { showToast("שם משתמש תפוס.", "error"); return; }
+    const pwd = generatePassword();
+    const newUser = normalizeUser({
+      username: uname,
+      password: pwd,
+      role: byId("adminUserRole").value,
+      active: true
+    });
+    state.users.push(newUser);
+    persistState();
+    showNewPassword(uname, pwd);
+    byId("adminUserForm").reset();
+    renderAdminUsers();
+    addNotification(`משתמש ${uname} נוצר.`);
+  });
+  byId("adminUserClearBtn")?.addEventListener("click", () => {
+    byId("adminUserForm").reset();
+    byId("adminUserNewPwd").classList.add("hidden");
+  });
+
   /* Admin – room form */
   byId("adminRoomForm").addEventListener("submit", e => {
     e.preventDefault();
@@ -1517,9 +1743,16 @@ function bindEvents() {
 
 function initialize() {
   /* Restore session */
-  const stored = sessionStorage.getItem("clinic_user");
-  if (stored) {
-    state.currentUser = { username: stored, role: stored === "admin" ? "admin" : "staff", label: "" };
+  const storedSession = sessionStorage.getItem("clinic_user");
+  if (storedSession) {
+    try {
+      const parsed = JSON.parse(storedSession);
+      state.currentUser = { username: parsed.username, role: parsed.role, label: parsed.username };
+    } catch {
+      // legacy plain string
+      const u = storedSession;
+      state.currentUser = { username: u, role: u === "admin" ? "admin" : "staff", label: u };
+    }
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
   }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0f766e" />
+  <meta name="theme-color" content="#0072BC" />
   <title>מערכת ניהול מרפאה</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -32,8 +32,8 @@
           <label>שעת התחלה
             <select id="bookingStart" required></select>
           </label>
-          <label>משך (דקות)
-            <input id="bookingDuration" type="number" min="30" step="30" value="60" required />
+          <label>שעת סיום
+            <select id="bookingEnd" required></select>
           </label>
           <label>צוות
             <select id="bookingTeam" required></select>
@@ -87,9 +87,18 @@
         <button type="submit">כניסה</button>
       </form>
       <p id="loginError" class="error hidden">שם משתמש או סיסמה שגויים</p>
-      <div class="demo-creds">
+      <div class="demo-creds" id="demoCreds">
         <span>admin / admin123</span>
         <span>staff / staff123</span>
+      </div>
+      <div style="margin-top:.6rem">
+        <button type="button" id="requestResetBtn" class="secondary" style="font-size:.88rem">שכחתי סיסמה / בקשת איפוס</button>
+      </div>
+      <div id="resetRequestForm" class="hidden" style="margin-top:.7rem">
+        <label style="font-weight:600">שם משתמש לאיפוס
+          <input id="resetUsername" autocomplete="off" placeholder="הזן שם משתמש" style="max-width:260px" />
+        </label>
+        <button type="button" id="submitResetRequest" style="margin-top:.5rem">שלח בקשת איפוס</button>
       </div>
     </section>
 
@@ -158,10 +167,9 @@
           <label>חדר           <select id="requestRoom"     required></select></label>
           <label>יום           <select id="requestDay"      required></select></label>
           <label>שעת התחלה    <select id="requestStart"    required></select></label>
+          <label>שעת סיום      <select id="requestEnd"      required></select></label>
           <datalist id="requestStaffList"></datalist>
-          <label>איש/ת צוות   <input  id="requestStaff" list="requestStaffList" autocomplete="off" required /></label>
-          <label>משך (דקות)   <input  id="requestDuration" type="number" min="30" step="30" value="60" required /></label>
-          <label class="checkbox-label"><input id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
+          <label>איש/ת צוות   <input  id="requestStaff" list="requestStaffList" autocomplete="off" required /></label><input id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
           <label class="full">סיבת בקשה <textarea id="requestReason" required></textarea></label>
           <button type="submit">שלח בקשה</button>
         </form>
@@ -191,7 +199,31 @@
           </label>
         </div>
 
-        <div class="admin-two-col">
+        <div class="admin-three-col">
+
+          <!-- Users panel -->
+          <article class="panel">
+            <h3 class="panel-title">ניהול משתמשי מערכת</h3>
+            <form id="adminUserForm" class="grid-form compact-form">
+              <input type="hidden" id="adminUserId" />
+              <label>שם משתמש <input id="adminUserName" required placeholder="לדוגמה: dr.cohen" /></label>
+              <label>תפקיד
+                <select id="adminUserRole">
+                  <option value="staff">צוות (Staff)</option>
+                  <option value="admin">מנהל (Admin)</option>
+                </select>
+              </label>
+              <div class="form-actions full">
+                <button id="adminUserSaveBtn" type="submit">צור משתמש</button>
+                <button id="adminUserClearBtn" type="button" class="secondary hidden">ניקוי</button>
+              </div>
+            </form>
+            <div id="adminUserNewPwd" class="hidden"></div>
+            <h4 style="margin:.8rem 0 .3rem">בקשות איפוס סיסמה</h4>
+            <div id="adminResetRequests"></div>
+            <h4 style="margin:.8rem 0 .3rem">רשימת משתמשים</h4>
+            <div id="adminUserList" class="admin-list"></div>
+          </article>
 
           <!-- Rooms panel -->
           <article class="panel">
@@ -234,11 +266,10 @@
             <div id="adminStaffList" class="admin-list"></div>
           </article>
 
-        </div>
+        </div><!-- /admin-three-col -->
       </section>
 
-      <!-- ======== MEETINGS TAB ======== -->
-      <section id="meetingsTab" class="card tab-content hidden">
+      <!-- ======== MEETINGS TAB class="card tab-content hidden">
         <div class="section-head">
           <h2>ישיבות צוות שבועיות</h2>
           <label class="file-upload-label">
