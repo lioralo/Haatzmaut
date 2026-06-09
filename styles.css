@@ -505,7 +505,7 @@ textarea { min-height: 90px; resize: vertical; }
 
 /* Booked slot */
 .slot-booked {
-  padding: 3px;
+  padding: 0;
   vertical-align: top;
   border: 1px solid rgba(15,118,110,.06);
 }
@@ -516,6 +516,7 @@ textarea { min-height: 90px; resize: vertical; }
 .bcard {
   display: flex; flex-direction: column; gap: 2px;
   height: 100%;
+  min-height: 100%;
   padding: .42rem .55rem;
   border-radius: var(--r-sm);
   border: 1px solid rgba(0,0,0,.06);
@@ -550,6 +551,11 @@ textarea { min-height: 90px; resize: vertical; }
 }
 .bcard-time { font-size: .78rem; opacity: .85; }
 .bcard-dur  { font-size: .74rem; opacity: .7; }
+.bcard-room {
+  font-size: .74rem;
+  font-weight: 700;
+  opacity: .9;
+}
 .bcard-move-btn {
   margin-top: .18rem;
   align-self: flex-start;
@@ -571,6 +577,13 @@ textarea { min-height: 90px; resize: vertical; }
   font-size: .74rem; opacity: .72;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+.rb-1 { box-shadow: inset 6px 0 0 #0f766e; }
+.rb-2 { box-shadow: inset 6px 0 0 #0369a1; }
+.rb-3 { box-shadow: inset 6px 0 0 #b45309; }
+.rb-4 { box-shadow: inset 6px 0 0 #7c3aed; }
+.rb-5 { box-shadow: inset 6px 0 0 #be123c; }
+.rb-6 { box-shadow: inset 6px 0 0 #334155; }
 
 /* Dragging state */
 .dragging { opacity: .45; transform: rotate(1.5deg) scale(.97); }
@@ -682,6 +695,11 @@ dialog::backdrop {
 .file-upload-label {
   display: flex; flex-direction: column; gap: .3rem;
   font-weight: 600; font-size: .9rem; cursor: pointer;
+}
+
+#meetingList h3 {
+  margin-top: 1rem;
+  margin-bottom: .25rem;
 }
 
 /* ============================================================

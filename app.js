@@ -174,6 +174,149 @@ function normalizeEntry(e, weekISO, roomsList) {
   };
 }
 
+function parseCsvRows(text) {
+  const lines = String(text || "").split(/\r?\n/).filter(Boolean);
+  if (!lines.length) return [];
+  const parseLine = line => {
+    const out = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === "," && !inQ) {
+        out.push(cur.trim());
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    out.push(cur.trim());
+    return out;
+  };
+  const cols = parseLine(lines[0]);
+  return lines.slice(1).map(line => {
+    const vals = parseLine(line);
+    return Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
+  });
+}
+
+function normalizeTemplateEntry(e, roomsList) {
+  const n = normalizeEntry(e, sundayISO(), roomsList);
+  return {
+    day: n.day,
+    roomId: n.roomId,
+    start: n.start,
+    duration: n.duration,
+    staff: n.staff,
+    team: n.team,
+    oneTime: n.oneTime,
+    note: n.note,
+    source: n.source || "template"
+  };
+}
+
+function templateFromEntries(entries, roomsList) {
+  return (entries || []).map(e => normalizeTemplateEntry(e, roomsList));
+}
+
+function instantiateTemplateWeek(template, weekISO, roomsList) {
+  return (template || []).map(t => normalizeEntry({ ...t, weekISO }, weekISO, roomsList));
+}
+
+function getWeekTemplate(weekISO) {
+  return state.weekTemplates[weekISO] || state.defaultTemplate;
+}
+
+function replaceWeekSchedule(weekISO, template) {
+  state.schedule = state.schedule.filter(e => e.weekISO !== weekISO);
+  state.schedule.push(...instantiateTemplateWeek(template, weekISO, state.rooms));
+}
+
+function ensureSyncedScheduleWindow() {
+  const weekList = [0, 1, 2].map(w => shiftWeek(state.weekISO, w));
+  weekList.forEach(iso => {
+    const hasWeek = state.schedule.some(e => e.weekISO === iso);
+    if (!hasWeek) replaceWeekSchedule(iso, getWeekTemplate(iso));
+  });
+}
+
+function applyTemplateScope(template, scope) {
+  const weeks = [];
+  if (scope === "current") weeks.push(state.weekISO);
+  if (scope === "upcoming") weeks.push(shiftWeek(state.weekISO, 1), shiftWeek(state.weekISO, 2));
+  if (scope === "current-upcoming") weeks.push(state.weekISO, shiftWeek(state.weekISO, 1), shiftWeek(state.weekISO, 2));
+
+  weeks.forEach(iso => {
+    state.weekTemplates[iso] = template;
+    replaceWeekSchedule(iso, template);
+    const nextISO = shiftWeek(iso, 1);
+    if (!state.weekTemplates[nextISO]) {
+      state.weekTemplates[nextISO] = state.defaultTemplate;
+      if (!state.schedule.some(e => e.weekISO === nextISO)) {
+        replaceWeekSchedule(nextISO, state.defaultTemplate);
+      }
+    }
+  });
+  ensureSyncedScheduleWindow();
+}
+
+function meetingAudienceLabel(v) {
+  const m = {
+    all: "כלל המרפאה",
+    children: "ילדים",
+    adults: "מבוגרים"
+  };
+  return m[v] || v || "";
+}
+
+function normalizeMeeting(m) {
+  return {
+    id: makeId("meet"),
+    speaker: String(m.speaker || m.presenter || "").trim(),
+    audience: String(m.audience || "all").trim() || "all",
+    specification: String(m.specification || m.agenda || "").trim(),
+    date: String(m.date || localISO(new Date())).trim(),
+    time: String(m.time || "09:00").trim(),
+    link: String(m.link || m.url || "").trim(),
+    files: Array.isArray(m.files) ? m.files.map(String) : String(m.files || "").split(";").map(v => v.trim()).filter(Boolean),
+    createdAt: new Date().toLocaleString("he-IL")
+  };
+}
+
+function normalizeIssue(i) {
+  return {
+    id: makeId("issue"),
+    roomId: i.roomId || "",
+    room: i.room || "כללי",
+    details: String(i.details || i.text || "").trim(),
+    createdAt: i.createdAt || new Date().toLocaleString("he-IL")
+  };
+}
+
+function normalizeRequest(req) {
+  return {
+    id: req.id || makeId("req"),
+    team: String(req.team || TEAMS[0]),
+    room: String(req.room || req.roomId || ""),
+    roomId: String(req.roomId || req.room || ""),
+    day: clampDay(req.day ?? 0),
+    startTime: String(req.startTime || req.start || "08:00"),
+    start: String(req.start || req.startTime || "08:00"),
+    staff: String(req.staff || "").trim(),
+    duration: Math.max(30, Number(req.duration || 60)),
+    oneTime: Boolean(req.oneTime),
+    reason: String(req.reason || "").trim(),
+    targetEntryId: String(req.targetEntryId || ""),
+    status: req.status || "pending",
+    createdAt: req.createdAt || new Date().toLocaleString("he-IL"),
+    decidedAt: req.decidedAt || "",
+    decidedBy: req.decidedBy || ""
+  };
+}
+
 /* ============================================================
    STATE
    ============================================================ */
@@ -210,6 +353,12 @@ function hydrateState() {
   const schedule = Array.isArray(src.schedule) && src.schedule.length
     ? src.schedule.map(e => normalizeEntry(e, weekISO, rooms))
     : buildDefaultSchedule(weekISO, rooms);
+  const defaultTemplate = Array.isArray(src.defaultTemplate) && src.defaultTemplate.length
+    ? templateFromEntries(src.defaultTemplate, rooms)
+    : templateFromEntries(buildDefaultSchedule(weekISO, rooms), rooms);
+  const weekTemplates = src.weekTemplates && typeof src.weekTemplates === "object"
+    ? Object.fromEntries(Object.entries(src.weekTemplates).map(([iso, entries]) => [iso, templateFromEntries(entries, rooms)]))
+    : {};
 
   return {
     currentUser:   null,
@@ -217,10 +366,12 @@ function hydrateState() {
     rooms,
     staff,
     schedule,
-    requests:      src.requests      || [],
-    meetings:      src.meetings      || [],
+    defaultTemplate,
+    weekTemplates,
+    requests:      Array.isArray(src.requests) ? src.requests.map(normalizeRequest) : [],
+    meetings:      Array.isArray(src.meetings) ? src.meetings.map(normalizeMeeting) : [],
     resources:     src.resources     || [],
-    issues:        src.issues        || [],
+    issues:        Array.isArray(src.issues) ? src.issues.map(normalizeIssue) : [],
     notifications: src.notifications || [],
     selectedTags:  new Set(Array.isArray(src.selectedTags) ? src.selectedTags : []),
     weekISO,
@@ -231,6 +382,7 @@ function hydrateState() {
 }
 
 const state = hydrateState();
+ensureSyncedScheduleWindow();
 
 function persistState() {
   try {
@@ -238,6 +390,8 @@ function persistState() {
       rooms:         state.rooms,
       staff:         state.staff,
       schedule:      state.schedule,
+      defaultTemplate: state.defaultTemplate,
+      weekTemplates:   state.weekTemplates,
       requests:      state.requests,
       meetings:      state.meetings,
       resources:     state.resources,
@@ -274,6 +428,11 @@ function activeDayEntries() {
   return state.schedule
     .filter(e => e.weekISO === state.weekISO && e.day === state.activeDay)
     .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
+}
+
+function roomColorClass(roomId) {
+  const idx = Math.abs(String(roomId || "").split("").reduce((a, ch) => a + ch.charCodeAt(0), 0)) % 6;
+  return ["rb-1", "rb-2", "rb-3", "rb-4", "rb-5", "rb-6"][idx];
 }
 
 function filteredRooms() {
@@ -363,9 +522,10 @@ function renderOccupancy() {
 
       const endTime = minToTime(timeToMin(entry.start) + entry.duration);
       const teamColor = teamColorClass(entry.team);
+      const roomBand = roomColorClass(entry.roomId);
 
       return `<td class="slot-booked" rowspan="${span}" data-entry-id="${entry.id}">
-        <div class="bcard ${teamColor}${entry.oneTime ? " bcard-onetime" : ""}"
+        <div class="bcard ${teamColor} ${roomBand}${entry.oneTime ? " bcard-onetime" : ""}"
              draggable="${admin}"
              data-entry-id="${entry.id}"
              data-room-id="${entry.roomId}"
@@ -374,6 +534,7 @@ function renderOccupancy() {
             <strong class="bcard-staff">${esc(entry.staff)}</strong>
             ${entry.oneTime ? `<span class="bcard-badge">חד-פעמי</span>` : ""}
           </div>
+          <div class="bcard-room">${esc(getRoomName(entry.roomId))}</div>
           <div class="bcard-time">${esc(entry.start)} – ${endTime}</div>
           <div class="bcard-dur">${entry.duration} דק׳</div>
           ${admin ? `<button type="button" class="bcard-move-btn" data-entry-id="${entry.id}">העבר</button>` : ""}
@@ -569,6 +730,7 @@ function openBookingModal({ roomId, slot, entry } = {}) {
   const fields = ["bookingStaff", "bookingDuration", "bookingStart", "bookingRoomSel", "bookingTeam", "bookingNote", "bookingOneTime"];
   fields.forEach(id => { const el = byId(id); if (el) el.disabled = !admin; });
   byId("bookingSubmit").classList.toggle("hidden", !admin);
+  byId("bookingSuggestChange")?.classList.toggle("hidden", !isEdit);
   byId("bookingDelete").classList.toggle("hidden", !(admin && isEdit));
 
   modal.showModal();
@@ -635,11 +797,12 @@ function renderStats() {
   if (!box) return;
   const today  = activeDayEntries().length;
   const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
+  const pendingRequests = state.requests.filter(r => r.status === "pending").length;
   box.innerHTML = `
     <div class="stat-card"><span>חדרים</span>          <strong>${state.rooms.length}</strong></div>
     <div class="stat-card"><span>הזמנות היום</span>    <strong>${today}</strong></div>
     <div class="stat-card"><span>הזמנות בשבוע</span>  <strong>${weekly}</strong></div>
-    <div class="stat-card"><span>בקשות פתוחות</span>  <strong>${state.requests.length}</strong></div>
+    <div class="stat-card"><span>בקשות ממתינות</span>  <strong>${pendingRequests}</strong></div>
   `;
 }
 
@@ -678,19 +841,21 @@ function renderRequests() {
     list.innerHTML = `<p class="empty-state">אין בקשות ממתינות.</p>`;
     return;
   }
+  const statusLabels = { pending: "ממתין", approved: "אושר", denied: "נדחה" };
   list.innerHTML = state.requests.map(req => {
     const dl  = dayLabel(req.day);
     const t   = req.startTime || req.start || "—";
     const rn  = getRoomName(req.roomId || req.room) || req.room || "—";
-    const btns = isAdmin()
+    const btns = isAdmin() && req.status === "pending"
       ? `<div class="notice-actions">
            <button class="btn-sm" data-req-id="${req.id}" data-action="approve">אישור</button>
            <button class="btn-sm secondary" data-req-id="${req.id}" data-action="deny">דחייה</button>
          </div>`
-      : `<div class="muted small">ממתין לאישור מנהל</div>`;
+      : `<div class="muted small">${req.status === "pending" ? "ממתין לאישור מנהל" : `סטטוס: ${statusLabels[req.status] || req.status}`}</div>`;
     return `<div class="notice">
       <div><strong>${esc(req.staff)}</strong> ביקש/ה ${esc(rn)} · יום ${dl} · ${t} (${req.duration} דק׳)</div>
       <div class="muted small">${esc(req.team)} | ${esc(req.reason)}</div>
+      <div class="notice-sub">סטטוס: ${statusLabels[req.status] || req.status}${req.decidedAt ? ` · ${esc(req.decidedAt)}` : ""}</div>
       ${btns}
     </div>`;
   }).join("");
@@ -698,23 +863,42 @@ function renderRequests() {
   list.querySelectorAll("button[data-req-id]").forEach(btn => {
     btn.addEventListener("click", () => {
       const req = state.requests.find(r => r.id === btn.dataset.reqId);
-      if (!req) return;
-      state.requests = state.requests.filter(r => r.id !== req.id);
+      if (!req || req.status !== "pending") return;
       if (btn.dataset.action === "approve") {
-        state.schedule.push(normalizeEntry({
-          weekISO:  state.weekISO,
-          day:      req.day,
-          roomId:   req.roomId || req.room,
-          start:    req.startTime || req.start,
-          duration: req.duration,
-          staff:    req.staff,
-          team:     req.team,
-          oneTime:  req.oneTime,
-          note:     req.reason,
-          source:   "request"
-        }, state.weekISO, state.rooms));
+        const existing = req.targetEntryId ? getEntryById(req.targetEntryId) : null;
+        if (existing) {
+          existing.weekISO = state.weekISO;
+          existing.day = req.day;
+          existing.roomId = req.roomId || req.room;
+          existing.start = req.startTime || req.start;
+          existing.duration = req.duration;
+          existing.staff = req.staff;
+          existing.team = req.team;
+          existing.oneTime = req.oneTime;
+          existing.note = req.reason;
+          existing.source = "request";
+        } else {
+          state.schedule.push(normalizeEntry({
+            weekISO:  state.weekISO,
+            day:      req.day,
+            roomId:   req.roomId || req.room,
+            start:    req.startTime || req.start,
+            duration: req.duration,
+            staff:    req.staff,
+            team:     req.team,
+            oneTime:  req.oneTime,
+            note:     req.reason,
+            source:   "request"
+          }, state.weekISO, state.rooms));
+        }
+        req.status = "approved";
+        req.decidedAt = new Date().toLocaleString("he-IL");
+        req.decidedBy = state.currentUser?.username || "admin";
         addNotification(`בקשת ${req.staff} אושרה.`, true);
       } else {
+        req.status = "denied";
+        req.decidedAt = new Date().toLocaleString("he-IL");
+        req.decidedBy = state.currentUser?.username || "admin";
         addNotification(`בקשת ${req.staff} נדחתה.`);
       }
       persistState();
@@ -730,12 +914,30 @@ function renderRequests() {
 function renderMeetings() {
   const box = byId("meetingList");
   if (!box) return;
-  box.innerHTML = state.meetings.length
-    ? state.meetings.map(m =>
-        `<div class="notice"><strong>${esc(m.team)}</strong>: ${esc(m.agenda)}<br>
-         <small>קבצים: ${(m.files || []).map(f => esc(f)).join(", ") || "ללא"}</small></div>`
-      ).join("")
-    : `<p class="empty-state">לא נוספו ישיבות עדיין.</p>`;
+  const sundayOnly = state.meetings
+    .filter(m => new Date(m.date).getDay() === 0)
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  if (!sundayOnly.length) {
+    box.innerHTML = `<p class="empty-state">לא נוספו ישיבות יום ראשון.</p>`;
+    return;
+  }
+  const now = new Date();
+  const upcoming = sundayOnly.filter(m => new Date(`${m.date}T${m.time || "00:00"}`) >= now);
+  const past = sundayOnly.filter(m => new Date(`${m.date}T${m.time || "00:00"}`) < now).reverse();
+  const renderBlock = arr => arr.map(m => `
+    <div class="notice">
+      <div><strong>${esc(m.speaker || "ללא דובר")}</strong> · ${esc(meetingAudienceLabel(m.audience))}</div>
+      <div>${esc(m.specification || "ללא פירוט")}</div>
+      <div class="muted small">${esc(m.date)} ${esc(m.time || "")}${m.link ? ` · <a href="${esc(m.link)}" target="_blank" rel="noopener">קישור</a>` : ""}</div>
+      <div class="muted small">קבצים: ${(m.files || []).map(f => esc(f)).join(", ") || "ללא"}</div>
+    </div>
+  `).join("");
+  box.innerHTML = `
+    <h3>ישיבות יום ראשון קרובות</h3>
+    ${upcoming.length ? renderBlock(upcoming) : `<p class="empty-state">אין ישיבות קרובות.</p>`}
+    <h3>ישיבות יום ראשון שהתקיימו</h3>
+    ${past.length ? renderBlock(past) : `<p class="empty-state">אין ישיבות עבר.</p>`}
+  `;
 }
 
 function renderResources() {
@@ -753,7 +955,7 @@ function renderIssues() {
   if (!box) return;
   box.innerHTML = state.issues.length
     ? state.issues.map(i =>
-        `<div class="notice"><strong>${esc(i.room)}</strong> (${esc(i.hour || i.time || "")}) – ${esc(i.details)}<br><small>${esc(i.createdAt)}</small></div>`
+        `<div class="notice"><strong>${esc(i.room || "כללי")}</strong> – ${esc(i.details)}<br><small>${esc(i.createdAt)}</small></div>`
       ).join("")
     : `<p class="empty-state">אין תקלות פתוחות.</p>`;
 }
@@ -918,6 +1120,7 @@ function showTab(tabId) {
    ============================================================ */
 
 function renderAll() {
+  ensureSyncedScheduleWindow();
   renderSessionBar();
   applyAccessControl();
   renderWeekHeader();
@@ -949,14 +1152,16 @@ function repopulateSelects() {
   const teamOpts = TEAMS.map(t => `<option>${t}</option>`).join("");
   const staffDatalist = state.staff.map(p => `<option value="${esc(p.fullName)}">`).join("");
 
-  ["requestRoom"].forEach(id => {
+  ["requestRoom", "issueRoom"].forEach(id => {
     const sel = byId(id); if (!sel) return;
     const cur = sel.value;
-    sel.innerHTML = roomOpts;
+    sel.innerHTML = id === "issueRoom"
+      ? `<option value="">כללי (לא חדר)</option>${roomOpts}`
+      : roomOpts;
     if (state.rooms.find(r => r.id === cur)) sel.value = cur;
   });
 
-  ["adminStaffTeam", "requestTeam", "meetingTeam"].forEach(id => {
+  ["adminStaffTeam", "requestTeam"].forEach(id => {
     const sel = byId(id); if (!sel) return;
     const cur = sel.value;
     sel.innerHTML = teamOpts;
@@ -980,6 +1185,10 @@ function populateStaticSelects() {
   }).join("");
   byId("requestDay").innerHTML   = dayOpts;
   byId("requestStart").innerHTML = timeOpts;
+  const meetingDate = byId("meetingDate");
+  if (meetingDate && !meetingDate.value) meetingDate.value = localISO(new Date());
+  const meetingTime = byId("meetingTime");
+  if (meetingTime && !meetingTime.value) meetingTime.value = "09:00";
 }
 
 function bindEvents() {
@@ -1019,15 +1228,18 @@ function bindEvents() {
   /* Week navigation */
   byId("weekPrev").addEventListener("click", () => {
     state.weekISO = shiftWeek(state.weekISO, -1);
+    ensureSyncedScheduleWindow();
     persistState(); renderAll();
   });
   byId("weekNext").addEventListener("click", () => {
     state.weekISO = shiftWeek(state.weekISO, 1);
+    ensureSyncedScheduleWindow();
     persistState(); renderAll();
   });
   byId("weekToday").addEventListener("click", () => {
     state.weekISO = sundayISO();
     state.activeDay = todayDayIdx();
+    ensureSyncedScheduleWindow();
     persistState(); renderAll();
   });
 
@@ -1099,6 +1311,29 @@ function bindEvents() {
     if (e.target === byId("bookingModal")) closeBookingModal();
   });
 
+  byId("bookingSuggestChange")?.addEventListener("click", () => {
+    const entryId = byId("bookingEntryId").value;
+    const staff = byId("bookingStaff").value.trim();
+    if (!entryId || !staff) return;
+    state.requests.unshift(normalizeRequest({
+      team: byId("bookingTeam").value,
+      roomId: byId("bookingRoomSel").value,
+      day: Number(byId("bookingDay").value),
+      start: byId("bookingStart").value,
+      duration: Number(byId("bookingDuration").value),
+      staff,
+      oneTime: byId("bookingOneTime").checked,
+      reason: byId("bookingNote").value.trim() || "בקשת שינוי מתוך הזמנה",
+      targetEntryId: entryId,
+      status: "pending"
+    }));
+    persistState();
+    closeBookingModal();
+    renderRequests();
+    renderStats();
+    addNotification("נשלחה בקשת שינוי להזמנה.", true);
+  });
+
   /* CSV/JSON upload */
   byId("scheduleUpload")?.addEventListener("change", e => {
     const file = e.target.files?.[0];
@@ -1111,16 +1346,15 @@ function bindEvents() {
         if (file.name.toLowerCase().endsWith(".json")) {
           records = JSON.parse(text);
         } else {
-          const [header, ...rows] = text.split(/\r?\n/).filter(Boolean);
-          const cols = header.split(",").map(c => c.trim());
-          records = rows.map(line => {
-            const vals = line.split(",").map(v => v.trim());
-            return Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
-          });
+          records = parseCsvRows(text);
         }
-        state.schedule = records.map(r => normalizeEntry(r, state.weekISO, state.rooms));
+        const template = templateFromEntries(records, state.rooms);
+        if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
+        const scope = byId("scheduleReplaceScope")?.value || "current-upcoming";
+        state.defaultTemplate = template;
+        applyTemplateScope(template, scope);
         persistState(); renderAll();
-        addNotification("לוח הזמנים עודכן מקובץ.");
+        addNotification("לוח הזמנים הוחלף וסונכרן לשלושת השבועות הקרובים.");
       } catch (err) {
         showToast(`שגיאה: ${err.message}`, "error");
       }
@@ -1134,7 +1368,7 @@ function bindEvents() {
     e.preventDefault();
     const staff = byId("requestStaff").value.trim();
     if (!staff) { showToast("יש להזין שם איש צוות.", "error"); return; }
-    state.requests.unshift({
+    state.requests.unshift(normalizeRequest({
       id:        makeId("req"),
       team:      byId("requestTeam").value,
       room:      reqRoomSel.value,
@@ -1145,8 +1379,10 @@ function bindEvents() {
       staff,
       duration:  Number(byId("requestDuration").value),
       oneTime:   byId("requestOneTime").checked,
-      reason:    byId("requestReason").value.trim()
-    });
+      reason:    byId("requestReason").value.trim(),
+      targetEntryId: byId("requestTargetEntry")?.value || "",
+      status: "pending"
+    }));
     persistState();
     byId("requestForm").reset();
     renderRequests();
@@ -1157,13 +1393,55 @@ function bindEvents() {
   /* Meetings form */
   byId("meetingForm").addEventListener("submit", e => {
     e.preventDefault();
-    state.meetings.unshift({
-      team:   byId("meetingTeam").value,
-      agenda: byId("meetingAgenda").value.trim(),
-      files:  [...byId("meetingFiles").files].map(f => f.name)
-    });
+    state.meetings.unshift(normalizeMeeting({
+      speaker: byId("meetingSpeaker").value,
+      audience: byId("meetingAudience").value,
+      specification: byId("meetingAgenda").value.trim(),
+      date: byId("meetingDate").value,
+      time: byId("meetingTime").value,
+      link: byId("meetingLink").value,
+      files: [...byId("meetingFiles").files].map(f => f.name)
+    }));
     persistState(); byId("meetingForm").reset(); renderMeetings();
-    addNotification("נוסף סדר יום לישיבת צוות.");
+    populateStaticSelects();
+    addNotification("נוספה ישיבת יום ראשון.");
+  });
+
+  byId("meetingUpload")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "").trim();
+        const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
+        const meetings = (Array.isArray(records) ? records : []).map(normalizeMeeting);
+        state.meetings.unshift(...meetings);
+        persistState();
+        renderMeetings();
+        addNotification(`יובאו ${meetings.length} ישיבות.`);
+      } catch (err) {
+        showToast(`שגיאה בייבוא ישיבות: ${err.message}`, "error");
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  byId("issueForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    const details = byId("issueText").value.trim();
+    if (!details) { showToast("יש להזין תיאור תקלה.", "error"); return; }
+    const roomId = byId("issueRoom").value;
+    state.issues.unshift(normalizeIssue({
+      roomId,
+      room: roomId ? getRoomName(roomId) : "כללי",
+      details
+    }));
+    persistState();
+    byId("issueForm").reset();
+    repopulateSelects();
+    renderIssues();
+    addNotification("נשלח דיווח תקלה.");
   });
 
   /* Resources form */
@@ -1248,6 +1526,7 @@ function initialize() {
 
   populateStaticSelects();
   bindEvents();
+  ensureSyncedScheduleWindow();
   renderAll();
 
   if (state.currentUser) {

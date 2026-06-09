@@ -53,6 +53,7 @@
 
       <div class="dialog-footer">
         <button id="bookingSubmit" type="submit">שמירה</button>
+        <button id="bookingSuggestChange" type="button" class="secondary hidden">בקשת שינוי</button>
         <button id="bookingClose2" type="button" class="secondary">ביטול</button>
         <button id="bookingDelete" type="button" class="danger hidden">מחיקה</button>
       </div>
@@ -152,6 +153,7 @@
           </div>
         </div>
         <form id="requestForm" class="grid-form">
+          <input type="hidden" id="requestTargetEntry" />
           <label>צוות          <select id="requestTeam"     required></select></label>
           <label>חדר           <select id="requestRoom"     required></select></label>
           <label>יום           <select id="requestDay"      required></select></label>
@@ -178,6 +180,14 @@
           <label class="file-upload-label">
             טעינת לו"ז (CSV/JSON)
             <input type="file" id="scheduleUpload" accept=".csv,.json" />
+          </label>
+          <label>
+            החלפה עבור
+            <select id="scheduleReplaceScope">
+              <option value="current">שבוע נוכחי</option>
+              <option value="upcoming">שבועות הבאים</option>
+              <option value="current-upcoming" selected>נוכחי + שני הבאים</option>
+            </select>
           </label>
         </div>
 
@@ -231,10 +241,24 @@
       <section id="meetingsTab" class="card tab-content hidden">
         <div class="section-head">
           <h2>ישיבות צוות שבועיות</h2>
+          <label class="file-upload-label">
+            יבוא ישיבות (CSV/JSON)
+            <input type="file" id="meetingUpload" accept=".csv,.json" />
+          </label>
         </div>
         <form id="meetingForm" class="grid-form">
-          <label>צוות <select id="meetingTeam"></select></label>
+          <label>דובר/ת <input id="meetingSpeaker" required /></label>
+          <label>קהל יעד
+            <select id="meetingAudience" required>
+              <option value="all">כלל המרפאה</option>
+              <option value="children">ילדים</option>
+              <option value="adults">מבוגרים</option>
+            </select>
+          </label>
+          <label>תאריך <input id="meetingDate" type="date" required /></label>
+          <label>שעה <input id="meetingTime" type="time" required /></label>
           <label class="full">נושאים וסדר יום <textarea id="meetingAgenda" required></textarea></label>
+          <label class="full">קישור לישיבה <input id="meetingLink" type="url" placeholder="https://" /></label>
           <label>קבצים <input id="meetingFiles" type="file" multiple /></label>
           <button type="submit">שמירה</button>
         </form>
@@ -267,6 +291,15 @@
           <h2>תקלות חדרים</h2>
           <p class="muted">כל דיווח תקלה מועבר לתור האדמיניסטרציה.</p>
         </div>
+        <form id="issueForm" class="grid-form">
+          <label>חדר (אופציונלי)
+            <select id="issueRoom"></select>
+          </label>
+          <label class="full">תיאור תקלה חופשי
+            <textarea id="issueText" required placeholder="אפשר לדווח גם תקלה כללית שאינה קשורה לחדר"></textarea>
+          </label>
+          <button type="submit">שליחת תקלה</button>
+        </form>
         <div id="issueQueue"></div>
       </section>
 
