@@ -136,8 +136,12 @@ body {
 
 .notifications-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
+  max-height: 176px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  padding-left: 4px;
 }
 
 .notice-item {

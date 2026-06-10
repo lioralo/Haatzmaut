@@ -1,14 +1,24 @@
 const STORAGE_KEY = "haatzmaut_v5";
+const DISPLAY_PAGE_VERSION = "20260610e";
 const WORK_START = 8 * 60;
 const WORK_END = 20 * 60;
 const SLOT_MIN = 30;
-const ROOMS_PER_PAGE = 10;
-const ROTATE_MS = 30000;
+const DEFAULT_SETTINGS = {
+  switchSeconds: 30,
+  hoursBefore: 1,
+  hoursAfter: 3,
+  roomsPerPage: 10,
+  messages: []
+};
 
 const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
 let roomPageIndex = 0;
-let nextRotationAt = Date.now() + ROTATE_MS;
+let nextRotationAt = Date.now() + (DEFAULT_SETTINGS.switchSeconds * 1000);
+let rotationIntervalId = null;
+let refreshIntervalId = null;
+let messageScrollIntervalId = null;
+let settingsSignature = "";
 
 function byId(id) {
   return document.getElementById(id);
@@ -63,6 +73,32 @@ function loadState() {
   }
 }
 
+function getDisplaySettings(state) {
+  const settings = state.displaySettings || {};
+  return {
+    switchSeconds: Math.max(5, Number(settings.switchSeconds || DEFAULT_SETTINGS.switchSeconds)),
+    hoursBefore: Math.max(0, Number(settings.hoursBefore ?? DEFAULT_SETTINGS.hoursBefore)),
+    hoursAfter: Math.max(1, Number(settings.hoursAfter ?? DEFAULT_SETTINGS.hoursAfter)),
+    roomsPerPage: Math.max(1, Number(settings.roomsPerPage || DEFAULT_SETTINGS.roomsPerPage)),
+    messages: Array.isArray(settings.messages) ? settings.messages : []
+  };
+}
+
+function getSettingsSignature(settings) {
+  return JSON.stringify({
+    switchSeconds: settings.switchSeconds,
+    hoursBefore: settings.hoursBefore,
+    hoursAfter: settings.hoursAfter,
+    roomsPerPage: settings.roomsPerPage,
+    messages: (settings.messages || []).map(message => [message.id, message.text, message.expiresAt])
+  });
+}
+
+function activeMessages(state) {
+  const now = Date.now();
+  return getDisplaySettings(state).messages.filter(message => !message.expiresAt || Date.parse(message.expiresAt) > now);
+}
+
 function defaultRooms() {
   return Array.from({ length: 12 }, (_, i) => ({ id: `r${i + 1}`, name: `חדר ${i + 1}` }));
 }
@@ -92,10 +128,10 @@ function getTodaysEntries(state) {
     }));
 }
 
-function getWindowSlots(now) {
+function getWindowSlots(now, settings) {
   const nowMin = (now.getHours() * 60) + now.getMinutes();
-  const start = floorToSlot(nowMin - 60);
-  const end = ceilToSlot(nowMin + 180);
+  const start = Math.max(WORK_START, floorToSlot(nowMin - (settings.hoursBefore * 60)));
+  const end = Math.min(WORK_END, ceilToSlot(nowMin + (settings.hoursAfter * 60)));
   const slots = [];
 
   for (let m = start; m <= end; m += SLOT_MIN) {
@@ -136,35 +172,37 @@ function renderClock() {
 
 function renderNotifications(state) {
   const box = byId("notificationsList");
-  const notifications = Array.isArray(state.notifications) ? state.notifications : [];
+  const notifications = activeMessages(state);
+  clearMessagesAutoScroll();
 
   if (!notifications.length) {
     box.innerHTML = '<div class="notice-item">אין הודעות להצגה כרגע.</div>';
     return;
   }
 
-  const top = notifications.slice(0, 4);
-  box.innerHTML = top.map(n => {
+  box.innerHTML = notifications.map(n => {
     const text = esc(n.text || "");
-    const at = esc(n.at || "");
-    const cls = n.critical ? "notice-item critical" : "notice-item";
-    return `<div class="${cls}">${text}<br><small>${at}</small></div>`;
+    const at = n.expiresAt ? `עד ${esc(new Date(n.expiresAt).toLocaleString("he-IL"))}` : "ללא הגבלת זמן";
+    return `<div class="notice-item">${text}<br><small>${at}</small></div>`;
   }).join("");
+
+  setupMessagesAutoScroll(box);
 }
 
 function renderTable() {
   const state = loadState();
+  const settings = getDisplaySettings(state);
   const rooms = getRooms(state);
   const entries = getTodaysEntries(state);
   const now = new Date();
   const day = now.getDay();
-  const slots = getWindowSlots(now);
+  const slots = getWindowSlots(now, settings);
 
-  const totalPages = Math.max(1, Math.ceil(rooms.length / ROOMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(rooms.length / settings.roomsPerPage));
   roomPageIndex = roomPageIndex % totalPages;
 
-  const startIdx = roomPageIndex * ROOMS_PER_PAGE;
-  const visibleRooms = rooms.slice(startIdx, startIdx + ROOMS_PER_PAGE);
+  const startIdx = roomPageIndex * settings.roomsPerPage;
+  const visibleRooms = rooms.slice(startIdx, startIdx + settings.roomsPerPage);
 
   byId("roomsRange").textContent = `חדרים ${startIdx + 1}-${Math.min(startIdx + visibleRooms.length, rooms.length)} מתוך ${rooms.length}`;
 
@@ -204,30 +242,76 @@ function renderTable() {
   renderNotifications(state);
 }
 
+function setupMessagesAutoScroll(box) {
+  clearMessagesAutoScroll();
+  box.scrollTop = 0;
+  if (box.scrollHeight <= box.clientHeight + 8) return;
+  messageScrollIntervalId = setInterval(() => {
+    const step = 72;
+    const next = box.scrollTop + step;
+    box.scrollTo({ top: next >= box.scrollHeight - box.clientHeight ? 0 : next, behavior: "smooth" });
+  }, 2500);
+}
+
+function clearMessagesAutoScroll() {
+  if (messageScrollIntervalId) {
+    clearInterval(messageScrollIntervalId);
+    messageScrollIntervalId = null;
+  }
+}
+
 function renderRotationCountdown() {
+  const settings = getDisplaySettings(loadState());
   const leftMs = Math.max(0, nextRotationAt - Date.now());
   const leftSec = Math.ceil(leftMs / 1000);
   const el = byId("rotateCountdown");
   if (!el) return;
-  el.textContent = `החלפה בעוד ${leftSec} שניות`;
+  el.textContent = `החלפה בעוד ${leftSec} שניות מתוך ${settings.switchSeconds}`;
 }
 
 function nextPage() {
+  const settings = getDisplaySettings(loadState());
   roomPageIndex += 1;
-  nextRotationAt = Date.now() + ROTATE_MS;
+  nextRotationAt = Date.now() + (settings.switchSeconds * 1000);
   renderTable();
   renderRotationCountdown();
+}
+
+function restartDisplayTimers() {
+  const settings = getDisplaySettings(loadState());
+  if (rotationIntervalId) clearInterval(rotationIntervalId);
+  if (refreshIntervalId) clearInterval(refreshIntervalId);
+  settingsSignature = getSettingsSignature(settings);
+  nextRotationAt = Date.now() + (settings.switchSeconds * 1000);
+  rotationIntervalId = setInterval(nextPage, settings.switchSeconds * 1000);
+  refreshIntervalId = setInterval(() => {
+    const latestSettings = getDisplaySettings(loadState());
+    if (getSettingsSignature(latestSettings) !== settingsSignature) {
+      restartDisplayTimers();
+      renderTable();
+      renderRotationCountdown();
+      return;
+    }
+    renderTable();
+    renderRotationCountdown();
+  }, 15000);
 }
 
 function initialize() {
   renderClock();
   renderTable();
   renderRotationCountdown();
+  restartDisplayTimers();
 
   setInterval(renderClock, 1000);
-  setInterval(renderTable, 15000);
   setInterval(renderRotationCountdown, 1000);
-  setInterval(nextPage, ROTATE_MS);
+  window.addEventListener("storage", event => {
+    if (event.key === STORAGE_KEY) {
+      restartDisplayTimers();
+      renderTable();
+      renderRotationCountdown();
+    }
+  });
 }
 
 initialize();

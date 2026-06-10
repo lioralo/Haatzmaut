@@ -8,7 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>מערכת ניהול מרפאה</title>
-  <link rel="stylesheet" href="styles.css?v=20260610b" />
+  <link rel="stylesheet" href="styles.css?v=20260610e" />
 </head>
 <body>
 
@@ -74,6 +74,7 @@
         <span id="activeUser"></span>
         <span id="activeRole" class="session-role"></span>
       </div>
+      <a id="displayAdminQuickLink" class="secondary session-link" href="display.html?v=20260610e" target="_blank" rel="noopener">מסך תצוגה</a>
       <button id="logoutBtn" type="button" class="secondary">התנתקות</button>
     </div>
   </header>
@@ -84,7 +85,7 @@
     <section id="loginSection" class="card auth-card">
       <h2>כניסה מאובטחת</h2>
       <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
-      <a class="display-entry-link" href="display.html?v=20260610b" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
+      <a class="display-entry-link" href="display.html?v=20260610e" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
       <form id="loginForm" class="auth-form">
         <label>שם משתמש <input id="username" autocomplete="username" required /></label>
         <label>סיסמה     <input id="password" type="password" autocomplete="current-password" required /></label>
@@ -112,12 +113,13 @@
       <!-- Tab bar -->
       <nav class="card tabs">
         <button data-tab="dashboardTab" class="active">לוח הזמנות</button>
-        <button data-tab="requestsTab">בקשות</button>
         <button data-tab="adminTab" class="admin-only hidden">ניהול משתמשים וחדרים</button>
+        <button data-tab="requestsTab">בקשות</button>
         <button data-tab="meetingsTab">ישיבות</button>
-        <button data-tab="resourcesTab">מרכז ידע</button>
-        <button data-tab="issuesTab">תקלות</button>
         <button data-tab="notificationsTab">התראות</button>
+        <button data-tab="issuesTab">תקלות</button>
+        <button data-tab="resourcesTab">מרכז ידע</button>
+        <a class="tab-link" href="display.html?v=20260610e" target="_blank" rel="noopener">מסך תצוגה</a>
       </nav>
 
       <!-- ======== DASHBOARD TAB ======== -->
@@ -286,6 +288,55 @@
           </article>
 
         </div><!-- /admin-three-col -->
+
+        <article class="panel admin-display-panel">
+          <div class="section-head">
+            <div>
+              <h3 class="panel-title">ניהול מסך תצוגה</h3>
+              <p class="muted">שליטה בזמן החלפה, חלון שעות, מספר חדרים להצגה והודעות למסך ההמתנה.</p>
+            </div>
+            <a class="display-entry-link" href="display.html?v=20260610e" target="_blank" rel="noopener">פתח מסך תצוגה</a>
+          </div>
+
+          <form id="displaySettingsForm" class="grid-form compact-form">
+            <label>זמן החלפה בשניות
+              <input id="displaySwitchSeconds" type="number" min="5" step="1" required />
+            </label>
+            <label>טווח אחורה בשעות
+              <input id="displayHoursBefore" type="number" min="0" step="1" required />
+            </label>
+            <label>טווח קדימה בשעות
+              <input id="displayHoursAfter" type="number" min="1" step="1" required />
+            </label>
+            <label>כמה חדרים להציג בכל פעם
+              <input id="displayRoomsPerPage" type="number" min="1" step="1" required />
+            </label>
+            <div class="form-actions full">
+              <button type="submit">שמור הגדרות תצוגה</button>
+            </div>
+          </form>
+
+          <form id="displayMessageForm" class="grid-form compact-form admin-display-message-form">
+            <label class="full">הודעה למסך התצוגה
+              <textarea id="displayMessageText" rows="2" placeholder="לדוגמה: נא להמתין עד לקריאת הצוות"></textarea>
+            </label>
+            <label>משך הצגה
+              <select id="displayMessageDuration">
+                <option value="5">5 דקות</option>
+                <option value="10">10 דקות</option>
+                <option value="15">15 דקות</option>
+                <option value="30">30 דקות</option>
+                <option value="60">60 דקות</option>
+                <option value="unlimited">ללא הגבלת זמן</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="submit">הוסף הודעה</button>
+            </div>
+          </form>
+
+          <div id="displayMessagesList"></div>
+        </article>
       </section>
 
       <!-- ======== MEETINGS TAB ======== -->
@@ -378,6 +429,6 @@
       });
     });
   </script>
-  <script src="app.js?v=20260610b"></script>
+  <script src="app.js?v=20260610e"></script>
 </body>
 </html>

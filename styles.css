@@ -119,6 +119,10 @@ h3 { font-size: 1.1rem; }
   border: 1px solid rgba(255,255,255,.18);
 }
 
+.session-link {
+  text-decoration: none;
+}
+
 .session-text { display: grid; gap: .1rem; }
 .session-role { font-size: .88rem; color: rgba(255,255,255,.82); }
 
@@ -302,6 +306,22 @@ textarea { min-height: 90px; resize: vertical; }
   background: linear-gradient(135deg, #f1f5f9, #d9e7e9);
   color: var(--text); box-shadow: none;
   font-size: .92rem;
+}
+.tabs .tab-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .62rem 1rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f1f5f9, #d9e7e9);
+  color: var(--text);
+  text-decoration: none;
+  font-size: .92rem;
+  font-weight: 600;
+}
+.tabs .tab-link:hover {
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: #fff;
 }
 .tabs button.active {
   background: linear-gradient(135deg, var(--primary), var(--primary-2));
@@ -740,6 +760,14 @@ dialog::backdrop {
   justify-content: space-between;
   gap: .8rem;
   margin-bottom: .75rem;
+}
+
+.admin-display-panel {
+  margin-top: 1rem;
+}
+
+.admin-display-message-form {
+  margin-top: 1rem;
 }
 
 #meetingList h3 {

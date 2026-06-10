@@ -152,6 +152,31 @@ function normalizeUser(u) {
   };
 }
 
+function normalizeDisplayMessage(message) {
+  return {
+    id: message.id || makeId("displaymsg"),
+    text: String(message.text || "").trim(),
+    createdAt: String(message.createdAt || new Date().toLocaleString("he-IL")),
+    expiresAt: message.expiresAt ? String(message.expiresAt) : "",
+    durationMinutes: message.durationMinutes === "unlimited" ? "unlimited" : Math.max(5, Number(message.durationMinutes || 5))
+  };
+}
+
+function normalizeDisplaySettings(settings) {
+  return {
+    switchSeconds: Math.max(5, Number(settings?.switchSeconds || 30)),
+    hoursBefore: Math.max(0, Number(settings?.hoursBefore ?? 1)),
+    hoursAfter: Math.max(1, Number(settings?.hoursAfter ?? 3)),
+    roomsPerPage: Math.max(1, Number(settings?.roomsPerPage || 10)),
+    messages: Array.isArray(settings?.messages) ? settings.messages.map(normalizeDisplayMessage).filter(m => m.text) : []
+  };
+}
+
+function activeDisplayMessages(settings = state?.displaySettings) {
+  const now = Date.now();
+  return (settings?.messages || []).filter(message => !message.expiresAt || Date.parse(message.expiresAt) > now);
+}
+
 /* ============================================================
    NORMALIZATION
    ============================================================ */
@@ -485,6 +510,7 @@ function hydrateState() {
     resources:     src.resources     || [],
     issues:        Array.isArray(src.issues) ? src.issues.map(normalizeIssue) : [],
     notifications: src.notifications || [],
+    displaySettings: normalizeDisplaySettings(src.displaySettings),
     selectedTags:  new Set(Array.isArray(src.selectedTags) ? src.selectedTags : []),
     weekISO,
     activeDay:     clampDay(src.activeDay ?? todayDayIdx()),
@@ -513,6 +539,7 @@ function persistState() {
       resources:     state.resources,
       issues:        state.issues,
       notifications: state.notifications,
+      displaySettings: state.displaySettings,
       users:         state.users,
       passwordResets: state.passwordResets,
       selectedTags:  [...state.selectedTags],
@@ -1295,6 +1322,45 @@ function renderAdminStaff() {
   });
 }
 
+function renderAdminDisplayControls() {
+  const form = byId("displaySettingsForm");
+  const messagesBox = byId("displayMessagesList");
+  const quickLink = byId("displayAdminQuickLink");
+  if (!form || !messagesBox) return;
+
+  const settings = state.displaySettings;
+  byId("displaySwitchSeconds").value = String(settings.switchSeconds);
+  byId("displayHoursBefore").value = String(settings.hoursBefore);
+  byId("displayHoursAfter").value = String(settings.hoursAfter);
+  byId("displayRoomsPerPage").value = String(settings.roomsPerPage);
+  if (quickLink) quickLink.href = `display.html?v=20260610e`;
+
+  const messages = activeDisplayMessages(settings);
+  messagesBox.innerHTML = messages.length
+    ? messages.map(message => {
+        const expiry = message.expiresAt
+          ? `עד ${esc(new Date(message.expiresAt).toLocaleString("he-IL"))}`
+          : "ללא הגבלת זמן";
+        return `<div class="notice">
+          <strong>${esc(message.text)}</strong>
+          <div class="notice-sub">${expiry}</div>
+          <div class="notice-actions">
+            <button type="button" class="btn-sm danger" data-display-message-del="${message.id}">מחיקה</button>
+          </div>
+        </div>`;
+      }).join("")
+    : `<p class="empty-state">אין הודעות פעילות למסך התצוגה.</p>`;
+
+  messagesBox.querySelectorAll("[data-display-message-del]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.displaySettings.messages = state.displaySettings.messages.filter(message => message.id !== btn.dataset.displayMessageDel);
+      persistState();
+      renderAdminDisplayControls();
+      addNotification("הודעה הוסרה ממסך התצוגה.");
+    });
+  });
+}
+
 /* ============================================================
    SESSION BAR + ACCESS CONTROL
    ============================================================ */
@@ -1373,6 +1439,7 @@ function renderAll() {
     renderAdminStaff();
     renderAdminUsers();
     renderAdminResetRequests();
+    renderAdminDisplayControls();
   }
 }
 
@@ -1895,6 +1962,46 @@ function bindEvents() {
     byId("adminStaffId").value = "";
     byId("adminStaffSaveBtn").textContent = "הוסף איש צוות";
     byId("adminStaffClearBtn").classList.add("hidden");
+  });
+
+  byId("displaySettingsForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+    state.displaySettings = normalizeDisplaySettings({
+      ...state.displaySettings,
+      switchSeconds: byId("displaySwitchSeconds").value,
+      hoursBefore: byId("displayHoursBefore").value,
+      hoursAfter: byId("displayHoursAfter").value,
+      roomsPerPage: byId("displayRoomsPerPage").value,
+      messages: state.displaySettings.messages
+    });
+    persistState();
+    renderAdminDisplayControls();
+    addNotification("הגדרות מסך התצוגה נשמרו.");
+  });
+
+  byId("displayMessageForm")?.addEventListener("submit", e => {
+    e.preventDefault();
+    if (!isAdmin()) return;
+    const text = byId("displayMessageText").value.trim();
+    const duration = byId("displayMessageDuration").value;
+    if (!text) {
+      showToast("יש להזין הודעה למסך התצוגה.", "error");
+      return;
+    }
+    const expiresAt = duration === "unlimited"
+      ? ""
+      : new Date(Date.now() + (Number(duration) * 60000)).toISOString();
+    state.displaySettings.messages.unshift(normalizeDisplayMessage({
+      text,
+      durationMinutes: duration,
+      expiresAt
+    }));
+    persistState();
+    byId("displayMessageForm").reset();
+    byId("displayMessageDuration").value = "5";
+    renderAdminDisplayControls();
+    addNotification("נוספה הודעה למסך התצוגה.");
   });
 }
 
