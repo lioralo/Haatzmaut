@@ -734,6 +734,14 @@ dialog::backdrop {
   font-weight: 700;
 }
 
+.staff-template-links {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .8rem;
+  margin-bottom: .75rem;
+}
+
 #meetingList h3 {
   margin-top: 1rem;
   margin-bottom: .25rem;

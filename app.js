@@ -260,6 +260,76 @@ function isValidMeetingRecord(rec) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time);
 }
 
+function isValidStaffRecord(rec) {
+  if (!rec || typeof rec !== "object") return false;
+  return Boolean(String(rec.fullName || rec.name || "").trim());
+}
+
+function staffKey(rec) {
+  const fullName = String(rec.fullName || rec.name || "").trim().toLowerCase();
+  const email = String(rec.email || "").trim().toLowerCase();
+  const phone = String(rec.phone || "").trim();
+  return fullName || email || phone || String(rec.id || makeId("staffkey"));
+}
+
+function mergeStaffWithLinkedPriority(existingStaff, incomingRecords, users) {
+  const linkedIds = new Set((users || []).map(u => String(u.staffId || "")).filter(Boolean));
+  const groups = new Map();
+
+  const addToGroup = (rec, origin) => {
+    const normalized = normalizeStaff(rec);
+    const key = staffKey(normalized);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ origin, rec: normalized });
+  };
+
+  (existingStaff || []).forEach(s => addToGroup(s, "existing"));
+  (incomingRecords || []).forEach(s => addToGroup(s, "incoming"));
+
+  const merged = [];
+  const remap = new Map();
+
+  groups.forEach(items => {
+    const existing = items.filter(i => i.origin === "existing").map(i => i.rec);
+    const incoming = items.filter(i => i.origin === "incoming").map(i => i.rec);
+
+    const linkedExisting = existing.find(e => linkedIds.has(e.id));
+    let keeper = linkedExisting || existing[0] || incoming[incoming.length - 1];
+    if (!keeper) return;
+
+    if (incoming.length) {
+      const latestIncoming = incoming[incoming.length - 1];
+      if (!linkedExisting) {
+        // When no linked record exists, apply incoming updates on top of the kept id.
+        keeper = normalizeStaff({ ...keeper, ...latestIncoming, id: keeper.id || latestIncoming.id });
+      } else {
+        // Keep linked record id and only fill missing fields from upload.
+        keeper = normalizeStaff({
+          ...latestIncoming,
+          ...keeper,
+          phone: keeper.phone || latestIncoming.phone,
+          email: keeper.email || latestIncoming.email,
+          role: keeper.role || latestIncoming.role,
+          team: keeper.team || latestIncoming.team,
+          id: keeper.id
+        });
+      }
+    }
+
+    existing.forEach(s => {
+      if (s.id !== keeper.id) remap.set(s.id, keeper.id);
+    });
+    merged.push(keeper);
+  });
+
+  const updatedUsers = (users || []).map(u => {
+    const mapped = remap.get(String(u.staffId || ""));
+    return mapped ? { ...u, staffId: mapped } : u;
+  });
+
+  return { staff: merged, users: updatedUsers };
+}
+
 function templateFromEntries(entries, roomsList) {
   return (entries || []).map(e => normalizeTemplateEntry(e, roomsList));
 }
@@ -1666,6 +1736,46 @@ function bindEvents() {
         addNotification(`יובאו ${meetings.length} ישיבות מתוך ${rows.length} רשומות.`);
       } catch (err) {
         showToast(`שגיאה בייבוא ישיבות: ${err.message}`, "error");
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  byId("staffUpload")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "").trim();
+        const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
+        const rows = Array.isArray(records) ? records : [];
+        const validRows = rows.filter(isValidStaffRecord);
+        if (!validRows.length) throw new Error("לא נמצאו רשומות צוות תקינות בקובץ");
+
+        const normalizedIncoming = validRows.map(r => normalizeStaff({
+          id: String(r.id || "").trim() || makeId("staff"),
+          fullName: r.fullName || r.name,
+          phone: r.phone,
+          email: r.email,
+          role: r.role,
+          team: r.team
+        }));
+
+        const beforeCount = state.staff.length;
+        const merged = mergeStaffWithLinkedPriority(state.staff, normalizedIncoming, state.users);
+        state.staff = merged.staff;
+        state.users = merged.users;
+
+        persistState();
+        renderAdminStaff();
+        renderAdminUsers();
+        repopulateSelects();
+        addNotification(`יובא קובץ צוות: ${validRows.length} רשומות תקינות מתוך ${rows.length}. סה"כ צוות: ${state.staff.length} (לפני: ${beforeCount}).`);
+      } catch (err) {
+        showToast(`שגיאה בייבוא צוות: ${err.message}`, "error");
       } finally {
         e.target.value = "";
       }

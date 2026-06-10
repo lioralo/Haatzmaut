@@ -258,6 +258,13 @@
           <!-- Staff panel -->
           <article class="panel">
             <h3 class="panel-title">צוות</h3>
+            <div class="template-links staff-template-links">
+              <a href="templates/staff_template.csv" download>הורדת תבנית CSV לצוות</a>
+              <label class="file-upload-label">
+                יבוא צוות (CSV/JSON)
+                <input type="file" id="staffUpload" accept=".csv,.json" />
+              </label>
+            </div>
 
             <form id="adminStaffForm" class="grid-form compact-form">
               <input type="hidden" id="adminStaffId" />
