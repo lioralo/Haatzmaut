@@ -8,6 +8,7 @@ const ROTATE_MS = 30000;
 const DAY_NAMES = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
 
 let roomPageIndex = 0;
+let nextRotationAt = Date.now() + ROTATE_MS;
 
 function byId(id) {
   return document.getElementById(id);
@@ -203,17 +204,29 @@ function renderTable() {
   renderNotifications(state);
 }
 
+function renderRotationCountdown() {
+  const leftMs = Math.max(0, nextRotationAt - Date.now());
+  const leftSec = Math.ceil(leftMs / 1000);
+  const el = byId("rotateCountdown");
+  if (!el) return;
+  el.textContent = `החלפה בעוד ${leftSec} שניות`;
+}
+
 function nextPage() {
   roomPageIndex += 1;
+  nextRotationAt = Date.now() + ROTATE_MS;
   renderTable();
+  renderRotationCountdown();
 }
 
 function initialize() {
   renderClock();
   renderTable();
+  renderRotationCountdown();
 
   setInterval(renderClock, 1000);
   setInterval(renderTable, 15000);
+  setInterval(renderRotationCountdown, 1000);
   setInterval(nextPage, ROTATE_MS);
 }
 
