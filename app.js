@@ -226,7 +226,9 @@ function normalizeEntry(e, weekISO, roomsList) {
 }
 
 function parseCsvRows(text) {
-  const lines = String(text || "").split(/\r?\n/).filter(Boolean);
+  // Strip UTF-8 BOM if present (common in Excel exports)
+  let raw = String(text || "").replace(/^\uFEFF/, "");
+  const lines = raw.split(/\r?\n/).filter(Boolean);
   if (!lines.length) return [];
   const parseLine = line => {
     const out = [];
@@ -247,11 +249,87 @@ function parseCsvRows(text) {
     out.push(cur.trim());
     return out;
   };
-  const cols = parseLine(lines[0]);
+  const cols = parseLine(lines[0]).map(c => c.trim());
   return lines.slice(1).map(line => {
     const vals = parseLine(line);
-    return Object.fromEntries(cols.map((c, i) => [c, vals[i]]));
+    // Map each column; default to "" if row has fewer values than header
+    return Object.fromEntries(cols.map((c, i) => [c, vals[i] !== undefined ? vals[i] : ""]));
   });
+}
+
+/* ============================================================
+   CSV EXPORT HELPERS
+   ============================================================ */
+
+function csvEscapeField(val) {
+  const s = String(val == null ? "" : val);
+  // Wrap in quotes if field contains comma, newline or double-quote
+  if (s.includes(",") || s.includes("\n") || s.includes('"')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function buildCsv(headers, rows) {
+  const head = headers.map(csvEscapeField).join(",");
+  const body = rows.map(row => headers.map(h => csvEscapeField(row[h])).join(",")).join("\r\n");
+  return head + "\r\n" + body;
+}
+
+function triggerCsvDownload(filename, csvText) {
+  const blob = new Blob(["\uFEFF" + csvText], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportBookingsCSV() {
+  const headers = ["weekISO", "day", "roomId", "roomName", "start", "duration", "staff", "team", "note", "oneTime"];
+  const rows = state.schedule.map(e => ({
+    weekISO:  e.weekISO,
+    day:      e.day,
+    roomId:   e.roomId,
+    roomName: getRoomName(e.roomId),
+    start:    e.start,
+    duration: e.duration,
+    staff:    e.staff,
+    team:     e.team,
+    note:     e.note || "",
+    oneTime:  e.oneTime ? "TRUE" : "FALSE"
+  }));
+  triggerCsvDownload("bookings_current.csv", buildCsv(headers, rows));
+}
+
+function exportStaffCSV() {
+  const headers = ["id", "fullName", "phone", "email", "role", "team"];
+  triggerCsvDownload("staff_current.csv", buildCsv(headers, state.staff));
+}
+
+function exportMeetingsCSV() {
+  const headers = ["speaker", "audience", "specification", "date", "time", "link", "files"];
+  const rows = state.meetings.map(m => ({
+    speaker:       m.speaker,
+    audience:      m.audience,
+    specification: m.specification || m.agenda || "",
+    date:          m.date,
+    time:          m.time,
+    link:          m.link || "",
+    files:         Array.isArray(m.files) ? m.files.join(";") : (m.files || "")
+  }));
+  triggerCsvDownload("meetings_current.csv", buildCsv(headers, rows));
+}
+
+function exportRoomsCSV() {
+  const headers = ["id", "name", "tags"];
+  const rows = state.rooms.map(r => ({
+    id:   r.id,
+    name: r.name,
+    tags: Array.isArray(r.tags) ? r.tags.join(", ") : (r.tags || "")
+  }));
+  triggerCsvDownload("rooms_current.csv", buildCsv(headers, rows));
 }
 
 function normalizeTemplateEntry(e, roomsList) {
@@ -1849,6 +1927,45 @@ function bindEvents() {
     };
     reader.readAsText(file);
   });
+
+  byId("roomUpload")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "").trim();
+        const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
+        const rows = Array.isArray(records) ? records : [];
+        const validRows = rows.filter(r => r && typeof r === "object" && String(r.name || "").trim());
+        if (!validRows.length) throw new Error("לא נמצאו רשומות חדרים תקינות בקובץ");
+        const incoming = validRows.map(r => normalizeRoom({
+          id:   String(r.id || "").trim() || makeId("room"),
+          name: r.name,
+          tags: r.tags
+        }));
+        // Merge: keep existing room if id matches, otherwise add
+        incoming.forEach(room => {
+          const idx = state.rooms.findIndex(r => r.id === room.id);
+          if (idx >= 0) state.rooms[idx] = room;
+          else state.rooms.push(room);
+        });
+        persistState();
+        renderAll();
+        addNotification(`יובאו ${incoming.length} חדרים מתוך ${rows.length} רשומות.`);
+      } catch (err) {
+        showToast(`שגיאה בייבוא חדרים: ${err.message}`, "error");
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  byId("exportBookingsBtn")?.addEventListener("click", () => { exportBookingsCSV(); });
+  byId("exportStaffBtn")?.addEventListener("click", () => { exportStaffCSV(); });
+  byId("exportMeetingsBtn")?.addEventListener("click", () => { exportMeetingsCSV(); });
+  byId("exportRoomsBtn")?.addEventListener("click", () => { exportRoomsCSV(); });
 
   byId("issueForm")?.addEventListener("submit", e => {
     e.preventDefault();

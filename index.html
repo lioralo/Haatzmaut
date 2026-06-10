@@ -192,6 +192,7 @@
             <p id="adminWeekLabel" class="muted"></p>
             <div class="template-links">
               <a href="templates/bookings_template.csv" download>הורדת תבנית CSV ללו"ז</a>
+              <button type="button" id="exportBookingsBtn" class="btn-link">הורדת לו"ז נוכחי (CSV)</button>
             </div>
           </div>
           <label class="file-upload-label">
@@ -242,6 +243,14 @@
           <!-- Rooms panel -->
           <article class="panel">
             <h3 class="panel-title">חדרים</h3>
+            <div class="template-links">
+              <a href="templates/rooms_template.csv" download>הורדת תבנית CSV לחדרים</a>
+              <button type="button" id="exportRoomsBtn" class="btn-link">הורדת חדרים נוכחיים (CSV)</button>
+              <label class="file-upload-label">
+                יבוא חדרים (CSV/JSON)
+                <input type="file" id="roomUpload" accept=".csv,.json" />
+              </label>
+            </div>
 
             <form id="adminRoomForm" class="grid-form compact-form">
               <input type="hidden" id="adminRoomId" />
@@ -265,6 +274,7 @@
             <h3 class="panel-title">צוות</h3>
             <div class="template-links staff-template-links">
               <a href="templates/staff_template.csv" download>הורדת תבנית CSV לצוות</a>
+              <button type="button" id="exportStaffBtn" class="btn-link">הורדת צוות נוכחי (CSV)</button>
               <label class="file-upload-label">
                 יבוא צוות (CSV/JSON)
                 <input type="file" id="staffUpload" accept=".csv,.json" />
@@ -346,6 +356,7 @@
             <h2>ישיבות צוות שבועיות</h2>
             <div class="template-links">
               <a href="templates/meetings_template.csv" download>הורדת תבנית CSV לישיבות</a>
+              <button type="button" id="exportMeetingsBtn" class="btn-link">הורדת ישיבות נוכחיות (CSV)</button>
             </div>
           </div>
           <label class="file-upload-label">

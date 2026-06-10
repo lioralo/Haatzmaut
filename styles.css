@@ -747,11 +747,26 @@ dialog::backdrop {
 
 .template-links {
   margin-top: .35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .8rem;
 }
 
-.template-links a {
+.template-links a,
+.template-links .btn-link {
   color: #005a8e;
   font-weight: 700;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  text-decoration: underline;
 }
 
 .staff-template-links {
