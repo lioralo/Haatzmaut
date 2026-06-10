@@ -81,6 +81,7 @@
     <section id="loginSection" class="card auth-card">
       <h2>כניסה מאובטחת</h2>
       <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
+      <a class="display-entry-link" href="display.html" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
       <form id="loginForm" class="auth-form">
         <label>שם משתמש <input id="username" autocomplete="username" required /></label>
         <label>סיסמה     <input id="password" type="password" autocomplete="current-password" required /></label>
@@ -184,6 +185,9 @@
           <div>
             <h2>ניהול משתמשים וחדרים</h2>
             <p id="adminWeekLabel" class="muted"></p>
+            <div class="template-links">
+              <a href="templates/bookings_template.csv" download>הורדת תבנית CSV ללו"ז</a>
+            </div>
           </div>
           <label class="file-upload-label">
             טעינת לו"ז (CSV/JSON)
@@ -277,7 +281,12 @@
       <!-- ======== MEETINGS TAB ======== -->
       <section id="meetingsTab" class="card tab-content hidden">
         <div class="section-head">
-          <h2>ישיבות צוות שבועיות</h2>
+          <div>
+            <h2>ישיבות צוות שבועיות</h2>
+            <div class="template-links">
+              <a href="templates/meetings_template.csv" download>הורדת תבנית CSV לישיבות</a>
+            </div>
+          </div>
           <label class="file-upload-label">
             יבוא ישיבות (CSV/JSON)
             <input type="file" id="meetingUpload" accept=".csv,.json" />

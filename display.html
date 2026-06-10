@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0072BC" />
+  <title>לוח תצוגה מרפאה</title>
+  <link rel="stylesheet" href="display.css" />
+</head>
+<body>
+  <header class="display-header">
+    <div class="clock-panel">
+      <p class="label">שעה נוכחית</p>
+      <p id="nowTime" class="now-time">--:--</p>
+      <p id="nowDate" class="now-date">--</p>
+    </div>
+    <div class="title-panel">
+      <h1>לוח תצוגה למרפאה</h1>
+      <p>מציג יום נוכחי בלבד, שעה אחורה ועד 3 שעות קדימה</p>
+    </div>
+    <div class="status-panel">
+      <p class="label">החלפת חדרים</p>
+      <p id="roomsRange" class="range-text">--</p>
+      <a class="back-link" href="index.html">חזרה למערכת</a>
+    </div>
+  </header>
+
+  <section class="notifications-wrap">
+    <h2>הודעות</h2>
+    <div id="notificationsList" class="notifications-list"></div>
+  </section>
+
+  <main class="table-wrap">
+    <table id="displayTable" class="display-table"></table>
+  </main>
+
+  <script src="display.js"></script>
+</body>
+</html>

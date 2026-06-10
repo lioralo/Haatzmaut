@@ -1,0 +1,231 @@
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700;800&family=Rubik:wght@500;700;800&display=swap');
+
+:root {
+  --bg: #e9f3fb;
+  --bg-2: #f7fbff;
+  --line: rgba(13, 33, 55, 0.14);
+  --text: #0d2137;
+  --muted: #35506b;
+  --primary: #0072bc;
+  --primary-dark: #005a8e;
+  --accent: #f47b20;
+  --card: rgba(255, 255, 255, 0.92);
+  --shadow: 0 18px 44px rgba(9, 30, 66, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: 'Assistant', sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 10% 10%, rgba(0, 114, 188, 0.22), transparent 36%),
+    radial-gradient(circle at 90% 90%, rgba(244, 123, 32, 0.18), transparent 28%),
+    linear-gradient(135deg, var(--bg), var(--bg-2));
+  padding: 14px;
+}
+
+.display-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.clock-panel,
+.title-panel,
+.status-panel {
+  background: var(--card);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  box-shadow: var(--shadow);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.now-time {
+  margin: 4px 0;
+  font-family: 'Rubik', sans-serif;
+  font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  color: var(--primary-dark);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.now-date {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.title-panel {
+  display: grid;
+  align-content: center;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(0, 114, 188, 0.16), rgba(255, 255, 255, 0.95));
+}
+
+.title-panel h1 {
+  margin: 0;
+  font-family: 'Rubik', sans-serif;
+  font-size: clamp(1.35rem, 2.6vw, 2.2rem);
+}
+
+.title-panel p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.status-panel {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  justify-items: start;
+}
+
+.range-text {
+  margin: 0;
+  font-family: 'Rubik', sans-serif;
+  font-size: 1.12rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.back-link {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.notifications-wrap {
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 114, 188, 0.14);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+}
+
+.notifications-wrap h2 {
+  margin: 0 0 8px;
+  font-family: 'Rubik', sans-serif;
+  font-size: 1rem;
+  color: var(--primary-dark);
+}
+
+.notifications-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.notice-item {
+  background: rgba(237, 245, 252, 0.9);
+  border: 1px solid var(--line);
+  border-right: 4px solid var(--primary);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-weight: 600;
+  min-height: 56px;
+}
+
+.notice-item.critical {
+  border-right-color: var(--accent);
+  background: rgba(255, 239, 223, 0.85);
+}
+
+.table-wrap {
+  margin-top: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(0, 114, 188, 0.16);
+  border-radius: 16px;
+  overflow: auto;
+  box-shadow: var(--shadow);
+}
+
+.display-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.display-table th,
+.display-table td {
+  border: 1px solid rgba(0, 114, 188, 0.12);
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: top;
+}
+
+.display-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(135deg, #e0f0fc, #cae7fb);
+  color: #013a5d;
+  font-size: 0.95rem;
+}
+
+.display-table .time-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  width: 86px;
+  background: linear-gradient(135deg, #0072bc, #005a8e);
+  color: #fff;
+  font-family: 'Rubik', sans-serif;
+}
+
+.slot-empty {
+  color: #6b86a1;
+  font-size: 0.9rem;
+}
+
+.slot-booked {
+  border-right: 4px solid var(--accent);
+  background: rgba(0, 114, 188, 0.08);
+  border-radius: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.slot-booked .meta {
+  display: block;
+  font-size: 0.78rem;
+  color: #1f4567;
+  font-weight: 600;
+}
+
+.live-row .time-col,
+.live-row td {
+  box-shadow: inset 0 0 0 2px rgba(244, 123, 32, 0.36);
+}
+
+@media (max-width: 1050px) {
+  .display-header {
+    grid-template-columns: 1fr;
+  }
+
+  .status-panel {
+    justify-items: stretch;
+  }
+
+  .notifications-list {
+    grid-template-columns: 1fr;
+  }
+}

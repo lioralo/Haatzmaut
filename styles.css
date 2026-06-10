@@ -272,6 +272,24 @@ textarea { min-height: 90px; resize: vertical; }
   border: 1px solid rgba(0,114,188,.18);
 }
 
+.display-entry-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: .65rem;
+  padding: .46rem .85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(0,114,188,.25);
+  color: #005a8e;
+  background: rgba(0,114,188,.08);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.display-entry-link:hover {
+  background: rgba(0,114,188,.14);
+}
+
 /* ============================================================
    TABS
    ============================================================ */
@@ -705,6 +723,15 @@ dialog::backdrop {
 .file-upload-label {
   display: flex; flex-direction: column; gap: .3rem;
   font-weight: 600; font-size: .9rem; cursor: pointer;
+}
+
+.template-links {
+  margin-top: .35rem;
+}
+
+.template-links a {
+  color: #005a8e;
+  font-weight: 700;
 }
 
 #meetingList h3 {

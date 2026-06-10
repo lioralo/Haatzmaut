@@ -244,6 +244,22 @@ function normalizeTemplateEntry(e, roomsList) {
   };
 }
 
+function isValidScheduleTemplateRecord(rec) {
+  if (!rec || typeof rec !== "object") return false;
+  const day = Number(rec.day);
+  const start = String(rec.start || "").trim();
+  const duration = Number(rec.duration || 0);
+  const hasRoom = String(rec.roomId || rec.room || "").trim();
+  return Number.isFinite(day) && day >= 0 && day <= 4 && /^\d{2}:\d{2}$/.test(start) && duration > 0 && Boolean(hasRoom);
+}
+
+function isValidMeetingRecord(rec) {
+  if (!rec || typeof rec !== "object") return false;
+  const date = String(rec.date || "").trim();
+  const time = String(rec.time || "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time);
+}
+
 function templateFromEntries(entries, roomsList) {
   return (entries || []).map(e => normalizeTemplateEntry(e, roomsList));
 }
@@ -1565,15 +1581,19 @@ function bindEvents() {
         } else {
           records = parseCsvRows(text);
         }
-        const template = templateFromEntries(records, state.rooms);
+        const rows = Array.isArray(records) ? records : [];
+        const validRows = rows.filter(isValidScheduleTemplateRecord);
+        const template = templateFromEntries(validRows, state.rooms);
         if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
         const scope = byId("scheduleReplaceScope")?.value || "current-upcoming";
         state.defaultTemplate = template;
         applyTemplateScope(template, scope);
         persistState(); renderAll();
-        addNotification("לוח הזמנים הוחלף וסונכרן לשלושת השבועות הקרובים.");
+        addNotification(`לוח הזמנים עודכן: נטענו ${template.length} רשומות תקינות מתוך ${rows.length}.`);
       } catch (err) {
         showToast(`שגיאה: ${err.message}`, "error");
+      } finally {
+        e.target.value = "";
       }
     };
     reader.readAsText(file);
@@ -1636,13 +1656,18 @@ function bindEvents() {
       try {
         const text = String(reader.result || "").trim();
         const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
-        const meetings = (Array.isArray(records) ? records : []).map(normalizeMeeting);
+        const rows = Array.isArray(records) ? records : [];
+        const validRows = rows.filter(isValidMeetingRecord);
+        const meetings = validRows.map(normalizeMeeting);
+        if (!meetings.length) throw new Error("לא נמצאו רשומות ישיבות תקינות בקובץ");
         state.meetings.unshift(...meetings);
         persistState();
         renderMeetings();
-        addNotification(`יובאו ${meetings.length} ישיבות.`);
+        addNotification(`יובאו ${meetings.length} ישיבות מתוך ${rows.length} רשומות.`);
       } catch (err) {
         showToast(`שגיאה בייבוא ישיבות: ${err.message}`, "error");
+      } finally {
+        e.target.value = "";
       }
     };
     reader.readAsText(file);
