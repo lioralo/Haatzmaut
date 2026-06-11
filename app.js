@@ -3,6 +3,17 @@
    ============================================================ */
 
 const STORAGE_KEY = "haatzmaut_v5";
+const MAX_UPLOAD_SIZE = 1024 * 1024; // 1MB
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
+const AUDIT_LOG_MAX = 500;
+const DEV_LOGIN_ENABLED = (() => {
+  const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const q = new URLSearchParams(window.location.search);
+  return isLocalHost && q.get("devAuth") === "1";
+})();
 
 const DAY_DEFS = [
   { key: 0, label: "ראשון",  short: "א׳" },
@@ -150,6 +161,60 @@ function normalizeUser(u) {
     active:    u.active !== false,
     createdAt: u.createdAt || new Date().toLocaleString("he-IL")
   };
+}
+
+function enforceMaxLength(fieldLabel, value, maxLen) {
+  const v = String(value ?? "");
+  if (v.length > maxLen) {
+    throw new Error(`${fieldLabel} ארוך מדי (מקסימום ${maxLen} תווים).`);
+  }
+  return v;
+}
+
+function normalizeUsernameInput(raw) {
+  const username = String(raw || "").trim().toLowerCase();
+  if (!username) throw new Error("יש להזין שם משתמש.");
+  if (!/^[a-z0-9._-]{3,50}$/.test(username)) {
+    throw new Error("שם משתמש חייב להיות באנגלית באורך 3-50 תווים ויכול לכלול נקודה/קו תחתון/מינוס.");
+  }
+  return username;
+}
+
+function ensureUploadAllowed(file, label = "קובץ", allowedExt = ["csv", "json"]) {
+  if (!file) return false;
+  const ext = String(file.name || "").toLowerCase().split(".").pop();
+  if (!allowedExt.includes(ext)) {
+    showToast(`${label} חייב להיות מסוג ${allowedExt.join("/")}.`, "error");
+    return false;
+  }
+  if (file.size > MAX_UPLOAD_SIZE) {
+    showToast(`${label} גדול מדי. מקסימום ${Math.round(MAX_UPLOAD_SIZE / 1024)}KB.`, "error");
+    return false;
+  }
+  return true;
+}
+
+function confirmImportPreview(label, totalRows, validRows, extra = "") {
+  const invalidRows = Math.max(0, totalRows - validRows);
+  const message = [
+    `תצוגה מקדימה לייבוא ${label}:`,
+    `סה\"כ רשומות: ${totalRows}`,
+    `רשומות תקינות: ${validRows}`,
+    `רשומות שיידחו: ${invalidRows}`,
+    extra,
+    "להמשיך לייבוא בפועל?"
+  ].filter(Boolean).join("\n");
+  return confirm(message);
+}
+
+function triggerJsonDownload(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function normalizeDisplayMessage(message) {
@@ -597,7 +662,23 @@ function hydrateState() {
     users:         Array.isArray(src.users) && src.users.length
                      ? src.users.map(normalizeUser)
                      : DEFAULT_USERS.map(u => ({ ...u })),
-    passwordResets: src.passwordResets || []
+    passwordResets: src.passwordResets || [],
+    auditLog: Array.isArray(src.auditLog)
+      ? src.auditLog.map(a => ({
+          id: String(a.id || makeId("audit")),
+          at: String(a.at || new Date().toLocaleString("he-IL")),
+          user: String(a.user || "system"),
+          action: String(a.action || "event"),
+          detail: String(a.detail || ""),
+          severity: ["info", "warn", "critical"].includes(a.severity) ? a.severity : "info"
+        }))
+      : [],
+    loginSecurity: {
+      failures: Array.isArray(src.loginSecurity?.failures)
+        ? src.loginSecurity.failures.map(Number).filter(Number.isFinite)
+        : [],
+      lockUntil: Math.max(0, Number(src.loginSecurity?.lockUntil || 0))
+    }
   };
 }
 
@@ -620,6 +701,8 @@ function persistState() {
       displaySettings: state.displaySettings,
       users:         state.users,
       passwordResets: state.passwordResets,
+      auditLog:      state.auditLog,
+      loginSecurity: state.loginSecurity,
       selectedTags:  [...state.selectedTags],
       weekISO:       state.weekISO,
       activeDay:     state.activeDay,
@@ -638,6 +721,180 @@ const getRoomName = id  => getRoomById(id)?.name || id;
 const getEntryById = id => state.schedule.find(e => e.id === id);
 const getStaffById = id => state.staff.find(s => s.id === id);
 const weekStart   = ()  => isoDate(state.weekISO);
+
+let sessionTimeoutId = null;
+
+function recordAudit(action, detail = "", severity = "info", shouldPersist = true) {
+  state.auditLog.unshift({
+    id: makeId("audit"),
+    at: new Date().toLocaleString("he-IL"),
+    user: state.currentUser?.username || "system",
+    action,
+    detail: String(detail || ""),
+    severity: ["info", "warn", "critical"].includes(severity) ? severity : "info"
+  });
+  if (state.auditLog.length > AUDIT_LOG_MAX) {
+    state.auditLog = state.auditLog.slice(0, AUDIT_LOG_MAX);
+  }
+  if (shouldPersist) persistState();
+}
+
+function registerActivity() {
+  if (!state.currentUser) return;
+  clearTimeout(sessionTimeoutId);
+  sessionTimeoutId = setTimeout(() => {
+    if (!state.currentUser) return;
+    recordAudit("session.timeout", "פג תוקף התחברות עקב חוסר פעילות.", "warn", false);
+    logoutCurrentUser("ההתחברות פגה עקב חוסר פעילות. יש להתחבר מחדש.");
+  }, SESSION_TIMEOUT_MS);
+}
+
+function clearSessionTimer() {
+  clearTimeout(sessionTimeoutId);
+  sessionTimeoutId = null;
+}
+
+function pruneLoginFailures(nowTs = Date.now()) {
+  state.loginSecurity.failures = state.loginSecurity.failures.filter(ts => (nowTs - ts) <= LOGIN_WINDOW_MS);
+}
+
+function resetLoginGuard(shouldPersist = true) {
+  state.loginSecurity.failures = [];
+  state.loginSecurity.lockUntil = 0;
+  if (shouldPersist) persistState();
+}
+
+function registerFailedLogin() {
+  const nowTs = Date.now();
+  pruneLoginFailures(nowTs);
+  state.loginSecurity.failures.push(nowTs);
+  if (state.loginSecurity.failures.length >= LOGIN_MAX_ATTEMPTS) {
+    state.loginSecurity.lockUntil = nowTs + LOGIN_LOCKOUT_MS;
+    recordAudit("auth.lockout", "נחסמה כניסה זמנית עקב ניסיונות כושלים.", "critical", false);
+  }
+  persistState();
+}
+
+function isLoginLocked() {
+  const nowTs = Date.now();
+  if (state.loginSecurity.lockUntil > nowTs) {
+    return true;
+  }
+  if (state.loginSecurity.lockUntil) {
+    resetLoginGuard();
+  }
+  return false;
+}
+
+function applyImportedState(rawState) {
+  if (!rawState || typeof rawState !== "object") throw new Error("קובץ גיבוי לא תקין.");
+  const candidate = rawState.data && typeof rawState.data === "object" ? rawState.data : rawState;
+  if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule) || !Array.isArray(candidate.users)) {
+    throw new Error("גיבוי חסר שדות חובה (rooms/schedule/users).");
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(candidate));
+  const restored = hydrateState();
+  const activeSession = state.currentUser;
+  Object.assign(state, restored);
+  state.currentUser = activeSession;
+  ensureSyncedScheduleWindow();
+  persistState();
+}
+
+function buildIntegrityReport() {
+  const report = [];
+  const fixes = [];
+  const roomIds = new Set(state.rooms.map(r => r.id));
+  const staffIds = new Set(state.staff.map(s => s.id));
+  const allTags = new Set(state.rooms.flatMap(r => r.tags));
+
+  const brokenUsers = state.users.filter(u => u.staffId && !staffIds.has(u.staffId));
+  if (brokenUsers.length) {
+    report.push(`נמצאו ${brokenUsers.length} משתמשים עם שיוך צוות לא תקין.`);
+    fixes.push(() => {
+      state.users = state.users.map(u => (u.staffId && !staffIds.has(u.staffId)) ? { ...u, staffId: "" } : u);
+    });
+  }
+
+  const brokenEntries = state.schedule.filter(e => !roomIds.has(e.roomId));
+  if (brokenEntries.length) {
+    report.push(`נמצאו ${brokenEntries.length} הזמנות עם חדר לא קיים.`);
+    fixes.push(() => {
+      state.schedule = state.schedule.filter(e => roomIds.has(e.roomId));
+    });
+  }
+
+  const brokenRequests = state.requests.filter(r => r.roomId && !roomIds.has(r.roomId));
+  if (brokenRequests.length) {
+    report.push(`נמצאו ${brokenRequests.length} בקשות שינוי עם חדר לא קיים.`);
+    fixes.push(() => {
+      state.requests = state.requests.map(r => (r.roomId && !roomIds.has(r.roomId))
+        ? normalizeRequest({ ...r, roomId: "", room: "" })
+        : r);
+    });
+  }
+
+  const staleSelectedTags = [...state.selectedTags].filter(tag => !allTags.has(tag));
+  if (staleSelectedTags.length) {
+    report.push(`נמצאו ${staleSelectedTags.length} תגיות סינון שכבר לא קיימות.`);
+    fixes.push(() => {
+      state.selectedTags = new Set([...state.selectedTags].filter(tag => allTags.has(tag)));
+    });
+  }
+
+  return {
+    hasIssues: report.length > 0,
+    report,
+    applyFixes: () => fixes.forEach(fn => fn())
+  };
+}
+
+function runIntegrityAssistant() {
+  const integrity = buildIntegrityReport();
+  if (!integrity.hasIssues) return;
+  const summary = integrity.report.join("\n");
+  const shouldFix = confirm(`זוהו אי-התאמות בנתונים:\n${summary}\n\nלהפעיל תיקון אוטומטי עכשיו?`);
+  if (!shouldFix) {
+    showToast("זוהו אי-התאמות. מומלץ לבצע שחזור/ניקוי מאדמין.", "warn");
+    recordAudit("integrity.scan.warning", "זוהו אי-התאמות והמשתמש דחה תיקון אוטומטי.", "warn", true);
+    return;
+  }
+  integrity.applyFixes();
+  ensureSyncedScheduleWindow();
+  persistState();
+  recordAudit("integrity.scan.repaired", integrity.report.join(" | "), "critical", true);
+  showToast("תיקון הנתונים הושלם.", "info");
+}
+
+function exportFullBackup() {
+  const payload = {
+    schemaVersion: 1,
+    exportedAt: new Date().toISOString(),
+    app: "haatzmaut",
+    data: {
+      rooms: state.rooms,
+      staff: state.staff,
+      schedule: state.schedule,
+      defaultTemplate: state.defaultTemplate,
+      weekTemplates: state.weekTemplates,
+      requests: state.requests,
+      meetings: state.meetings,
+      resources: state.resources,
+      issues: state.issues,
+      notifications: state.notifications,
+      displaySettings: state.displaySettings,
+      users: state.users,
+      passwordResets: state.passwordResets,
+      selectedTags: [...state.selectedTags],
+      weekISO: state.weekISO,
+      activeDay: state.activeDay,
+      activeTab: state.activeTab,
+      auditLog: state.auditLog,
+      loginSecurity: state.loginSecurity
+    }
+  };
+  triggerJsonDownload(`haatzmaut_backup_${localISO(new Date())}.json`, payload);
+}
 
 function weekRange() {
   const s = weekStart();
@@ -1246,10 +1503,12 @@ function renderAdminUsers() {
         user.password = newPwd;
         persistState();
         showNewPassword(user.username, newPwd);
+        recordAudit("user.password.reset", `בוצע איפוס סיסמה למשתמש ${user.username}.`, "critical", false);
         addNotification(`סיסמת ${user.username} אופסה.`);
       } else if (btn.dataset.action === "toggle-user") {
         user.active = !user.active;
         persistState();
+        recordAudit("user.status.toggle", `${user.username} => ${user.active ? "active" : "inactive"}`, "critical", false);
         renderAdminUsers();
       }
     });
@@ -1284,8 +1543,12 @@ function renderAdminResetRequests() {
           const newPwd = generatePassword();
           user.password = newPwd;
           showNewPassword(user.username, newPwd);
+          recordAudit("user.password.reset.requested", `אופסה סיסמה לפי בקשה עבור ${user.username}.`, "critical", false);
           addNotification(`סיסמת ${user.username} אופסה לפי בקשה.`);
         }
+      }
+      if (btn.dataset.action === "dismiss-reset") {
+        recordAudit("password.reset.dismiss", `נדחתה בקשת איפוס עבור ${req.username}.`, "warn", false);
       }
       state.passwordResets = state.passwordResets.filter(r => r.id !== req.id);
       persistState();
@@ -1439,6 +1702,22 @@ function renderAdminDisplayControls() {
   });
 }
 
+function renderAdminGovernance() {
+  const auditList = byId("adminAuditList");
+  if (!auditList) return;
+  if (!state.auditLog.length) {
+    auditList.innerHTML = `<p class="empty-state">אין רישומי בקרה עדיין.</p>`;
+    return;
+  }
+  auditList.innerHTML = state.auditLog.slice(0, 80).map(item => `
+    <div class="notice${item.severity === "critical" ? " notice-critical" : ""}">
+      <strong>${esc(item.action)}</strong>
+      <div class="notice-sub">${esc(item.at)} · ${esc(item.user)}</div>
+      ${item.detail ? `<div class="muted small">${esc(item.detail)}</div>` : ""}
+    </div>
+  `).join("");
+}
+
 /* ============================================================
    SESSION BAR + ACCESS CONTROL
    ============================================================ */
@@ -1518,6 +1797,7 @@ function renderAll() {
     renderAdminUsers();
     renderAdminResetRequests();
     renderAdminDisplayControls();
+    renderAdminGovernance();
   }
 }
 
@@ -1602,14 +1882,32 @@ function populateStaticSelects() {
 
 function bindEvents() {
 
+  ["click", "keydown", "mousemove", "touchstart"].forEach(evt => {
+    document.addEventListener(evt, registerActivity, { passive: true });
+  });
+
   /* Login */
   byId("loginForm").addEventListener("submit", e => {
     e.preventDefault();
-    const u = byId("username").value.trim();
+    if (isLoginLocked()) {
+      const leftSec = Math.ceil((state.loginSecurity.lockUntil - Date.now()) / 1000);
+      byId("loginError").textContent = `הכניסה חסומה זמנית. נסו שוב בעוד ${Math.max(1, leftSec)} שניות.`;
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    let u;
+    try {
+      u = normalizeUsernameInput(byId("username").value);
+    } catch (err) {
+      byId("loginError").textContent = err.message;
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
     const p = byId("password").value;
     // check state.users first, then fall back to DEFAULT_CREDENTIALS
     const sysUser = state.users.find(x => x.username === u.toLowerCase() && x.active);
-    const legacyAcct = state.credentials[u];
+    const legacyAcct = DEV_LOGIN_ENABLED ? state.credentials[u] : null;
     let role, label, staffId = "";
     if (sysUser && sysUser.password === p) {
       if (sysUser.role === "staff" && sysUser.staffId && !getStaffById(sysUser.staffId)) {
@@ -1623,26 +1921,30 @@ function bindEvents() {
     } else if (!sysUser && legacyAcct && legacyAcct.password === p) {
       role = legacyAcct.role;
       label = legacyAcct.label;
+      recordAudit("auth.login.legacy", `בוצעה התחברות נתיב פיתוח עבור ${u}.`, "warn", false);
     } else {
+      registerFailedLogin();
+      recordAudit("auth.login.failed", `ניסיון כניסה כושל עבור ${u}.`, "warn", false);
       byId("loginError").textContent = "שם משתמש או סיסמה שגויים";
       byId("loginError").classList.remove("hidden");
       return;
     }
+    resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
     byId("loginError").classList.add("hidden");
+    recordAudit("auth.login.success", `התחברות עבור ${u}.`, "info", false);
+    registerActivity();
+    persistState();
     renderAll();
     showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);
   });
 
   byId("logoutBtn").addEventListener("click", () => {
-    state.currentUser = null;
-    sessionStorage.removeItem("clinic_user");
-    byId("appSection").classList.add("hidden");
-    byId("loginSection").classList.remove("hidden");
-    renderSessionBar();
+    recordAudit("auth.logout", "התנתקות ידנית.", "info", false);
+    logoutCurrentUser();
   });
 
   /* Password reset request */
@@ -1650,12 +1952,19 @@ function bindEvents() {
     byId("resetRequestForm").classList.toggle("hidden");
   });
   byId("submitResetRequest")?.addEventListener("click", () => {
-    const uname = byId("resetUsername").value.trim().toLowerCase();
+    let uname;
+    try {
+      uname = normalizeUsernameInput(byId("resetUsername").value);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
     if (state.passwordResets.some(r => r.username === uname)) {
       showToast("בקשה כבר נשלחה.", "info"); return;
     }
     state.passwordResets.push({ id: makeId("rst"), username: uname, requestedAt: new Date().toLocaleString("he-IL") });
+    recordAudit("password.reset.request", `בקשת איפוס עבור ${uname}.`, "warn", false);
     persistState();
     byId("resetRequestForm").classList.add("hidden");
     byId("resetUsername").value = "";
@@ -1698,6 +2007,14 @@ function bindEvents() {
     const dur     = timeToMin(end) - timeToMin(start);
     const staff   = byId("bookingStaff").value.trim();
 
+    try {
+      enforceMaxLength("שם איש צוות", staff, 80);
+      enforceMaxLength("הערה", byId("bookingNote").value.trim(), 500);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
+
     if (!staff)        { showToast("יש להזין שם איש צוות.", "error"); return; }
     if (dur < 30)      { showToast("שעת הסיום חייבת להיות לאחר שעת ההתחלה.", "error"); return; }
     if (timeToMin(end) > WORK_END)   { showToast("המשבצת חורגת משעות העבודה.", "error"); return; }
@@ -1728,6 +2045,7 @@ function bindEvents() {
     else          state.schedule.push(payload);
 
     addNotification(`${staff} ${entryId ? "עודכן" : "נוסף"} ב${getRoomName(roomId)}.`, true);
+    recordAudit(entryId ? "booking.update" : "booking.create", `${staff} · ${getRoomName(roomId)} · ${start}-${end}`, "info", false);
     persistState();
     closeBookingModal();
     renderOccupancy();
@@ -1744,6 +2062,7 @@ function bindEvents() {
     if (!entry || !confirm(`למחוק את ${entry.staff}?`)) return;
     state.schedule = state.schedule.filter(e => e.id !== entryId);
     addNotification(`${entry.staff} הוסר/ה.`, true);
+    recordAudit("booking.delete", `${entry.staff} · ${getRoomName(entry.roomId)} · ${entry.start}`, "warn", false);
     persistState();
     closeBookingModal();
     renderOccupancy();
@@ -1785,7 +2104,7 @@ function bindEvents() {
   /* CSV/JSON upload */
   byId("scheduleUpload")?.addEventListener("change", e => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!ensureUploadAllowed(file, "קובץ לו\"ז")) { e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -1801,8 +2120,14 @@ function bindEvents() {
         const template = templateFromEntries(validRows, state.rooms);
         if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
         const scope = byId("scheduleReplaceScope")?.value || "current-upcoming";
+        const approved = confirmImportPreview("לו\"ז", rows.length, template.length, `טווח החלפה: ${scope}`);
+        if (!approved) {
+          showToast("ייבוא לו\"ז בוטל אחרי תצוגה מקדימה.", "info");
+          return;
+        }
         state.defaultTemplate = template;
         applyTemplateScope(template, scope);
+        recordAudit("schedule.import", `נטענו ${template.length} רשומות (${scope}).`, "warn", false);
         persistState(); renderAll();
         addNotification(`לוח הזמנים עודכן: נטענו ${template.length} רשומות תקינות מתוך ${rows.length}.`);
       } catch (err) {
@@ -1819,6 +2144,14 @@ function bindEvents() {
   byId("requestForm").addEventListener("submit", e => {
     e.preventDefault();
     const staff = byId("requestStaff").value.trim();
+    const reason = byId("requestReason").value.trim();
+    try {
+      enforceMaxLength("שם איש צוות", staff, 80);
+      enforceMaxLength("סיבת בקשה", reason, 500);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     const reqStart = byId("requestStart").value;
     const reqEnd   = byId("requestEnd").value;
     const dur = timeToMin(reqEnd) - timeToMin(reqStart);
@@ -1842,6 +2175,7 @@ function bindEvents() {
     persistState();
     byId("requestForm").reset();
     renderRequests();
+    recordAudit("request.create", `${staff} · ${reason.slice(0, 80)}`, "info", false);
     addNotification("נשלחה בקשת שינוי לאישור מנהל.", true);
     repopulateSelects();
   });
@@ -1849,6 +2183,14 @@ function bindEvents() {
   /* Meetings form */
   byId("meetingForm").addEventListener("submit", e => {
     e.preventDefault();
+    try {
+      enforceMaxLength("דובר", byId("meetingSpeaker").value, 80);
+      enforceMaxLength("נושאים וסדר יום", byId("meetingAgenda").value.trim(), 800);
+      enforceMaxLength("קישור", byId("meetingLink").value.trim(), 300);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     state.meetings.unshift(normalizeMeeting({
       speaker: byId("meetingSpeaker").value,
       audience: byId("meetingAudience").value,
@@ -1860,12 +2202,13 @@ function bindEvents() {
     }));
     persistState(); byId("meetingForm").reset(); renderMeetings();
     populateStaticSelects();
+    recordAudit("meeting.create", "נוספה ישיבת צוות.", "info", false);
     addNotification("נוספה ישיבת יום ראשון.");
   });
 
   byId("meetingUpload")?.addEventListener("change", e => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!ensureUploadAllowed(file, "קובץ ישיבות")) { e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -1875,7 +2218,13 @@ function bindEvents() {
         const validRows = rows.filter(isValidMeetingRecord);
         const meetings = validRows.map(normalizeMeeting);
         if (!meetings.length) throw new Error("לא נמצאו רשומות ישיבות תקינות בקובץ");
+        const approved = confirmImportPreview("ישיבות", rows.length, meetings.length);
+        if (!approved) {
+          showToast("ייבוא ישיבות בוטל אחרי תצוגה מקדימה.", "info");
+          return;
+        }
         state.meetings.unshift(...meetings);
+        recordAudit("meeting.import", `יובאו ${meetings.length} ישיבות.`, "warn", false);
         persistState();
         renderMeetings();
         addNotification(`יובאו ${meetings.length} ישיבות מתוך ${rows.length} רשומות.`);
@@ -1890,7 +2239,7 @@ function bindEvents() {
 
   byId("staffUpload")?.addEventListener("change", e => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!ensureUploadAllowed(file, "קובץ צוות")) { e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -1899,6 +2248,11 @@ function bindEvents() {
         const rows = Array.isArray(records) ? records : [];
         const validRows = rows.filter(isValidStaffRecord);
         if (!validRows.length) throw new Error("לא נמצאו רשומות צוות תקינות בקובץ");
+        const approved = confirmImportPreview("צוות", rows.length, validRows.length);
+        if (!approved) {
+          showToast("ייבוא צוות בוטל אחרי תצוגה מקדימה.", "info");
+          return;
+        }
 
         const normalizedIncoming = validRows.map(r => normalizeStaff({
           id: String(r.id || "").trim() || makeId("staff"),
@@ -1913,6 +2267,7 @@ function bindEvents() {
         const merged = mergeStaffWithLinkedPriority(state.staff, normalizedIncoming, state.users);
         state.staff = merged.staff;
         state.users = merged.users;
+        recordAudit("staff.import", `יובאו ${validRows.length} רשומות צוות.`, "warn", false);
 
         persistState();
         renderAdminStaff();
@@ -1930,7 +2285,7 @@ function bindEvents() {
 
   byId("roomUpload")?.addEventListener("change", e => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!ensureUploadAllowed(file, "קובץ חדרים")) { e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -1939,6 +2294,11 @@ function bindEvents() {
         const rows = Array.isArray(records) ? records : [];
         const validRows = rows.filter(r => r && typeof r === "object" && String(r.name || "").trim());
         if (!validRows.length) throw new Error("לא נמצאו רשומות חדרים תקינות בקובץ");
+        const approved = confirmImportPreview("חדרים", rows.length, validRows.length);
+        if (!approved) {
+          showToast("ייבוא חדרים בוטל אחרי תצוגה מקדימה.", "info");
+          return;
+        }
         const incoming = validRows.map(r => normalizeRoom({
           id:   String(r.id || "").trim() || makeId("room"),
           name: r.name,
@@ -1950,6 +2310,7 @@ function bindEvents() {
           if (idx >= 0) state.rooms[idx] = room;
           else state.rooms.push(room);
         });
+        recordAudit("room.import", `יובאו ${incoming.length} חדרים.`, "warn", false);
         persistState();
         renderAll();
         addNotification(`יובאו ${incoming.length} חדרים מתוך ${rows.length} רשומות.`);
@@ -1970,6 +2331,12 @@ function bindEvents() {
   byId("issueForm")?.addEventListener("submit", e => {
     e.preventDefault();
     const details = byId("issueText").value.trim();
+    try {
+      enforceMaxLength("תיאור תקלה", details, 600);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     if (!details) { showToast("יש להזין תיאור תקלה.", "error"); return; }
     const roomId = byId("issueRoom").value;
     state.issues.unshift(normalizeIssue({
@@ -1981,25 +2348,40 @@ function bindEvents() {
     byId("issueForm").reset();
     repopulateSelects();
     renderIssues();
+    recordAudit("issue.create", roomId ? `חדר: ${roomId}` : "תקלה כללית", "info", false);
     addNotification("נשלח דיווח תקלה.");
   });
 
   /* Resources form */
   byId("resourceForm").addEventListener("submit", e => {
     e.preventDefault();
+    try {
+      enforceMaxLength("כותרת", byId("resourceTitle").value.trim(), 120);
+      enforceMaxLength("תיאור/קישור", byId("resourceUrl").value.trim(), 1000);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     state.resources.unshift({
       title:   byId("resourceTitle").value.trim(),
       type:    byId("resourceType").value,
       content: byId("resourceUrl").value.trim()
     });
     persistState(); byId("resourceForm").reset(); renderResources();
+    recordAudit("resource.create", "נוסף פריט למרכז הידע.", "info", false);
   });
 
   /* Admin – user form */
   byId("adminUserForm")?.addEventListener("submit", e => {
     e.preventDefault();
     if (!isAdmin()) return;
-    const uname = byId("adminUserName").value.trim().toLowerCase();
+    let uname;
+    try {
+      uname = normalizeUsernameInput(byId("adminUserName").value);
+    } catch (err) {
+      showToast(err.message, "error");
+      return;
+    }
     const role = byId("adminUserRole").value;
     const staffId = byId("adminUserStaff").value;
     if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
@@ -2019,6 +2401,7 @@ function bindEvents() {
     showNewPassword(uname, pwd);
     byId("adminUserForm").reset();
     renderAdminUsers();
+    recordAudit("user.create", `נוצר משתמש ${uname} (${role}).`, "critical", false);
     addNotification(`משתמש ${uname} נוצר.`);
   });
   byId("adminUserClearBtn")?.addEventListener("click", () => {
@@ -2036,6 +2419,7 @@ function bindEvents() {
     const idx = state.rooms.findIndex(r => r.id === room.id);
     if (idx >= 0) state.rooms[idx] = room;
     else          state.rooms.push(room);
+    recordAudit(idx >= 0 ? "room.update" : "room.create", `${room.name}`, "warn", false);
     persistState(); renderAll();
     addNotification(`${room.name} עודכן/נוסף.`);
     byId("adminRoomForm").reset();
@@ -2067,6 +2451,7 @@ function bindEvents() {
     const idx = state.staff.findIndex(p => p.id === person.id);
     if (idx >= 0) state.staff[idx] = person;
     else          state.staff.push(person);
+    recordAudit(idx >= 0 ? "staff.update" : "staff.create", `${person.fullName}`, "warn", false);
     persistState(); renderAdminStaff(); repopulateSelects(); renderAdminUsers();
     addNotification(`${person.fullName} עודכן/נוסף.`);
     byId("adminStaffForm").reset();
@@ -2092,6 +2477,7 @@ function bindEvents() {
       roomsPerPage: byId("displayRoomsPerPage").value,
       messages: state.displaySettings.messages
     });
+    recordAudit("display.settings.update", "עודכנו הגדרות מסך תצוגה.", "warn", false);
     persistState();
     renderAdminDisplayControls();
     addNotification("הגדרות מסך התצוגה נשמרו.");
@@ -2101,6 +2487,13 @@ function bindEvents() {
     e.preventDefault();
     if (!isAdmin()) return;
     const text = byId("displayMessageText").value.trim();
+        try {
+          enforceMaxLength("הודעה למסך", text, 300);
+        } catch (err) {
+          showToast(err.message, "error");
+          return;
+        }
+
     const duration = byId("displayMessageDuration").value;
     if (!text) {
       showToast("יש להזין הודעה למסך התצוגה.", "error");
@@ -2118,8 +2511,55 @@ function bindEvents() {
     byId("displayMessageForm").reset();
     byId("displayMessageDuration").value = "5";
     renderAdminDisplayControls();
+    recordAudit("display.message.create", text.slice(0, 80), "warn", false);
     addNotification("נוספה הודעה למסך התצוגה.");
   });
+
+  byId("exportBackupBtn")?.addEventListener("click", () => {
+    exportFullBackup();
+    recordAudit("backup.export", "בוצע ייצוא גיבוי מלא.", "critical", false);
+    showToast("הגיבוי הורד כקובץ JSON.", "info");
+  });
+
+  byId("backupUpload")?.addEventListener("change", e => {
+    const file = e.target.files?.[0];
+    if (!ensureUploadAllowed(file, "קובץ גיבוי", ["json"])) { e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = String(reader.result || "").trim();
+        const parsed = JSON.parse(text);
+        if (!confirm("האם להחליף את נתוני המערכת מהגיבוי?")) return;
+        applyImportedState(parsed);
+        recordAudit("backup.restore", "בוצע שחזור מגיבוי.", "critical", false);
+        renderAll();
+        showToast("השחזור הושלם בהצלחה.", "warn");
+      } catch (err) {
+        showToast(`שגיאה בשחזור: ${err.message}`, "error");
+      } finally {
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  byId("clearAuditBtn")?.addEventListener("click", () => {
+    if (!confirm("למחוק את יומן הבקרה?")) return;
+    state.auditLog = [];
+    persistState();
+    renderAdminGovernance();
+    showToast("יומן הבקרה נוקה.", "info");
+  });
+}
+
+function logoutCurrentUser(message = "") {
+  state.currentUser = null;
+  clearSessionTimer();
+  sessionStorage.removeItem("clinic_user");
+  byId("appSection").classList.add("hidden");
+  byId("loginSection").classList.remove("hidden");
+  renderSessionBar();
+  if (message) showToast(message, "warn");
 }
 
 /* ============================================================
@@ -2145,12 +2585,16 @@ function initialize() {
     }
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
+    registerActivity();
   }
 
   populateStaticSelects();
   bindEvents();
+  runIntegrityAssistant();
   ensureSyncedScheduleWindow();
   renderAll();
+
+  byId("demoCreds")?.classList.toggle("hidden", !DEV_LOGIN_ENABLED);
 
   if (state.currentUser) {
     showTab(state.activeTab === "adminTab" && !isAdmin() ? "dashboardTab" : state.activeTab);

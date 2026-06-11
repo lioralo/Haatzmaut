@@ -347,6 +347,27 @@
 
           <div id="displayMessagesList"></div>
         </article>
+
+        <article class="panel admin-governance-panel">
+          <div class="section-head">
+            <div>
+              <h3 class="panel-title">בקרה, אבטחה וגיבויים</h3>
+              <p class="muted">ייצוא/שחזור נתונים מלא, צפייה ביומן בקרה וניקוי יומן.</p>
+            </div>
+          </div>
+
+          <div class="template-links" style="margin-bottom:.7rem; gap:.5rem; display:flex; flex-wrap:wrap;">
+            <button type="button" id="exportBackupBtn" class="secondary">ייצוא גיבוי מלא (JSON)</button>
+            <label class="file-upload-label" style="margin:0;">
+              שחזור מגיבוי (JSON)
+              <input type="file" id="backupUpload" accept=".json" />
+            </label>
+            <button type="button" id="clearAuditBtn" class="secondary">ניקוי יומן בקרה</button>
+          </div>
+
+          <h4 style="margin:.2rem 0 .5rem">יומן בקרה</h4>
+          <div id="adminAuditList" class="admin-list"></div>
+        </article>
       </section>
 
       <!-- ======== MEETINGS TAB ======== -->
