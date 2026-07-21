@@ -1,0 +1,16 @@
+{
+  "name": "haatzmaut",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "מערכת ניהול מרפאה פנימית",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "build": "node build.mjs",
+    "lint": "eslint app.js display.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "eslint": "^9.0.0"
+  }
+}

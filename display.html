@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#0072BC" />
+  <meta name="theme-color" content="#2d2d3a" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none';" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>לוח תצוגה מרפאה</title>
-  <link rel="stylesheet" href="display.css?v=20260610e" />
+  <link rel="stylesheet" href="display.css?v=20260701" />
 </head>
 <body>
   <header class="display-header">
@@ -25,7 +26,7 @@
       <p class="label">החלפת חדרים</p>
       <p id="roomsRange" class="range-text">--</p>
       <p id="rotateCountdown" class="countdown-text">החלפה בעוד -- שניות</p>
-      <a class="back-link" href="index.html?v=20260610e">חזרה למערכת</a>
+      <a class="back-link" href="index.html?v=20260701">חזרה למערכת</a>
     </div>
   </header>
 
@@ -38,6 +39,6 @@
     <table id="displayTable" class="display-table"></table>
   </main>
 
-  <script src="display.js?v=20260610e"></script>
+  <script src="display.js?v=20260701"></script>
 </body>
 </html>

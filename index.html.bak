@@ -3,17 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#2d2d3a" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none';" />
+  <meta name="theme-color" content="#1e293b" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none';" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>מערכת ניהול מרפאה</title>
-  <link rel="stylesheet" href="styles.css?v=20260720" />
-</head>
+  <link rel="stylesheet" href="styles.css?v=20260701" />
+  <link rel="stylesheet" href="styles.css?v=20260701" />
 <body>
-  <a href="#main-content" class="skip-link">דלג לתוכן הראשי</a>
-  <div id="ariaLive" class="sr-only" aria-live="polite"></div>
 
   <!-- Toast notification -->
   <div id="toast" class="toast" aria-live="assertive" role="status"></div>
@@ -33,8 +31,8 @@
   <!-- Booking modal -->
   <dialog id="bookingModal" class="booking-dialog">
     <form id="bookingForm" novalidate>
-      <input dir="auto" type="hidden" id="bookingEntryId" />
-      <input dir="auto" type="hidden" id="bookingDay" />
+      <input type="hidden" id="bookingEntryId" />
+      <input type="hidden" id="bookingDay" />
       <datalist id="bookingStaffList"></datalist>
 
       <div class="dialog-head">
@@ -44,11 +42,13 @@
 
       <div class="dialog-body">
         <div class="dialog-grid">
+          <label>מטופל/ת <input id="bookingClientName" placeholder="שם המטופל/ת" /></label>
+          <label>טלפון <input id="bookingClientPhone" type="tel" placeholder="050-0000000" /></label>
           <label>חדר <select id="bookingRoomSel" required></select></label>
           <label>שעת התחלה <select id="bookingStart" required></select></label>
           <label>שעת סיום <select id="bookingEnd" required></select></label>
           <label>צוות <select id="bookingTeam" required></select></label>
-          <label class="d-full">איש/ת צוות <input dir="auto" id="bookingStaff" list="bookingStaffList" autocomplete="off" required /></label>
+          <label class="d-full">איש/ת צוות <input id="bookingStaff" list="bookingStaffList" autocomplete="off" required /></label>
           <label>סוג פגישה
             <select id="bookingNoteType">
               <option value="therapy">טיפול</option>
@@ -58,18 +58,9 @@
               <option value="other">אחר</option>
             </select>
           </label>
-          <label>חזרה
-            <select id="bookingRecurring">
-              <option value="">חד-פעמי</option>
-              <option value="weekly">שבועית</option>
-              <option value="biweekly">דו-שבועית</option>
-              <option value="monthly">חודשית</option>
-            </select>
-          </label>
-          <label>עד תאריך <input dir="auto" id="bookingRecurringEnd" type="date" /></label>
-          <label class="d-full">הערות <textarea dir="auto" id="bookingNote" rows="2"></textarea></label>
+          <label class="d-full">הערות <textarea id="bookingNote" rows="2"></textarea></label>
           <label class="d-full checkbox-label">
-            <input dir="auto" id="bookingOneTime" type="checkbox" />
+            <input id="bookingOneTime" type="checkbox" />
             <span>משבצת חד-פעמית</span>
           </label>
         </div>
@@ -90,7 +81,6 @@
       <p class="eyebrow">מערכת ניהול מרפאה פנימית</p>
       <h1>מרפאה</h1>
     </div>
-    <button id="langSwitchBtn" class="secondary" style="font-size:.82rem;padding:.25rem .55rem">English</button>
     <div id="sessionBar" class="session-bar hidden">
       <div class="session-text">
         <span id="activeUser"></span>
@@ -104,10 +94,10 @@
   <section id="loginSection" class="card auth-card">
     <h2>כניסה מאובטחת</h2>
     <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
-    <a class="display-entry-link" href="display.html?v=20260720" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
+    <a class="display-entry-link" href="display.html?v=20260701" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
     <form id="loginForm" class="auth-form">
-      <label>שם משתמש <input dir="auto" id="username" autocomplete="username" required /></label>
-      <label>סיסמה <input dir="auto" id="password" type="password" autocomplete="current-password" required /></label>
+      <label>שם משתמש <input id="username" autocomplete="username" required /></label>
+      <label>סיסמה <input id="password" type="password" autocomplete="current-password" required /></label>
       <button type="submit">כניסה</button>
     </form>
     <p id="loginError" class="error hidden"></p>
@@ -119,7 +109,7 @@
       <button type="button" id="requestResetBtn" class="secondary">שכחתי סיסמה / בקשת איפוס</button>
     </div>
     <div id="resetRequestForm" class="hidden" style="margin-top:.7rem">
-      <label>שם משתמש לאיפוס <input dir="auto" id="resetUsername" autocomplete="off" /></label>
+      <label>שם משתמש לאיפוס <input id="resetUsername" autocomplete="off" /></label>
       <button type="button" id="submitResetRequest">שלח בקשת איפוס</button>
     </div>
   </section>
@@ -165,7 +155,7 @@
           </button>
         </nav>
         <div class="sidebar-footer">
-          <a href="display.html?v=20260720" target="_blank" rel="noopener" class="sidebar-item">
+          <a href="display.html?v=20260701" target="_blank" rel="noopener" class="sidebar-item">
             <span class="sidebar-icon">▣</span>
             <span class="sidebar-label">מסך תצוגה</span>
           </a>
@@ -177,6 +167,12 @@
 
         <!-- ======== DASHBOARD TAB (calendar) ======== -->
         <section id="dashboardTab" class="card tab-content">
+          <!-- Dashboard summary cards -->
+          <div id="dashboardSummary" class="dashboard-summary"></div>
+
+          <!-- Room status strip -->
+          <div id="roomStatusStrip" class="room-status-strip"></div>
+
           <!-- Week header + nav -->
           <div class="section-head">
             <div>
@@ -196,10 +192,11 @@
               <button data-calendar-mode="schedule" class="mode-tab active">תרשים יומי</button>
               <button data-calendar-mode="list" class="mode-tab">רשימת פגישות</button>
               <button data-calendar-mode="print" class="mode-tab">הדפסה</button>
-              <button data-calendar-mode="stats" class="mode-tab">סטטיסטיקה</button>
             </div>
             <div class="mode-actions">
-              <input dir="auto" id="bookingSearch" class="search-input" placeholder="חיפוש לפי שם מטפל או חדר..." />
+              <div id="hourRangeButtons" class="hour-range-filters"></div>
+              <select id="staffFilter" class="search-input" style="width:160px"></select>
+              <input id="bookingSearch" class="search-input" placeholder="חיפוש לפי שם מטופל, מטפל או חדר..." />
             </div>
           </div>
 
@@ -217,12 +214,6 @@
             <summary>סינון לפי תגית</summary>
             <div id="tagFilters" class="chips"></div>
           </details>
-
-          <!-- Waitlist -->
-          <div id="waitlistPanel"></div>
-
-          <!-- Stats dashboard -->
-          <div id="statsDashboard" class="hidden"></div>
 
           <!-- Schedule view -->
           <div id="scheduleView">
@@ -256,16 +247,16 @@
               <p class="muted">שלחו בקשה לשינוי הזמנה – תועבר לאישור מנהל.</p>
             </div>
             <form id="requestForm" class="grid-form">
-              <input dir="auto" type="hidden" id="requestTargetEntry" />
+              <input type="hidden" id="requestTargetEntry" />
               <label>צוות <select id="requestTeam" required></select></label>
               <label>חדר <select id="requestRoom" required></select></label>
               <label>יום <select id="requestDay" required></select></label>
               <label>שעת התחלה <select id="requestStart" required></select></label>
               <label>שעת סיום <select id="requestEnd" required></select></label>
-              <label>איש/ת צוות <input dir="auto" id="requestStaff" list="requestStaffList" autocomplete="off" required /></label>
+              <label>איש/ת צוות <input id="requestStaff" list="requestStaffList" autocomplete="off" required /></label>
               <datalist id="requestStaffList"></datalist>
-              <label class="full">סיבת בקשה <textarea dir="auto" id="requestReason" required></textarea></label>
-              <label class="checkbox-label"><input dir="auto" id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
+              <label class="full">סיבת בקשה <textarea id="requestReason" required></textarea></label>
+              <label class="checkbox-label"><input id="requestOneTime" type="checkbox" checked /><span>שינוי חד-פעמי</span></label>
               <button type="submit">שלח בקשה</button>
             </form>
             <h3>בקשות ממתינות</h3>
@@ -294,8 +285,8 @@
               <article class="panel">
                 <h3 class="panel-title">משתמשים</h3>
                 <form id="adminUserForm" class="grid-form compact-form">
-                  <input dir="auto" type="hidden" id="adminUserId" />
-                  <label>שם משתמש <input dir="auto" id="adminUserName" required /></label>
+                  <input type="hidden" id="adminUserId" />
+                  <label>שם משתמש <input id="adminUserName" required /></label>
                   <label>תפקיד <select id="adminUserRole"><option value="staff">צוות</option><option value="admin">מנהל</option></select></label>
                   <label>שיוך <select id="adminUserStaff"><option value="">ללא</option></select></label>
                   <div class="form-actions">
@@ -314,24 +305,15 @@
                 <div class="template-links">
                   <a href="templates/staff_template.csv" download>תבנית CSV</a>
                   <button id="exportStaffBtn" class="btn-link">הורד CSV נוכחי</button>
-                  <label class="file-upload-label">יבוא <input dir="auto" type="file" id="staffUpload" accept=".csv,.json" /></label>
+                  <label class="file-upload-label">יבוא <input type="file" id="staffUpload" accept=".csv,.json" /></label>
                 </div>
                 <form id="adminStaffForm" class="grid-form compact-form">
-                  <input dir="auto" type="hidden" id="adminStaffId" />
-                  <label>שם מלא <input dir="auto" id="adminStaffName" required /></label>
-                  <label>טלפון <input dir="auto" id="adminStaffPhone" type="tel" dir="ltr" /></label>
-                  <label>דוא"ל <input dir="auto" id="adminStaffEmail" type="email" /></label>
-                  <label>תפקיד <input dir="auto" id="adminStaffRole" /></label>
+                  <input type="hidden" id="adminStaffId" />
+                  <label>שם מלא <input id="adminStaffName" required /></label>
+                  <label>טלפון <input id="adminStaffPhone" type="tel" /></label>
+                  <label>דוא"ל <input id="adminStaffEmail" type="email" /></label>
+                  <label>תפקיד <input id="adminStaffRole" /></label>
                   <label>צוות <select id="adminStaffTeam"></select></label>
-                  <label>צבע <input dir="auto" id="adminStaffColor" type="color" /></label>
-                  <label>מקסימום פגישות ביום <input dir="auto" id="adminStaffMaxSessions" type="number" min="1" value="8" /></label>
-                  <label>שעות עבודה
-                    <div style="display:flex;gap:.25rem;align-items:center">
-                      <input dir="auto" id="adminStaffWorkStart" type="time" value="08:00" style="width:80px" />
-                      <span>-</span>
-                      <input dir="auto" id="adminStaffWorkEnd" type="time" value="20:00" style="width:80px" />
-                    </div>
-                  </label>
                   <div class="form-actions">
                     <button id="adminStaffSaveBtn" type="submit">הוסף</button>
                     <button id="adminStaffClearBtn" type="button" class="secondary hidden">ניקוי</button>
@@ -365,11 +347,11 @@
               <article class="panel">
                 <h3>קבוצות</h3>
                 <form id="groupForm" class="grid-form compact-form">
-                  <input dir="auto" type="hidden" id="groupId" />
-                  <label>שם <input dir="auto" id="groupName" required /></label>
-                  <label>צבע <input dir="auto" id="groupColor" type="color" /></label>
+                  <input type="hidden" id="groupId" />
+                  <label>שם <input id="groupName" required /></label>
+                  <label>צבע <input id="groupColor" type="color" /></label>
                   <label>יום שבועי <select id="groupDay"></select></label>
-                  <label>שעה <input dir="auto" id="groupTime" type="time" /></label>
+                  <label>שעה <input id="groupTime" type="time" /></label>
                   <button type="submit">שמור קבוצה</button>
                 </form>
                 <div id="groupList"></div>
@@ -377,19 +359,16 @@
               <article class="panel">
                 <h3>ישיבות</h3>
                 <form id="meetingForm" class="grid-form compact-form">
-                  <label>כותרת <input dir="auto" id="meetingTitle" /></label>
-                  <label>דובר <input dir="auto" id="meetingSpeaker" /></label>
-                  <label class="full">אנשי צוות
-                    <div id="meetingStaffChecks" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.25rem"></div>
-                  </label>
+                  <label>כותרת <input id="meetingTitle" /></label>
+                  <label>דובר <input id="meetingSpeaker" /></label>
                   <label>קבוצות <select id="meetingGroupIds" multiple></select></label>
-                  <label>תאריך <input dir="auto" id="meetingDate" type="date" /></label>
-                  <label>שעה <input dir="auto" id="meetingTime" type="time" /></label>
-                  <label>משך (דקות) <input dir="auto" id="meetingDuration" type="number" min="30" value="60" /></label>
+                  <label>תאריך <input id="meetingDate" type="date" /></label>
+                  <label>שעה <input id="meetingTime" type="time" /></label>
+                  <label>משך (דקות) <input id="meetingDuration" type="number" min="30" value="60" /></label>
                   <label>חזרה <select id="meetingRecurring"><option value="">חד-פעמית</option><option value="weekly">שבועית</option><option value="biweekly">דו-שבועית</option><option value="monthly-first">חודשית ראשונה</option></select></label>
-                  <label class="full">סדר יום <textarea dir="auto" id="meetingAgenda"></textarea></label>
-                  <label class="full">קישור <input dir="auto" id="meetingLink" type="url" /></label>
-                  <label>קבצים <input dir="auto" id="meetingFiles" type="file" multiple /></label>
+                  <label class="full">סדר יום <textarea id="meetingAgenda"></textarea></label>
+                  <label class="full">קישור <input id="meetingLink" type="url" /></label>
+                  <label>קבצים <input id="meetingFiles" type="file" multiple /></label>
                   <button type="submit">שמור ישיבה</button>
                 </form>
               </article>
@@ -417,7 +396,7 @@
             <div class="section-head"><h2>העלאת קבצים</h2></div>
             <div class="upload-area">
               <p>גררו קבצים לכאן או לחצו לבחירה</p>
-              <input dir="auto" type="file" id="resourceFileUpload" multiple />
+              <input type="file" id="resourceFileUpload" multiple />
             </div>
             <div id="uploadProgress"></div>
           </div>
@@ -445,7 +424,7 @@
               <label>חדר <select id="issueRoom"><option value="">כללי</option></select></label>
               <label>סוג <select id="issueType"></select></label>
               <label>דחיפות <select id="issuePriority"></select></label>
-              <label class="full">תיאור <textarea dir="auto" id="issueText" required></textarea></label>
+              <label class="full">תיאור <textarea id="issueText" required></textarea></label>
               <button type="submit">שלח</button>
             </form>
           </div>
@@ -462,12 +441,12 @@
               <div class="template-links">
                 <a href="templates/rooms_template.csv" download>תבנית CSV</a>
                 <button id="exportRoomsBtn" class="btn-link">הורד CSV</button>
-                <label class="file-upload-label">יבוא <input dir="auto" type="file" id="roomUpload" accept=".csv,.json" /></label>
+                <label class="file-upload-label">יבוא <input type="file" id="roomUpload" accept=".csv,.json" /></label>
               </div>
               <form id="adminRoomForm" class="grid-form compact-form">
-                <input dir="auto" type="hidden" id="adminRoomId" />
-                <label>שם <input dir="auto" id="adminRoomName" required /></label>
-                <label class="full">תגיות <input dir="auto" id="adminRoomTags" /></label>
+                <input type="hidden" id="adminRoomId" />
+                <label>שם <input id="adminRoomName" required /></label>
+                <label class="full">תגיות <input id="adminRoomTags" /></label>
                 <div class="form-actions">
                   <button id="adminRoomSaveBtn" type="submit">הוסף</button>
                   <button id="adminRoomClearBtn" type="button" class="secondary hidden">ניקוי</button>
@@ -478,14 +457,14 @@
             <article class="panel">
               <h3 class="panel-title">מסך תצוגה</h3>
               <form id="displaySettingsForm" class="grid-form compact-form">
-                <label>החלפה בשניות <input dir="auto" id="displaySwitchSeconds" type="number" min="5" /></label>
-                <label>אחורה בשעות <input dir="auto" id="displayHoursBefore" type="number" min="0" /></label>
-                <label>קדימה בשעות <input dir="auto" id="displayHoursAfter" type="number" min="1" /></label>
-                <label>חדרים בעמוד <input dir="auto" id="displayRoomsPerPage" type="number" min="1" /></label>
+                <label>החלפה בשניות <input id="displaySwitchSeconds" type="number" min="5" /></label>
+                <label>אחורה בשעות <input id="displayHoursBefore" type="number" min="0" /></label>
+                <label>קדימה בשעות <input id="displayHoursAfter" type="number" min="1" /></label>
+                <label>חדרים בעמוד <input id="displayRoomsPerPage" type="number" min="1" /></label>
                 <button type="submit">שמור</button>
               </form>
               <form id="displayMessageForm" class="grid-form compact-form">
-                <label>הודעה <textarea dir="auto" id="displayMessageText" rows="2"></textarea></label>
+                <label>הודעה <textarea id="displayMessageText" rows="2"></textarea></label>
                 <label>משך <select id="displayMessageDuration"><option value="5">5 דקות</option><option value="10">10</option><option value="30">30</option><option value="60">60</option><option value="unlimited">ללא הגבלה</option></select></label>
                 <button type="submit">הוסף</button>
               </form>
@@ -493,22 +472,10 @@
             </article>
           </div>
           <article class="panel">
-            <h3 class="panel-title">הגדרות מרפאה</h3>
-            <div id="settingsForm"><form id="clinicSettingsForm" class="grid-form compact-form">
-              <label>שם מרפאה <input dir="auto" id="settingsClinicName" /></label>
-              <label>טלפון <input dir="auto" id="settingsClinicPhone" type="tel" dir="ltr" /></label>
-              <label>כתובת <input dir="auto" id="settingsClinicAddress" /></label>
-              <label>מדיניות ביטול (שעות) <input dir="auto" id="settingsCancelPolicy" type="number" min="0" /></label>
-              <label>משך משבצת (דקות) <select id="settingsSlotDuration"><option value="30">30</option><option value="45">45</option><option value="60">60</option></select></label>
-              <label class="full">צוותים <input dir="auto" id="settingsTeams" placeholder="מופרדים בפסיקים" /></label>
-              <div class="form-actions"><button type="submit">שמירה</button></div>
-            </form></div>
-          </article>
-          <article class="panel">
             <h3>בקרה וגיבויים</h3>
             <div class="template-links">
               <button id="exportBackupBtn" class="secondary">ייצוא גיבוי (JSON)</button>
-              <label class="file-upload-label">שחזור <input dir="auto" type="file" id="backupUpload" accept=".json" /></label>
+              <label class="file-upload-label">שחזור <input type="file" id="backupUpload" accept=".json" /></label>
               <button id="clearAuditBtn" class="secondary">נקה יומן</button>
             </div>
             <div id="adminAuditList" class="admin-list"></div>

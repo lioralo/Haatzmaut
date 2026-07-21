@@ -2,14 +2,19 @@
    CONSTANTS
    ============================================================ */
 
-const STORAGE_KEY = "haatzmaut_v5";
+const STORAGE_KEY    = "haatzmaut_v6";
+const STORAGE_VERSION = 2;
 const MAX_UPLOAD_SIZE = 1024 * 1024; // 1MB
-const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_WINDOW_MS  = 10 * 60 * 1000;
 const LOGIN_MAX_ATTEMPTS = 5;
-const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+const LOGIN_LOCKOUT_MS  = 15 * 60 * 1000;
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 const AUDIT_LOG_MAX = 500;
+const PERSIST_DEBOUNCE_MS = 400;
+
 const DEV_LOGIN_ENABLED = (() => {
+  /* Build-time: esbuild define replaces __PROD__ with true/false */
+  if (typeof __PROD__ !== "undefined" && __PROD__) return false;
   const isLocalHost = ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const q = new URLSearchParams(window.location.search);
   return isLocalHost && q.get("devAuth") === "1";
@@ -56,21 +61,63 @@ const DEFAULT_STAFF = [
   { id: "s8", fullName: "רן כהן",       phone: "0500000007", email: "ran@clinic.org",    role: "מטפל זוגות",         team: "זוגות"         }
 ];
 
-const DEFAULT_CREDENTIALS = {
-  admin: { password: "admin123", role: "admin", label: "מנהל מערכת" },
-  staff: { password: "staff123", role: "staff", label: "צוות"        }
-};
-
-const DEFAULT_USERS = [
-  { id: "u1", username: "admin", password: "admin123", role: "admin", active: true, createdAt: "איפוס" },
-  { id: "u2", username: "staff", password: "staff123", role: "staff", active: true, createdAt: "איפוס" }
-];
+/* First-run bootstrap: no hardcoded credentials in production.
+   The first person to load the app is prompted to create an admin account. */
+function buildBootstrapState() {
+  return {
+    needsSetup: true,
+    defaultRooms:  DEFAULT_ROOMS.map(r => ({ ...r })),
+    defaultStaff:  DEFAULT_STAFF.map(s => ({ ...s })),
+    defaultTemplate: templateFromEntries(buildDefaultSchedule(sundayISO(), DEFAULT_ROOMS), DEFAULT_ROOMS)
+  };
+}
 
 /* ============================================================
    UTILITIES
    ============================================================ */
 
 const byId = id => document.getElementById(id);
+
+/* ---- Password hashing (Web Crypto PBKDF2) ---- */
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]
+  );
+  const derived = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: enc.encode(salt), iterations: 210000, hash: "SHA-256" },
+    keyMaterial, 256
+  );
+  return Array.from(new Uint8Array(derived)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function generateSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifyPassword(password, hash, salt) {
+  const computed = await hashPassword(password, salt);
+  return computed === hash;
+}
+
+async function passwordForUser(rawPassword) {
+  const salt = generateSalt();
+  const hash = await hashPassword(rawPassword, salt);
+  return { salt, passwordHash: hash };
+}
+
+/* Migrate plaintext password to hash on first login */
+async function migrateUserPassword(user, rawPassword) {
+  if (user.passwordHash) return user;
+  const { salt, passwordHash } = await passwordForUser(rawPassword);
+  user.passwordHash = passwordHash;
+  user.salt = salt;
+  delete user.password;
+  return user;
+}
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 
@@ -142,6 +189,26 @@ function esc(s) {
     .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function sanitizeUrl(url) {
+  const s = String(url ?? "").trim();
+  if (!s) return "";
+  const lower = s.toLowerCase();
+  if (/^(https?:|mailto:|tel:)\/\//i.test(s)) return s;
+  if (lower.startsWith("https://") || lower.startsWith("http://")) return s;
+  return "";
+}
+
+function stripHtml(str) {
+  return String(str ?? "").replace(/<[^>]*>/g, "");
+}
+
+function safeRender(fn, name = "") {
+  try { fn(); } catch (err) {
+    console.error(`[render error] ${name}:`, err);
+    recordAudit("render.error", `${name}: ${err.message}`, "critical", false);
+  }
+}
+
 function generatePassword(len = 10) {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789ABCDEFGHJKMNPQRSTUVWXYZ";
   let pwd = "";
@@ -155,7 +222,8 @@ function normalizeUser(u) {
   return {
     id:        u.id       || makeId("user"),
     username:  String(u.username || "").trim().toLowerCase(),
-    password:  String(u.password || ""),
+    passwordHash: String(u.passwordHash || ""),
+    salt:        String(u.salt || ""),
     role:      ["admin","staff"].includes(u.role) ? u.role : "staff",
     staffId:   String(u.staffId || ""),
     active:    u.active !== false,
@@ -602,7 +670,28 @@ function normalizeRequest(req) {
    ============================================================ */
 
 function loadStoredState() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); } catch { return null; }
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (!raw) return null;
+    return migrateState(raw);
+  } catch { return null; }
+}
+
+function migrateState(raw) {
+  let data = raw;
+  const ver = data._schemaVersion || 1;
+  if (ver < 2) {
+    if (Array.isArray(data.users)) {
+      data.users = data.users.map(u => {
+        if (u.password && !u.passwordHash) {
+          return { ...u, password: u.password };
+        }
+        return u;
+      });
+    }
+    data._schemaVersion = 2;
+  }
+  return data;
 }
 
 function buildDefaultSchedule(weekISO, rooms) {
@@ -642,7 +731,8 @@ function hydrateState() {
 
   return {
     currentUser:   null,
-    credentials:   DEFAULT_CREDENTIALS,
+    needsSetup:    !(src.users && src.users.length),
+    bootstrap:     buildBootstrapState(),
     rooms,
     staff,
     schedule,
@@ -661,7 +751,7 @@ function hydrateState() {
     drag:          null,
     users:         Array.isArray(src.users) && src.users.length
                      ? src.users.map(normalizeUser)
-                     : DEFAULT_USERS.map(u => ({ ...u })),
+                     : [],
     passwordResets: src.passwordResets || [],
     auditLog: Array.isArray(src.auditLog)
       ? src.auditLog.map(a => ({
@@ -685,9 +775,43 @@ function hydrateState() {
 const state = hydrateState();
 ensureSyncedScheduleWindow();
 
+let _persistTimer = null;
+
 function persistState() {
+  clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        _schemaVersion: STORAGE_VERSION,
+        rooms:         state.rooms,
+        staff:         state.staff,
+        schedule:      state.schedule,
+        defaultTemplate: state.defaultTemplate,
+        weekTemplates:   state.weekTemplates,
+        requests:      state.requests,
+        meetings:      state.meetings,
+        resources:     state.resources,
+        issues:        state.issues,
+        notifications: state.notifications,
+        displaySettings: state.displaySettings,
+        users:         state.users,
+        passwordResets: state.passwordResets,
+        auditLog:      state.auditLog,
+        loginSecurity: state.loginSecurity,
+        selectedTags:  [...state.selectedTags],
+        weekISO:       state.weekISO,
+        activeDay:     state.activeDay,
+        activeTab:     state.activeTab
+      }));
+    } catch {}
+  }, PERSIST_DEBOUNCE_MS);
+}
+
+function persistStateImmediate() {
+  clearTimeout(_persistTimer);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      _schemaVersion: STORAGE_VERSION,
       rooms:         state.rooms,
       staff:         state.staff,
       schedule:      state.schedule,
@@ -1428,7 +1552,7 @@ function renderMeetings() {
     <div class="notice">
       <div><strong>${esc(m.speaker || "ללא דובר")}</strong> · ${esc(meetingAudienceLabel(m.audience))}</div>
       <div>${esc(m.specification || "ללא פירוט")}</div>
-      <div class="muted small">${esc(m.date)} ${esc(m.time || "")}${m.link ? ` · <a href="${esc(m.link)}" target="_blank" rel="noopener">קישור</a>` : ""}</div>
+      <div class="muted small">${esc(m.date)} ${esc(m.time || "")}${sanitizeUrl(m.link) ? ` · <a href="${esc(sanitizeUrl(m.link))}" target="_blank" rel="noopener noreferrer">קישור</a>` : ""}</div>
       <div class="muted small">קבצים: ${(m.files || []).map(f => esc(f)).join(", ") || "ללא"}</div>
     </div>
   `).join("");
@@ -1499,10 +1623,13 @@ function renderAdminUsers() {
       const user = state.users.find(u => u.id === btn.dataset.userId);
       if (!user) return;
       if (btn.dataset.action === "reset-pwd") {
-        const newPwd = generatePassword();
-        user.password = newPwd;
-        persistState();
-        showNewPassword(user.username, newPwd);
+        const rawPwd = generatePassword();
+        passwordForUser(rawPwd).then(({ salt, passwordHash }) => {
+          user.passwordHash = passwordHash;
+          user.salt = salt;
+          persistState();
+        });
+        showNewPassword(user.username, rawPwd);
         recordAudit("user.password.reset", `בוצע איפוס סיסמה למשתמש ${user.username}.`, "critical", false);
         addNotification(`סיסמת ${user.username} אופסה.`);
       } else if (btn.dataset.action === "toggle-user") {
@@ -1540,9 +1667,13 @@ function renderAdminResetRequests() {
         const user = state.users.find(u => u.username === req.username);
         if (!user) { showToast("משתמש לא נמצא.", "error"); }
         else {
-          const newPwd = generatePassword();
-          user.password = newPwd;
-          showNewPassword(user.username, newPwd);
+          const rawPwd = generatePassword();
+          passwordForUser(rawPwd).then(({ salt, passwordHash }) => {
+            user.passwordHash = passwordHash;
+            user.salt = salt;
+            persistState();
+          });
+          showNewPassword(user.username, rawPwd);
           recordAudit("user.password.reset.requested", `אופסה סיסמה לפי בקשה עבור ${user.username}.`, "critical", false);
           addNotification(`סיסמת ${user.username} אופסה לפי בקשה.`);
         }
@@ -1564,11 +1695,20 @@ function showNewPassword(username, pwd) {
   box.innerHTML = `
     <div class="generated-pwd">
       <span>משתמש: <strong>${esc(username)}</strong> &nbsp;&nbsp; סיסמא חדשה:</span>
-      <strong id="pwdDisplay">${esc(pwd)}</strong>
-      <button class="btn-sm pwd-copy" onclick="navigator.clipboard.writeText('${esc(pwd)}').then(()=>this.textContent='הועתקו').catch(()=>{}); this.textContent='הועתק'">העתק</button>
+      <strong class="pwd-display">${esc(pwd)}</strong>
+      <button class="btn-sm pwd-copy" data-pwd="${esc(pwd)}">העתק</button>
     </div>
     <p class="muted small">חשוף סיסמא זו למשתמש בלבד – לא תוצג שוב.</p>
   `;
+  const copyBtn = box.querySelector(".pwd-copy");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", () => {
+      const pwdText = copyBtn.dataset.pwd;
+      navigator.clipboard.writeText(pwdText).then(() => {
+        copyBtn.textContent = "הועתק";
+      }).catch(() => {});
+    });
+  }
 }
 
 /* ============================================================
@@ -1674,7 +1814,7 @@ function renderAdminDisplayControls() {
   byId("displayHoursBefore").value = String(settings.hoursBefore);
   byId("displayHoursAfter").value = String(settings.hoursAfter);
   byId("displayRoomsPerPage").value = String(settings.roomsPerPage);
-  if (quickLink) quickLink.href = `display.html?v=20260610e`;
+  if (quickLink) quickLink.href = `display.html?v=20260610f`;
 
   const messages = activeDisplayMessages(settings);
   messagesBox.innerHTML = messages.length
@@ -1778,26 +1918,26 @@ function showTab(tabId) {
 
 function renderAll() {
   ensureSyncedScheduleWindow();
-  renderSessionBar();
+  safeRender(renderSessionBar, "sessionBar");
   applyAccessControl();
-  renderWeekHeader();
-  renderDayTabs();
-  renderStats();
-  renderTagFilters();
-  renderOccupancy();
-  renderRequests();
-  renderMeetings();
-  renderResources();
-  renderIssues();
-  renderNotifications();
-  repopulateSelects();
+  safeRender(renderWeekHeader, "weekHeader");
+  safeRender(renderDayTabs, "dayTabs");
+  safeRender(renderStats, "stats");
+  safeRender(renderTagFilters, "tagFilters");
+  safeRender(renderOccupancy, "occupancy");
+  safeRender(renderRequests, "requests");
+  safeRender(renderMeetings, "meetings");
+  safeRender(renderResources, "resources");
+  safeRender(renderIssues, "issues");
+  safeRender(renderNotifications, "notifications");
+  safeRender(repopulateSelects, "repopulateSelects");
   if (isAdmin()) {
-    renderAdminRooms();
-    renderAdminStaff();
-    renderAdminUsers();
-    renderAdminResetRequests();
-    renderAdminDisplayControls();
-    renderAdminGovernance();
+    safeRender(renderAdminRooms, "adminRooms");
+    safeRender(renderAdminStaff, "adminStaff");
+    safeRender(renderAdminUsers, "adminUsers");
+    safeRender(renderAdminResetRequests, "adminResetRequests");
+    safeRender(renderAdminDisplayControls, "adminDisplayControls");
+    safeRender(renderAdminGovernance, "adminGovernance");
   }
 }
 
@@ -1887,7 +2027,7 @@ function bindEvents() {
   });
 
   /* Login */
-  byId("loginForm").addEventListener("submit", e => {
+  byId("loginForm").addEventListener("submit", async e => {
     e.preventDefault();
     if (isLoginLocked()) {
       const leftSec = Math.ceil((state.loginSecurity.lockUntil - Date.now()) / 1000);
@@ -1905,30 +2045,55 @@ function bindEvents() {
       return;
     }
     const p = byId("password").value;
-    // check state.users first, then fall back to DEFAULT_CREDENTIALS
     const sysUser = state.users.find(x => x.username === u.toLowerCase() && x.active);
-    const legacyAcct = DEV_LOGIN_ENABLED ? state.credentials[u] : null;
+
     let role, label, staffId = "";
-    if (sysUser && sysUser.password === p) {
-      if (sysUser.role === "staff" && sysUser.staffId && !getStaffById(sysUser.staffId)) {
-        byId("loginError").textContent = "המשתמש משויך לאיש צוות שלא קיים.";
-        byId("loginError").classList.remove("hidden");
-        return;
-      }
-      role = sysUser.role;
-      label = sysUser.username;
-      staffId = sysUser.staffId || "";
-    } else if (!sysUser && legacyAcct && legacyAcct.password === p) {
-      role = legacyAcct.role;
-      label = legacyAcct.label;
-      recordAudit("auth.login.legacy", `בוצעה התחברות נתיב פיתוח עבור ${u}.`, "warn", false);
-    } else {
+
+    if (!sysUser) {
       registerFailedLogin();
       recordAudit("auth.login.failed", `ניסיון כניסה כושל עבור ${u}.`, "warn", false);
       byId("loginError").textContent = "שם משתמש או סיסמה שגויים";
       byId("loginError").classList.remove("hidden");
       return;
     }
+
+    let verified = false;
+
+    if (sysUser.passwordHash && sysUser.salt) {
+      verified = await verifyPassword(p, sysUser.passwordHash, sysUser.salt);
+    } else if (sysUser.password) {
+      if (sysUser.password === p) {
+        await migrateUserPassword(sysUser, p);
+        verified = true;
+      }
+    } else if (DEV_LOGIN_ENABLED) {
+      const legacy = { admin: { pass: "admin123", role: "admin", label: "מנהל מערכת" }, staff: { pass: "staff123", role: "staff", label: "צוות" } };
+      const match = legacy[u];
+      if (match && match.pass === p) {
+        role = match.role; label = match.label;
+        verified = true;
+        recordAudit("auth.login.legacy", `בוצעה התחברות נתיב פיתוח עבור ${u}.`, "warn", false);
+      }
+    }
+
+    if (!verified) {
+      registerFailedLogin();
+      recordAudit("auth.login.failed", `ניסיון כניסה כושל עבור ${u}.`, "warn", false);
+      byId("loginError").textContent = "שם משתמש או סיסמה שגויים";
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    if (sysUser.role === "staff" && sysUser.staffId && !getStaffById(sysUser.staffId)) {
+      byId("loginError").textContent = "המשתמש משויך לאיש צוות שלא קיים.";
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    role = role || sysUser.role;
+    label = label || sysUser.username;
+    staffId = sysUser.staffId || "";
+
     resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
@@ -2191,14 +2356,17 @@ function bindEvents() {
       showToast(err.message, "error");
       return;
     }
+    const rawLink = byId("meetingLink").value.trim();
+    const safeLink = sanitizeUrl(rawLink);
+    if (rawLink && !safeLink) { showToast("קישור לא חוקי - יש להזין כתובת URL תקינה.", "error"); return; }
     state.meetings.unshift(normalizeMeeting({
       speaker: byId("meetingSpeaker").value,
       audience: byId("meetingAudience").value,
-      specification: byId("meetingAgenda").value.trim(),
+      specification: stripHtml(byId("meetingAgenda").value.trim()),
       date: byId("meetingDate").value,
       time: byId("meetingTime").value,
-      link: byId("meetingLink").value,
-      files: [...byId("meetingFiles").files].map(f => f.name)
+      link: safeLink,
+      files: [...byId("meetingFiles").files].map(f => safeFileDisplayName(f.name))
     }));
     persistState(); byId("meetingForm").reset(); renderMeetings();
     populateStaticSelects();
@@ -2363,16 +2531,16 @@ function bindEvents() {
       return;
     }
     state.resources.unshift({
-      title:   byId("resourceTitle").value.trim(),
+      title:   stripHtml(byId("resourceTitle").value.trim()),
       type:    byId("resourceType").value,
-      content: byId("resourceUrl").value.trim()
+      content: stripHtml(byId("resourceUrl").value.trim())
     });
     persistState(); byId("resourceForm").reset(); renderResources();
     recordAudit("resource.create", "נוסף פריט למרכז הידע.", "info", false);
   });
 
   /* Admin – user form */
-  byId("adminUserForm")?.addEventListener("submit", e => {
+  byId("adminUserForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     if (!isAdmin()) return;
     let uname;
@@ -2388,17 +2556,20 @@ function bindEvents() {
     if (state.users.find(u => u.username === uname)) { showToast("שם משתמש תפוס.", "error"); return; }
     if (role === "staff" && !staffId) { showToast("יש לשייך משתמש צוות לאיש צוות.", "error"); return; }
     if (staffId && state.users.some(u => u.staffId === staffId)) { showToast("איש צוות זה כבר משויך למשתמש אחר.", "error"); return; }
-    const pwd = generatePassword();
+    const rawPwd = generatePassword();
+    const { salt, passwordHash } = await passwordForUser(rawPwd);
     const newUser = normalizeUser({
       username: uname,
-      password: pwd,
+      passwordHash,
+      salt,
       role,
       staffId,
       active: true
     });
     state.users.push(newUser);
+    state.needsSetup = false;
     persistState();
-    showNewPassword(uname, pwd);
+    showNewPassword(uname, rawPwd);
     byId("adminUserForm").reset();
     renderAdminUsers();
     recordAudit("user.create", `נוצר משתמש ${uname} (${role}).`, "critical", false);
@@ -2601,5 +2772,5 @@ function initialize() {
   }
 }
 
-window.addEventListener("beforeunload", persistState);
+window.addEventListener("beforeunload", persistStateImmediate);
 initialize();

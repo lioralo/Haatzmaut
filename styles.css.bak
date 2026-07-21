@@ -102,10 +102,10 @@ h3 { font-size: 0.95rem; }
 .sidebar {
   background: #2d2d3a;
   color: #b4aea5;
-  border-inline-end: none;
+  border-left: none;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   transition: width 200ms ease;
   position: relative;
 }
@@ -114,23 +114,15 @@ h3 { font-size: 0.95rem; }
 .sidebar-collapsed .sidebar-footer .sidebar-label { display: none; }
 .sidebar-collapsed .sidebar-item { justify-content: center; padding: .7rem; }
 .sidebar-toggle {
-  position: absolute; top: 8px; inset-inline-start: calc(100% + 2px);
+  position: absolute; top: 8px; left: -14px;
   width: 28px; height: 28px; border-radius: 50%;
   background: #3d3d4a; color: #e2e8f0;
   font-size: .7rem; padding: 0;
   display: flex; align-items: center; justify-content: center;
   z-index: 10; cursor: pointer; border: 2px solid #475569;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
 }
-.sidebar-toggle:hover { background: #4d4d5a; }
-.sidebar-collapsed .sidebar-toggle { inset-inline-start: calc(100% + 2px); }
-.sidebar::after {
-  content: "";
-  position: absolute; top: 0; inset-inline-end: 0;
-  width: 1px; height: 100%;
-  background: rgba(255,255,255,0.08);
-  pointer-events: none;
-}
+.sidebar-collapsed .sidebar-toggle { left: -8px; }
+.sidebar-nav { flex: 1; padding: .5rem 0; overflow-y: auto; }
 .sidebar-item {
   display: flex; align-items: center; gap: .5rem;
   width: 100%; padding: .45rem .75rem; margin: 0;
@@ -150,7 +142,7 @@ h3 { font-size: 0.95rem; }
 .sidebar-badge {
   background: var(--danger); color: #fbfaf7;
   font-size: .65rem; padding: 1px 6px; border-radius: 8px;
-  margin-inline-start: auto; font-weight: 700;
+  margin-right: auto; font-weight: 700;
 }
 .sidebar-divider { height: 1px; background: rgba(255,255,255,0.06); margin: .4rem .6rem; }
 .sidebar-footer { padding: .5rem 0; border-top: 1px solid rgba(255,255,255,0.06); }
@@ -243,7 +235,7 @@ h3 { font-size: 0.95rem; }
   border: 1px solid var(--line);
 }
 
-.dash-card .dash-value { font-size: 1.8rem; font-weight: 800; color: var(--primary); font-weight: 700; }
+.dash-card .dash-value { font-size: 1.8rem; font-weight: 800; color: var(--primary); font-family: 'Rubik', sans-serif; }
 .dash-card .dash-label { font-size: .85rem; color: var(--muted); }
 
 .dash-card.highlight { border-color: var(--accent); }
@@ -255,7 +247,7 @@ h3 { font-size: 0.95rem; }
 /* ============================================================
    ROOM STATUS DOTS
    ============================================================ */
-.room-status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-inline-end: 4px; }
+.room-status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-left: 4px; }
 .room-status-free { background: #22c55e; }
 .room-status-occupied { background: #ef4444; }
 .room-status-soon { background: #f59e0b; }
@@ -553,7 +545,7 @@ textarea { min-height: 90px; resize: vertical; }
   display: flex; flex-direction: column; gap: .15rem;
 }
 .stat-card span   { font-size: .84rem; color: var(--muted); }
-.stat-card strong { font-size: 1.55rem; font-weight: 700; }
+.stat-card strong { font-size: 1.55rem; font-family: 'Rubik', sans-serif; }
 
 /* ============================================================
    TAG FILTERS
@@ -608,7 +600,7 @@ textarea { min-height: 90px; resize: vertical; }
 .time-col-head,
 .time-cell {
   position: sticky;
-  inset-inline-start: 0;
+  right: 0;
   z-index: 5;
   background: linear-gradient(135deg, #5d7b6f, #4a665b);
   color: #fbfaf7;
@@ -617,7 +609,7 @@ textarea { min-height: 90px; resize: vertical; }
   max-width: 72px;
   text-align: center;
   padding: .45rem .5rem;
-  border-inline-end: 1px solid rgba(93,123,111,.3);
+  border-left: 1px solid rgba(93,123,111,.3);
 }
 
 .time-col-head { font-size: .82rem; font-weight: 700; z-index: 8; }
@@ -632,7 +624,7 @@ textarea { min-height: 90px; resize: vertical; }
   text-align: center;
   padding: .5rem .4rem;
   min-width: 150px;
-  border-inline-end: 1px solid rgba(93,123,111,.08);
+  border-left: 1px solid rgba(93,123,111,.08);
   border-bottom: 2px solid rgba(93,123,111,.2);
 }
 
@@ -764,18 +756,18 @@ textarea { min-height: 90px; resize: vertical; }
 }
 
 /* Room color bands — applied on <td> so the stripe spans the full rowspan height */
-td.rb-1 { border-inline-start: 5px solid #5d7b6f; }
-td.rb-2 { border-inline-start: 5px solid #c4a882; }
-td.rb-3 { border-inline-start: 5px solid #0A8042; }
-td.rb-4 { border-inline-start: 5px solid #7C3AED; }
-td.rb-5 { border-inline-start: 5px solid #BE123C; }
-td.rb-6 { border-inline-start: 5px solid #334155; }
-td.slot-booked.rb-1 .bcard { border-inline-start: 5px solid #5d7b6f; }
-td.slot-booked.rb-2 .bcard { border-inline-start: 5px solid #c4a882; }
-td.slot-booked.rb-3 .bcard { border-inline-start: 5px solid #0A8042; }
-td.slot-booked.rb-4 .bcard { border-inline-start: 5px solid #7C3AED; }
-td.slot-booked.rb-5 .bcard { border-inline-start: 5px solid #BE123C; }
-td.slot-booked.rb-6 .bcard { border-inline-start: 5px solid #334155; }
+td.rb-1 { border-right: 5px solid #5d7b6f; }
+td.rb-2 { border-right: 5px solid #c4a882; }
+td.rb-3 { border-right: 5px solid #0A8042; }
+td.rb-4 { border-right: 5px solid #7C3AED; }
+td.rb-5 { border-right: 5px solid #BE123C; }
+td.rb-6 { border-right: 5px solid #334155; }
+td.slot-booked.rb-1 .bcard { border-right: 5px solid #5d7b6f; }
+td.slot-booked.rb-2 .bcard { border-right: 5px solid #c4a882; }
+td.slot-booked.rb-3 .bcard { border-right: 5px solid #0A8042; }
+td.slot-booked.rb-4 .bcard { border-right: 5px solid #7C3AED; }
+td.slot-booked.rb-5 .bcard { border-right: 5px solid #BE123C; }
+td.slot-booked.rb-6 .bcard { border-right: 5px solid #334155; }
 
 /* Dragging state */
 .dragging { opacity: .45; transform: rotate(1.5deg) scale(.97); }
@@ -846,7 +838,7 @@ dialog::backdrop {
    NOTIFICATION BELL & PANEL
    ============================================================ */
 .notification-bell {
-  position: fixed; bottom: 24px; inset-inline-start: 24px; z-index: 100;
+  position: fixed; bottom: 24px; right: 24px; z-index: 100;
   width: 50px; height: 50px; border-radius: 50%;
   background: var(--surface-2); border: 1px solid var(--line);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer;
@@ -855,7 +847,7 @@ dialog::backdrop {
 }
 
 .bell-badge {
-  position: absolute; top: -4px; inset-inline-start: -4px;
+  position: absolute; top: -4px; right: -4px;
   background: var(--danger); color: #fbfaf7; font-size: .68rem;
   min-width: 18px; height: 18px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
@@ -863,7 +855,7 @@ dialog::backdrop {
 }
 
 .notification-panel {
-  position: fixed; bottom: 84px; inset-inline-start: 24px; z-index: 99;
+  position: fixed; bottom: 84px; right: 24px; z-index: 99;
   width: 320px; max-height: 400px;
   background: var(--surface-2); border-radius: 12px;
   box-shadow: var(--shadow-lg); overflow: hidden;
@@ -877,7 +869,7 @@ dialog::backdrop {
 
 .notif-item { padding: .6rem 1rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
 .notif-item small { color: var(--muted); display: block; margin-top: .15rem; }
-.notif-item.critical { border-inline-start: 3px solid var(--danger); }
+.notif-item.critical { border-right: 3px solid var(--danger); }
 
 /* ============================================================
    NOTICES
@@ -989,7 +981,7 @@ dialog::backdrop {
 .toast {
   position: fixed;
   bottom: 1.5rem;
-  inset-inline-end: 50%;
+  left: 50%;
   transform: translateX(-50%) translateY(5rem);
   opacity: 0;
   z-index: 1000;
@@ -1031,7 +1023,7 @@ dialog::backdrop {
   margin-top: .4rem;
 }
 .generated-pwd .pwd-copy {
-  margin-inline-start: auto;
+  margin-right: auto;
   padding: .22rem .6rem;
   font-size: .8rem;
   font-family: inherit;
@@ -1133,7 +1125,7 @@ details > summary::-webkit-details-marker { display: none; }
 .room-status-card .rs-room { font-weight: 600; font-size: .85rem; margin-bottom: .2rem; }
 .room-status-card .rs-session { font-size: .8rem; color: var(--muted); }
 .room-status-card .rs-time { font-size: .72rem; color: var(--muted); }
-.room-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-inline-start: 4px; }
+.room-status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; }
 .room-status-free { background: var(--success); }
 .room-status-occupied { background: var(--danger); }
 .room-status-soon { background: var(--accent); }
@@ -1162,7 +1154,7 @@ details > summary::-webkit-details-marker { display: none; }
 .mt-card {
   display: flex; gap: .75rem; padding: .65rem .75rem;
   background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-md); border-inline-start: 3px solid var(--primary);
+  border-radius: var(--r-md); border-right: 3px solid var(--primary);
 }
 .mt-card .mt-time { min-width: 50px; font-weight: 600; font-size: .85rem; }
 .mt-card .mt-body { flex: 1; }
@@ -1247,7 +1239,7 @@ details > summary::-webkit-details-marker { display: none; }
 /* ============================================================
    HOUR RANGE FILTER
    ============================================================ */
-.hour-range-filters { display: flex; gap: .25rem; margin-inline-start: auto; }
+.hour-range-filters { display: flex; gap: .25rem; margin-right: auto; }
 .hour-range-btn {
   padding: .2rem .55rem; font-size: .78rem; border: 1px solid var(--line);
   border-radius: var(--r-sm); background: var(--surface); color: var(--muted);
@@ -1255,80 +1247,3 @@ details > summary::-webkit-details-marker { display: none; }
 }
 .hour-range-btn.active { background: var(--primary); color: #fbfaf7; border-color: var(--primary); }
 
-/* ============================================================
-   ENHANCEMENT STYLES
-   ============================================================ */
-
-/* Skip link */
-.skip-link { position: absolute; top: -100px; inset-inline-end: 8px; z-index: 200; background: var(--primary); color: #fbfaf7; padding: .5rem 1rem; border-radius: var(--r-sm); font-size: .9rem; text-decoration: none; }
-.skip-link:focus { top: 8px; }
-
-/* Screen reader only */
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
-
-/* SOAP fields in dialog */
-.dialog-section-label { grid-column: 1 / -1; font-weight: 700; font-size: .85rem; color: var(--primary); margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--line); }
-
-/* Statistics bar charts */
-.stat-bar-wrap { background: var(--surface-2); border-radius: 4px; height: 18px; overflow: hidden; margin-top: 4px; }
-.stat-bar-fill { background: var(--primary); height: 100%; border-radius: 4px; color: #fbfaf7; font-size: .75rem; display: flex; align-items: center; padding: 0 8px; min-width: 36px; font-weight: 700; text-shadow: 0 1px 0 rgba(0,0,0,0.15); font-weight: 600; transition: width 400ms ease; }
-
-/* Slot unavailable (staff availability) */
-.slot-unavailable { background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,.03) 4px, rgba(0,0,0,.03) 6px); }
-
-/* Recurring badge */
-.bcard-recurring { display: inline-block; background: var(--primary-soft); color: var(--primary); font-size: .65rem; padding: 0 5px; border-radius: 3px; margin-inline-end: 4px; }
-
-/* Settings panel */
-.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
-
-/* Focus visible */
-:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-button:focus-visible, .sidebar-item:focus-visible, .mode-tab:focus-visible, .day-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
-
-/* Print enhancements */
-@media print {
-  .sidebar, .site-header, .mode-toolbar, .week-nav, .notification-bell, .notification-panel,
-  .filter-collapsible, .session-bar, .tabs, .day-tabs, .dashboard-summary, .filter-collapsible,
-  .room-status-strip, #waitlistPanel, #statsDashboard, .mode-toolbar, .hour-range-filters { display: none !important; }
-  .app-layout { display: block; height: auto; }
-  .main-content { padding: 0; overflow: visible; }
-  .card { box-shadow: none; border: none; padding: .5rem; }
-  .occ-table { font-size: 9pt; width: 100%; page-break-inside: avoid; }
-  .occ-table th, .occ-table td { padding: 2px 4px; }
-  @page { margin: 1cm; }
-}
-
-
-/* ============================================================
-   TYPOGRAPHY SCALE — deliberate, restrained, 4 weights only
-   ============================================================ */
-h1, h2, h3, h4 { font-weight: 600; margin: 0; }
-h1 { font-size: 1.125rem; letter-spacing: normal; }
-h2 { font-size: 1rem; }
-h3 { font-size: 0.9375rem; }
-h4 { font-size: 0.875rem; font-weight: 500; }
-
-/* ============================================================
-   SIGNATURE ELEMENT — The schedule as a physical form
-   The card lifts off the warm paper background with a subtle,
-   deliberate shadow. Only this element gets depth.
-   ============================================================ */
-.card { box-shadow: 0 1px 0 var(--line), 0 2px 8px rgba(45,45,58,0.04); }
-.main-content { background: var(--bg); }
-
-/* ============================================================
-   EMPTY STATES — invitations to act, not apologies
-   ============================================================ */
-.empty-state { padding: 2rem 1rem; text-align: center; color: var(--muted); font-size: 0.875rem; }
-.empty-state::before { display: block; content: ""; font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.4; }
-
-/* ============================================================
-   FORM INPUT POLISH — dir="auto" for mixed content
-   ============================================================ */
-input, textarea, select { font-size: 0.875rem; border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem 0.55rem; background: var(--surface); color: var(--text); }
-input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(93,123,111,0.15); outline: none; }
-input::placeholder, textarea::placeholder { color: #b0a89e; }

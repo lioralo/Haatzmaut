@@ -1,0 +1,638 @@
+/* ============================================================
+   HAATZMAUT — Main Entry Point
+   Bootstraps core store, restores session, initializes all modules.
+   ============================================================ */
+
+import { state, isAdmin, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState } from './core/store.js';
+import { DEV_LOGIN_ENABLED, DEFAULT_ROOMS, DEFAULT_STAFF, DAY_DEFS } from './core/constants.js';
+import {
+  byId, showToast, generatePassword, passwordForUser, makeId,
+  localISO, minToTime, timeToMin, sundayISO, todayDayIdx, clampDay, esc
+} from './core/utils.js';
+import {
+  restoreSession, registerActivity, applyAccessControl,
+  renderSessionBar, logoutCurrentUser
+} from './core/session.js';
+
+import { ensureSyncedScheduleWindow, getRoomName, activeDayEntries } from './calendar/state.js';
+import {
+  renderOccupancy, renderDayTabs, renderWeekHeader, renderStats,
+  renderTagFilters, renderRequests, renderRoomStatusStrip,
+  renderStaffFilter, renderHourRangeButtons
+} from './calendar/render.js';
+import { initCalendarEvents } from './calendar/events.js';
+
+import { DEFAULT_PERMISSIONS } from './staff/state.js';
+import { renderAdminUsers, renderAdminStaff, renderAdminResetRequests, renderStaffDirectory, renderStaffAccordion } from './staff/render.js';
+import { initStaffEvents } from './staff/events.js';
+
+import { renderMeetingGroups, renderMeetingTimeline } from './meetings/render.js';
+import { initMeetingsEvents } from './meetings/events.js';
+
+import { ISSUE_TYPES, STATUS_LABELS } from './issues/state.js';
+import { renderIssuesBoard } from './issues/render.js';
+import { initIssuesEvents } from './issues/events.js';
+
+import { renderResourceBrowser, renderFolderTree } from './resources/render.js';
+import { initResourcesEvents } from './resources/events.js';
+
+/* ----------------------------------------------------------
+   Shared UI
+   ---------------------------------------------------------- */
+
+function showTab(tabId) {
+  const sidebarBtn = document.querySelector(`.sidebar-item[data-tab='${tabId}']`);
+  if (!sidebarBtn || sidebarBtn.classList.contains("hidden")) return;
+
+  state.activeTab = tabId;
+  document.querySelectorAll(".tab-content").forEach(t => t.classList.add("hidden"));
+  document.querySelectorAll(".sidebar-item").forEach(b => b.classList.remove("active"));
+  const panel = byId(tabId);
+  if (panel) panel.classList.remove("hidden");
+  sidebarBtn.classList.add("active");
+}
+
+function addNotification(text, critical = false) {
+  if (!state.notifications) state.notifications = [];
+  state.notifications.unshift({
+    id: makeId("note"), text, critical,
+    at: new Date().toLocaleString("he-IL")
+  });
+}
+
+/* ----------------------------------------------------------
+   Mode Management
+   ---------------------------------------------------------- */
+
+function applyTabMode(tabId) {
+  const toolbar = document.querySelector(`#${tabId} .mode-toolbar`);
+  if (!toolbar) return;
+
+  let modeKey, targetMode;
+  if (tabId === "dashboardTab") {
+    targetMode = state.modes.calendar;
+    modeKey = "calendar";
+  } else if (tabId === "requestsTab") {
+    targetMode = state.modes.requests;
+    modeKey = "requests";
+  } else if (tabId === "staffTab" || tabId === "adminTab") {
+    targetMode = state.modes.staff;
+    modeKey = "staff";
+  } else if (tabId === "meetingsTab") {
+    targetMode = state.modes.meetings;
+    modeKey = "meetings";
+  } else if (tabId === "resourcesTab") {
+    targetMode = state.modes.resources;
+    modeKey = "resources";
+  } else if (tabId === "issuesTab") {
+    targetMode = state.modes.issues;
+    modeKey = "issues";
+  }
+
+  if (!targetMode) return;
+
+  toolbar.querySelectorAll(".mode-tab").forEach(b => {
+    b.classList.toggle("active", (b.dataset.mode || b.dataset.calendarMode) === targetMode);
+  });
+
+  if (tabId === "dashboardTab") {
+    byId("scheduleView")?.classList.toggle("hidden", targetMode !== "schedule");
+    byId("listView")?.classList.toggle("hidden", targetMode !== "list");
+    byId("printView")?.classList.toggle("hidden", targetMode !== "print");
+    if (targetMode === "list") renderBookingList();
+    if (targetMode === "print") window.print();
+  } else if (tabId === "requestsTab") {
+    byId("requestsViewMode")?.classList.toggle("hidden", targetMode !== "view");
+    byId("requestsExportMode")?.classList.toggle("hidden", targetMode !== "export");
+  } else if (tabId === "staffTab" || tabId === "adminTab") {
+    byId("staffViewMode")?.classList.toggle("hidden", targetMode !== "view");
+    byId("staffEditMode")?.classList.toggle("hidden", targetMode !== "edit");
+    byId("staffExportMode")?.classList.toggle("hidden", targetMode !== "export");
+    if (targetMode === "view") { renderStaffDirectory(); }
+    if (targetMode === "edit") { renderStaffAccordion(); }
+  } else if (tabId === "meetingsTab") {
+    byId("meetingsViewMode")?.classList.toggle("hidden", targetMode !== "view");
+    byId("meetingsEditMode")?.classList.toggle("hidden", targetMode !== "edit");
+    byId("meetingsExportMode")?.classList.toggle("hidden", targetMode !== "export");
+    if (targetMode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
+  } else if (tabId === "resourcesTab") {
+    byId("resourcesBrowseMode")?.classList.toggle("hidden", targetMode !== "browse");
+    byId("resourcesUploadMode")?.classList.toggle("hidden", targetMode !== "upload");
+    byId("resourcesDownloadMode")?.classList.toggle("hidden", targetMode !== "download");
+  } else if (tabId === "issuesTab") {
+    byId("issuesBoardMode")?.classList.toggle("hidden", targetMode !== "board");
+    byId("issuesReportMode")?.classList.toggle("hidden", targetMode !== "report");
+    byId("issuesSummaryMode")?.classList.toggle("hidden", targetMode !== "summary");
+    if (targetMode === "summary") renderIssuesSummary();
+  }
+}
+
+function initModeToolbars() {
+  document.querySelectorAll(".mode-tab").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const toolbar = btn.closest(".mode-toolbar");
+      const tab = btn.closest(".card.tab-content, .tab-content");
+      const mode = btn.dataset.mode || btn.dataset.calendarMode;
+      if (!mode) return;
+
+      toolbar.querySelectorAll(".mode-tab").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const tabId = tab?.id;
+      if (tabId === "dashboardTab") {
+        byId("scheduleView")?.classList.toggle("hidden", mode !== "schedule");
+        byId("listView")?.classList.toggle("hidden", mode !== "list");
+        byId("printView")?.classList.toggle("hidden", mode !== "print");
+        if (mode === "list") renderBookingList();
+        if (mode === "print") window.print();
+        state.modes.calendar = mode;
+      } else if (tabId === "requestsTab") {
+        byId("requestsViewMode")?.classList.toggle("hidden", mode !== "view");
+        byId("requestsExportMode")?.classList.toggle("hidden", mode !== "export");
+        state.modes.requests = mode;
+      } else if (tabId === "staffTab") {
+        byId("staffViewMode")?.classList.toggle("hidden", mode !== "view");
+        byId("staffEditMode")?.classList.toggle("hidden", mode !== "edit");
+        byId("staffExportMode")?.classList.toggle("hidden", mode !== "export");
+        state.modes.staff = mode;
+        if (mode === "view") { renderStaffDirectory(); }
+        if (mode === "edit") { renderStaffAccordion(); }
+      } else if (tabId === "meetingsTab") {
+        byId("meetingsViewMode")?.classList.toggle("hidden", mode !== "view");
+        byId("meetingsEditMode")?.classList.toggle("hidden", mode !== "edit");
+        byId("meetingsExportMode")?.classList.toggle("hidden", mode !== "export");
+        state.modes.meetings = mode;
+        if (mode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
+      } else if (tabId === "resourcesTab") {
+        byId("resourcesBrowseMode")?.classList.toggle("hidden", mode !== "browse");
+        byId("resourcesUploadMode")?.classList.toggle("hidden", mode !== "upload");
+        byId("resourcesDownloadMode")?.classList.toggle("hidden", mode !== "download");
+        state.modes.resources = mode;
+      } else if (tabId === "issuesTab") {
+        byId("issuesBoardMode")?.classList.toggle("hidden", mode !== "board");
+        byId("issuesReportMode")?.classList.toggle("hidden", mode !== "report");
+        byId("issuesSummaryMode")?.classList.toggle("hidden", mode !== "summary");
+        state.modes.issues = mode;
+        if (mode === "summary") renderIssuesSummary();
+      }
+    });
+  });
+}
+
+/* ----------------------------------------------------------
+   Notifications
+   ---------------------------------------------------------- */
+
+function updateNotificationBell() {
+  const badge = byId("notificationBadge");
+  const bell = byId("notificationBell");
+  if (!badge || !bell) return;
+  const count = state.notifications?.length || 0;
+  badge.textContent = count;
+  badge.classList.toggle("hidden", count === 0);
+  bell.classList.toggle("hidden", !state.currentUser);
+}
+
+function renderNotificationPanel() {
+  const list = byId("notificationList");
+  if (!list) return;
+  const items = state.notifications?.slice(0, 20) || [];
+  list.innerHTML = items.map(n =>
+    `<div class="notif-item${n.critical ? " critical" : ""}">${n.text}<small>${n.at}</small></div>`
+  ).join("") || '<div class="notif-item muted">אין התראות</div>';
+}
+
+/* ----------------------------------------------------------
+   Booking List (calendar list mode)
+   ---------------------------------------------------------- */
+
+function renderBookingList() {
+  const container = byId("bookingListView");
+  if (!container) return;
+  const query = (state.searchQuery || "").toLowerCase();
+  let entries = state.schedule.filter(e => e.weekISO === state.weekISO).sort((a, b) => {
+    if (a.day !== b.day) return a.day - b.day;
+    return timeToMin(a.start) - timeToMin(b.start);
+  });
+  if (query) {
+    entries = entries.filter(e =>
+      (e.clientName || "").toLowerCase().includes(query) ||
+      (e.staff || "").toLowerCase().includes(query) ||
+      (getRoomName(e.roomId) || "").toLowerCase().includes(query)
+    );
+  }
+  container.innerHTML = entries.length ? entries.map(e => {
+    const roomName = getRoomName(e.roomId);
+    const endTime = minToTime(timeToMin(e.start) + e.duration);
+    return `<div class="booking-list-item">
+      <div><strong>${esc(e.clientName || e.staff)}</strong> · ${esc(e.staff)}<br><small>${esc(roomName)} · ${DAY_DEFS[e.day]?.label} · ${e.start}-${endTime}</small></div>
+      <span class="badge">${esc(e.noteType || "")}</span>
+      <span class="badge">${e.sessionStatus || ""}</span>
+    </div>`;
+  }).join("") : '<p class="empty-state">אין פגישות להצגה</p>';
+}
+
+/* ----------------------------------------------------------
+   Dashboard Summary
+   ---------------------------------------------------------- */
+
+function renderDashboardSummary() {
+  const container = byId("dashboardSummary");
+  if (!container) return;
+  const today = activeDayEntries();
+  const weekEntries = state.schedule.filter(e => e.weekISO === state.weekISO);
+  const pendingReqs = state.requests.filter(r => r.status === "pending").length;
+  const openIssues = state.issues.filter(i => i.status !== "closed" && i.status !== "resolved").length;
+  const now = timeToMin(minToTime(new Date().getHours() * 60 + new Date().getMinutes()));
+  const inSession = today.filter(e => {
+    const start = timeToMin(e.start);
+    const end = start + e.duration;
+    return start <= now && now < end;
+  }).length;
+
+  container.innerHTML = `
+    <div class="dash-card"><span class="dash-value">${weekEntries.length}</span><span class="dash-label">פגישות השבוע</span></div>
+    <div class="dash-card highlight"><span class="dash-value">${today.length}</span><span class="dash-label">פגישות היום</span></div>
+    <div class="dash-card"><span class="dash-value">${inSession}</span><span class="dash-label">בטיפול כעת</span></div>
+    <div class="dash-card${pendingReqs ? " warning" : ""}"><span class="dash-value">${pendingReqs}</span><span class="dash-label">בקשות ממתינות</span></div>
+    <div class="dash-card${openIssues ? " warning" : ""}"><span class="dash-value">${openIssues}</span><span class="dash-label">תקלות פתוחות</span></div>
+  `;
+}
+
+/* ----------------------------------------------------------
+   Issues Summary
+   ---------------------------------------------------------- */
+
+function renderIssuesSummary() {
+  const container = byId("issuesSummary");
+  if (!container) return;
+  const total = state.issues.length;
+  const resolved = state.issues.filter(i => i.status === "resolved" || i.status === "closed").length;
+  const open = total - resolved;
+  container.innerHTML = `
+    <div class="dashboard-summary">
+      <div class="dash-card warning"><span class="dash-value">${open}</span><span class="dash-label">פתוחות</span></div>
+      <div class="dash-card"><span class="dash-value">${resolved}</span><span class="dash-label">נפתרו</span></div>
+      <div class="dash-card"><span class="dash-value">${total}</span><span class="dash-label">סה"כ</span></div>
+    </div>
+    <div id="issuesSummaryDetail"></div>
+  `;
+}
+
+/* ----------------------------------------------------------
+   Bootstrap
+   ---------------------------------------------------------- */
+
+async function bootstrapAdmin() {
+  if (state.users && state.users.length > 0) return;
+  const rawPwd = "admin123";
+  const { salt, passwordHash } = await passwordForUser(rawPwd);
+  if (!state.users) state.users = [];
+  state.users.push({
+    id: makeId("user"),
+    username: "admin",
+    passwordHash,
+    salt,
+    role: "admin",
+    staffId: "",
+    active: true,
+    createdAt: new Date().toLocaleString("he-IL")
+  });
+  if (!state.staff) state.staff = [];
+  state.needsSetup = false;
+  persistStateImmediate();
+}
+
+/* ----------------------------------------------------------
+   Global render dispatch
+   ---------------------------------------------------------- */
+
+function renderActiveTab() {
+  const tab = state.activeTab || "dashboardTab";
+  showTab(tab);
+
+  switch (tab) {
+  case "dashboardTab":
+    renderWeekHeader();
+    renderDayTabs();
+    renderStats();
+    renderTagFilters();
+    renderRoomStatusStrip();
+    renderStaffFilter();
+    renderHourRangeButtons();
+    renderOccupancy();
+    renderDashboardSummary();
+    break;
+  case "staffTab":
+    renderStaffDirectory();
+    break;
+  case "adminTab":
+    if (isAdmin()) {
+      renderStaffAccordion();
+    }
+    break;
+  case "meetingsTab":
+    renderMeetingGroups();
+    renderMeetingTimeline();
+    break;
+  case "issuesTab":
+    renderIssuesBoard();
+    break;
+  case "resourcesTab":
+    renderResourceBrowser();
+    renderFolderTree();
+    break;
+  case "requestsTab":
+    renderRequests();
+    break;
+  }
+
+  updateNotificationBell();
+  applyTabMode(tab);
+}
+
+/* ----------------------------------------------------------
+   Initialize
+   ---------------------------------------------------------- */
+
+async function initialize() {
+  /* Restore persisted state from localStorage */
+  const stored = loadStoredState();
+  if (stored) {
+    state.auditLog        = stored.auditLog        || [];
+    state.loginSecurity   = stored.loginSecurity   || { failures: [], lockUntil: 0 };
+    state.activeTab       = stored.activeTab       || "dashboardTab";
+    state.schedule        = stored.schedule        || [];
+    state.rooms           = stored.rooms           || [];
+    state.defaultTemplate = stored.defaultTemplate || [];
+    state.weekTemplates   = stored.weekTemplates   || {};
+    state.requests        = stored.requests        || [];
+    state.selectedTags    = new Set(stored.selectedTags || []);
+    state.weekISO         = stored.weekISO         || "";
+    state.activeDay       = stored.activeDay       ?? 0;
+    state.staff           = stored.staff           || [];
+    state.users           = stored.users           || [];
+    state.passwordResets  = stored.passwordResets  || [];
+    state.folders         = stored.folders         || [];
+    state.files           = stored.files           || [];
+    state.meetingGroups   = stored.meetingGroups   || [];
+    state.meetings        = stored.meetings        || [];
+    state.issues          = stored.issues          || [];
+    state.displaySettings = stored.displaySettings || {};
+  }
+  if (!state.weekISO) state.weekISO = sundayISO();
+  if (!state.activeDay && state.activeDay !== 0) state.activeDay = todayDayIdx();
+  if (!state.rooms || !state.rooms.length) state.rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
+  if (!state.staff || !state.staff.length) state.staff = DEFAULT_STAFF.map(s => ({ ...s }));
+
+  state.modes = state.modes || { staff: "view", meetings: "view", resources: "browse", issues: "board", requests: "view", calendar: "schedule" };
+
+  state.sidebarCollapsed = localStorage.getItem("sidebar_collapsed") === "true";
+  if (state.sidebarCollapsed) {
+    document.querySelector(".app-layout")?.classList.add("sidebar-collapsed");
+  }
+
+  await bootstrapAdmin();
+
+  const loggedIn = restoreSession();
+  if (loggedIn) {
+    byId("loginSection").classList.add("hidden");
+    byId("appSection").classList.remove("hidden");
+    applyAccessControl();
+    renderSessionBar();
+    registerActivity();
+  }
+
+  if (state.currentUser) {
+    const firstTab = state.activeTab === "adminTab" && !isAdmin()
+      ? "dashboardTab"
+      : (state.activeTab || "dashboardTab");
+    state.activeTab = firstTab;
+  }
+
+  initCalendarEvents();
+  initStaffEvents();
+  initMeetingsEvents();
+  initIssuesEvents();
+  initResourcesEvents();
+  initModeToolbars();
+
+  ensureSyncedScheduleWindow();
+  runIntegrityAssistant();
+  renderActiveTab();
+
+  const demoCreds = byId("demoCreds");
+  if (demoCreds) demoCreds.classList.toggle("hidden", !DEV_LOGIN_ENABLED);
+
+  if (state.currentUser) {
+    const firstTab = state.activeTab === "adminTab" && !isAdmin()
+      ? "dashboardTab"
+      : (state.activeTab || "dashboardTab");
+    state.activeTab = firstTab;
+    showTab(firstTab);
+  }
+}
+
+/* ----------------------------------------------------------
+   Tab navigation events
+   ---------------------------------------------------------- */
+
+function initNavigation() {
+  document.querySelectorAll(".sidebar-item[data-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tabId = btn.dataset.tab;
+      if (!tabId) return;
+      if ((tabId === "adminTab" || tabId === "staffTab") && !isAdmin()) return;
+      showTab(tabId);
+      renderActiveTab();
+    });
+  });
+
+  byId("logoutBtn")?.addEventListener("click", () => {
+    recordAudit("auth.logout", "התנתקות ידנית.", "info", false);
+    logoutCurrentUser();
+    byId("appSection").classList.add("hidden");
+    byId("loginSection").classList.remove("hidden");
+    renderSessionBar();
+  });
+}
+
+/* ----------------------------------------------------------
+   Login event
+   ---------------------------------------------------------- */
+
+function initLogin() {
+  const form = byId("loginForm");
+  if (!form) return;
+
+  function isLoginLocked() {
+    const nowTs = Date.now();
+    if (!state.loginSecurity) return false;
+    if (state.loginSecurity.lockUntil > nowTs) return true;
+    if (state.loginSecurity.lockUntil) {
+      state.loginSecurity.failures = [];
+      state.loginSecurity.lockUntil = 0;
+    }
+    return false;
+  }
+
+  function resetLoginGuard() {
+    if (!state.loginSecurity) state.loginSecurity = { failures: [], lockUntil: 0 };
+    state.loginSecurity.failures = [];
+    state.loginSecurity.lockUntil = 0;
+  }
+
+  form.addEventListener("submit", async e => {
+    e.preventDefault();
+
+    if (isLoginLocked()) {
+      const leftSec = Math.ceil((state.loginSecurity.lockUntil - Date.now()) / 1000);
+      byId("loginError").textContent = `הכניסה חסומה זמנית. נסו שוב בעוד ${Math.max(1, leftSec)} שניות.`;
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    const u = String(byId("username").value || "").trim().toLowerCase();
+    const p = byId("password").value;
+    if (!u || !p) {
+      byId("loginError").textContent = "יש להזין שם משתמש וסיסמה.";
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    const { users } = state;
+    const sysUser = Array.isArray(users) ? users.find(x => x.username === u && x.active) : null;
+    let role, label, staffId = "", verified = false;
+    let effectiveUser = sysUser;
+
+    // Dev auth bypass
+    if (DEV_LOGIN_ENABLED) {
+      const legacy = { admin: { pass: "admin123", role: "admin", label: "מנהל מערכת" }, staff: { pass: "staff123", role: "staff", label: "צוות" } };
+      const match = legacy[u];
+      if (match && match.pass === p) {
+        role = match.role; label = match.label; verified = true;
+        effectiveUser = effectiveUser || { role, staffId: "" };
+        recordAudit("auth.login.legacy", `התחברות נתיב פיתוח: ${u}.`, "warn", false);
+      }
+    }
+
+    if (!verified && sysUser) {
+      const { verifyPassword, migrateUserPassword } = await import('./core/utils.js');
+      if (sysUser.passwordHash && sysUser.salt) {
+        verified = await verifyPassword(p, sysUser.passwordHash, sysUser.salt);
+      } else if (sysUser.password) {
+        if (sysUser.password === p) {
+          await migrateUserPassword(sysUser, p);
+          verified = true;
+        }
+      }
+      if (verified) {
+        role = sysUser.role;
+        label = sysUser.username;
+        staffId = sysUser.staffId || "";
+      }
+    }
+
+    if (!verified) {
+      if (!state.loginSecurity) state.loginSecurity = { failures: [], lockUntil: 0 };
+      const nowTs = Date.now();
+      state.loginSecurity.failures = state.loginSecurity.failures.filter(ts => (nowTs - ts) <= 10 * 60 * 1000);
+      state.loginSecurity.failures.push(nowTs);
+      if (state.loginSecurity.failures.length >= 5) {
+        state.loginSecurity.lockUntil = nowTs + 15 * 60 * 1000;
+        recordAudit("auth.lockout", "נחסמה כניסה זמנית.", "critical", false);
+      }
+      recordAudit("auth.login.failed", `ניסיון כניסה כושל: ${u}.`, "warn", false);
+      byId("loginError").textContent = "שם משתמש או סיסמה שגויים";
+      byId("loginError").classList.remove("hidden");
+      return;
+    }
+
+    resetLoginGuard();
+    state.currentUser = { username: u, role, label, staffId };
+    sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
+    byId("loginSection").classList.add("hidden");
+    byId("appSection").classList.remove("hidden");
+    byId("loginError").classList.add("hidden");
+    recordAudit("auth.login.success", `התחברות: ${u}.`, "info", false);
+    applyAccessControl();
+    renderSessionBar();
+    registerActivity();
+
+    state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
+    renderActiveTab();
+  });
+}
+
+/* ----------------------------------------------------------
+   Keyboard shortcuts
+   ---------------------------------------------------------- */
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+  const key = e.key.toLowerCase();
+  if (key === "n" && isAdmin()) {
+    import('./calendar/render.js').then(m => m.openBookingModal({}));
+  } else if (key === "t") {
+    state.weekISO = sundayISO();
+    state.activeDay = todayDayIdx();
+    import('./calendar/state.js').then(m => m.ensureSyncedScheduleWindow());
+    import('./calendar/render.js').then(m => { m.renderWeekHeader(); m.renderDayTabs(); m.renderOccupancy(); });
+  } else if (key === "arrowright") {
+    state.activeDay = clampDay(state.activeDay - 1);
+    import('./calendar/render.js').then(m => { m.renderDayTabs(); m.renderOccupancy(); });
+  } else if (key === "arrowleft") {
+    state.activeDay = clampDay(state.activeDay + 1);
+    import('./calendar/render.js').then(m => { m.renderDayTabs(); m.renderOccupancy(); });
+  } else if (key === "escape") {
+    import('./calendar/render.js').then(m => m.closeBookingModal());
+  }
+});
+
+/* ----------------------------------------------------------
+   Notification center events
+   ---------------------------------------------------------- */
+
+byId("notificationBell")?.addEventListener("click", () => {
+  const panel = byId("notificationPanel");
+  panel.classList.toggle("hidden");
+  if (!panel.classList.contains("hidden")) renderNotificationPanel();
+});
+
+document.querySelector(".notif-clear")?.addEventListener("click", () => {
+  state.notifications = [];
+  updateNotificationBell();
+  renderNotificationPanel();
+});
+
+/* ----------------------------------------------------------
+   Search events
+   ---------------------------------------------------------- */
+
+byId("bookingSearch")?.addEventListener("input", e => {
+  state.searchQuery = e.target.value;
+  if (state.modes?.calendar === "list") renderBookingList();
+  else renderOccupancy();
+});
+
+/* ----------------------------------------------------------
+   Sidebar toggle
+   ---------------------------------------------------------- */
+
+byId("sidebarToggle")?.addEventListener("click", () => {
+  const layout = document.querySelector(".app-layout");
+  layout.classList.toggle("sidebar-collapsed");
+  localStorage.setItem("sidebar_collapsed", layout.classList.contains("sidebar-collapsed"));
+});
+
+/* ----------------------------------------------------------
+   Boot
+   ---------------------------------------------------------- */
+
+window.addEventListener("beforeunload", persistStateImmediate);
+
+initNavigation();
+initLogin();
+await initialize();
+
+export { showTab, renderActiveTab, addNotification, renderDashboardSummary, renderBookingList, renderIssuesSummary, updateNotificationBell };

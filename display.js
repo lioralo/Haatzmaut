@@ -1,5 +1,5 @@
 const STORAGE_KEY = "haatzmaut_v5";
-const DISPLAY_PAGE_VERSION = "20260610e";
+const DISPLAY_PAGE_VERSION = "20260610f";
 const WORK_START = 8 * 60;
 const WORK_END = 20 * 60;
 const SLOT_MIN = 30;
