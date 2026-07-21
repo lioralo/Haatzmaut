@@ -19,7 +19,7 @@
   <div id="toast" class="toast" aria-live="assertive" role="status"></div>
 
   <!-- Notification bell -->
-  <button id="notificationBell" class="notification-bell hidden" aria-label="התראות">
+  <button id="notificationBell" class="notification-bell hidden" aria-label="התראות" aria-expanded="false">
     <span class="bell-icon">🔔</span>
     <span id="notificationBadge" class="bell-badge">0</span>
   </button>
@@ -44,11 +44,11 @@
 
       <div class="dialog-body">
         <div class="dialog-grid">
-          <label>חדר <select id="bookingRoomSel" required></select></label>
-          <label>שעת התחלה <select id="bookingStart" required></select></label>
-          <label>שעת סיום <select id="bookingEnd" required></select></label>
-          <label>צוות <select id="bookingTeam" required></select></label>
-          <label class="d-full">איש/ת צוות <input dir="auto" id="bookingStaff" list="bookingStaffList" autocomplete="off" required /></label>
+          <label>חדר <select id="bookingRoomSel" required aria-required="true"></select></label>
+          <label>שעת התחלה <select id="bookingStart" required aria-required="true"></select></label>
+          <label>שעת סיום <select id="bookingEnd" required aria-required="true"></select></label>
+          <label>צוות <select id="bookingTeam" required aria-required="true"></select></label>
+          <label class="d-full">איש/ת צוות <input dir="auto" id="bookingStaff" list="bookingStaffList" autocomplete="off" required aria-required="true" /></label>
           <label>סוג פגישה
             <select id="bookingNoteType">
               <option value="therapy">טיפול</option>
@@ -90,7 +90,6 @@
       <p class="eyebrow">מערכת ניהול מרפאה פנימית</p>
       <h1>מרפאה</h1>
     </div>
-    <button id="langSwitchBtn" class="secondary" style="font-size:.82rem;padding:.25rem .55rem">English</button>
     <div id="sessionBar" class="session-bar hidden">
       <div class="session-text">
         <span id="activeUser"></span>
@@ -102,13 +101,15 @@
 
   <!-- Login -->
   <section id="loginSection" class="card auth-card">
-    <h2>כניסה מאובטחת</h2>
-    <p class="muted">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
-    <a class="display-entry-link" href="display.html?v=20260720" target="_blank" rel="noopener">תצוגת קליניקה חיה (למסך המתנה)</a>
+    <h2 data-i18n="login.title">כניסה מאובטחת</h2>
+    <p class="muted" data-i18n="login.subtitle">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
+    <button id="langSwitchBtnLogin" class="secondary" style="font-size:.82rem;padding:.25rem .55rem;margin-bottom:.5rem">English</button>
+    <a class="display-entry-link" href="display.html?v=20260720" target="_blank" rel="noopener" data-i18n="display.liveView">תצוגת קליניקה חיה (למסך המתנה)</a>
+    <a class="display-entry-link" href="accessibility.html" data-i18n="accessibility.statement">הצהרת נגישות</a>
     <form id="loginForm" class="auth-form">
-      <label>שם משתמש <input dir="auto" id="username" autocomplete="username" required /></label>
-      <label>סיסמה <input dir="auto" id="password" type="password" autocomplete="current-password" required /></label>
-      <button type="submit">כניסה</button>
+      <label><span data-i18n="login.username">שם משתמש</span> <input dir="auto" id="username" autocomplete="username" required aria-required="true" aria-describedby="loginError" /></label>
+      <label><span data-i18n="login.password">סיסמה</span> <input dir="auto" id="password" type="password" autocomplete="current-password" required aria-required="true" /></label>
+      <button type="submit" data-i18n="login.submit">כניסה</button>
     </form>
     <p id="loginError" class="error hidden"></p>
     <div class="demo-creds" id="demoCreds">
@@ -134,46 +135,48 @@
         <nav class="sidebar-nav">
           <button data-tab="dashboardTab" class="sidebar-item active">
             <span class="sidebar-icon">▦</span>
-            <span class="sidebar-label">לוח הזמנות</span>
+            <span class="sidebar-label" data-i18n="sidebar.schedule">לוח הזמנות</span>
           </button>
           <button data-tab="requestsTab" class="sidebar-item">
             <span class="sidebar-icon">☰</span>
-            <span class="sidebar-label">בקשות</span>
+            <span class="sidebar-label" data-i18n="sidebar.requests">בקשות</span>
             <span id="requestsBadge" class="sidebar-badge hidden">0</span>
           </button>
           <button data-tab="staffTab" class="sidebar-item admin-only hidden">
             <span class="sidebar-icon">◈</span>
-            <span class="sidebar-label">צוות ומשתמשים</span>
+            <span class="sidebar-label" data-i18n="sidebar.staff">צוות ומשתמשים</span>
           </button>
           <button data-tab="meetingsTab" class="sidebar-item">
             <span class="sidebar-icon">◉</span>
-            <span class="sidebar-label">ישיבות צוות</span>
+            <span class="sidebar-label" data-i18n="sidebar.meetings">ישיבות צוות</span>
           </button>
           <button data-tab="resourcesTab" class="sidebar-item">
             <span class="sidebar-icon">⊞</span>
-            <span class="sidebar-label">מרכז משאבים</span>
+            <span class="sidebar-label" data-i18n="sidebar.resources">מרכז משאבים</span>
           </button>
           <button data-tab="issuesTab" class="sidebar-item">
             <span class="sidebar-icon">⚡</span>
-            <span class="sidebar-label">תקלות</span>
+            <span class="sidebar-label" data-i18n="sidebar.issues">תקלות</span>
             <span id="issuesBadge" class="sidebar-badge hidden">0</span>
           </button>
           <div class="sidebar-divider"></div>
-          <button data-tab="adminTab" class="sidebar-item admin-only hidden">
-            <span class="sidebar-icon">⛭</span>
-            <span class="sidebar-label">ניהול מערכת</span>
-          </button>
-        </nav>
-        <div class="sidebar-footer">
           <a href="display.html?v=20260720" target="_blank" rel="noopener" class="sidebar-item">
             <span class="sidebar-icon">▣</span>
-            <span class="sidebar-label">מסך תצוגה</span>
+            <span class="sidebar-label" data-i18n="sidebar.display">מסך תצוגה</span>
           </a>
-        </div>
+          <button id="langSwitchBtn" class="sidebar-item" style="font-size:.82rem;text-align:start;width:100%">
+            <span class="sidebar-icon">🌐</span>
+            <span class="sidebar-label">English</span>
+          </button>
+          <button data-tab="adminTab" class="sidebar-item admin-only hidden">
+            <span class="sidebar-icon">⛭</span>
+            <span class="sidebar-label" data-i18n="sidebar.admin">ניהול מערכת</span>
+          </button>
+        </nav>
       </aside>
 
       <!-- Main content -->
-      <main class="main-content">
+      <main class="main-content" id="main-content">
 
         <!-- ======== DASHBOARD TAB (calendar) ======== -->
         <section id="dashboardTab" class="card tab-content">
@@ -195,7 +198,6 @@
             <div class="mode-tabs">
               <button data-calendar-mode="schedule" class="mode-tab active">תרשים יומי</button>
               <button data-calendar-mode="list" class="mode-tab">רשימת פגישות</button>
-              <button data-calendar-mode="print" class="mode-tab">הדפסה</button>
               <button data-calendar-mode="stats" class="mode-tab">סטטיסטיקה</button>
             </div>
             <div class="mode-actions">
@@ -403,27 +405,9 @@
 
         <!-- ======== RESOURCES TAB ======== -->
         <section id="resourcesTab" class="card tab-content hidden">
-          <div class="mode-toolbar">
-            <div class="mode-tabs">
-              <button data-mode="browse" class="mode-tab active">עיון</button>
-              <button data-mode="upload" class="mode-tab">העלאה</button>
-              <button data-mode="download" class="mode-tab">הורדות</button>
-            </div>
-          </div>
           <div id="resourcesBrowseMode">
+            <div class="section-head"><h2>מרכז משאבים</h2></div>
             <div id="resourceList"></div>
-          </div>
-          <div id="resourcesUploadMode" class="hidden">
-            <div class="section-head"><h2>העלאת קבצים</h2></div>
-            <div class="upload-area">
-              <p>גררו קבצים לכאן או לחצו לבחירה</p>
-              <input dir="auto" type="file" id="resourceFileUpload" multiple />
-            </div>
-            <div id="uploadProgress"></div>
-          </div>
-          <div id="resourcesDownloadMode" class="hidden">
-            <div class="section-head"><h2>הורדות</h2></div>
-            <div id="downloadableFilesList"></div>
           </div>
         </section>
 
@@ -456,6 +440,13 @@
 
         <!-- ======== ADMIN TAB ======== -->
         <section id="adminTab" class="card tab-content hidden admin-only">
+          <div class="admin-sub-tabs" style="display:flex;gap:.25rem;margin-bottom:.75rem;flex-wrap:wrap">
+            <button class="mode-tab active" data-admin-subtab="rooms">חדרים</button>
+            <button class="mode-tab" data-admin-subtab="display">מסך תצוגה</button>
+            <button class="mode-tab" data-admin-subtab="settings">הגדרות מרפאה</button>
+            <button class="mode-tab" data-admin-subtab="audit">בקרה וגיבויים</button>
+          </div>
+          <div data-admin-subtab="rooms" class="admin-subtab-content">
           <div class="admin-two-col">
             <article class="panel">
               <h3 class="panel-title">חדרים</h3>
@@ -476,6 +467,18 @@
               <div id="adminRoomList" class="admin-list"></div>
             </article>
             <article class="panel">
+              <h3 class="panel-title">ישיבות - יבוא CSV</h3>
+              <div class="template-links">
+                <a href="templates/meetings_template.csv" download>תבנית CSV לישיבות</a>
+                <label class="file-upload-label">יבוא ישיבות מקובץ <input dir="auto" type="file" id="meetingGroupUpload" accept=".csv,.json" /></label>
+              </div>
+              <p class="muted small">עמודות נדרשות: name, color, weeklyDay, defaultTime</p>
+              <div id="meetingImportStatus"></div>
+            </article>
+          </div>
+          </div>
+          <div data-admin-subtab="display" class="admin-subtab-content hidden">
+            <article class="panel">
               <h3 class="panel-title">מסך תצוגה</h3>
               <form id="displaySettingsForm" class="grid-form compact-form">
                 <label>החלפה בשניות <input dir="auto" id="displaySwitchSeconds" type="number" min="5" /></label>
@@ -492,27 +495,53 @@
               <div id="displayMessagesList"></div>
             </article>
           </div>
-          <article class="panel">
-            <h3 class="panel-title">הגדרות מרפאה</h3>
-            <div id="settingsForm"><form id="clinicSettingsForm" class="grid-form compact-form">
-              <label>שם מרפאה <input dir="auto" id="settingsClinicName" /></label>
-              <label>טלפון <input dir="auto" id="settingsClinicPhone" type="tel" dir="ltr" /></label>
-              <label>כתובת <input dir="auto" id="settingsClinicAddress" /></label>
-              <label>מדיניות ביטול (שעות) <input dir="auto" id="settingsCancelPolicy" type="number" min="0" /></label>
-              <label>משך משבצת (דקות) <select id="settingsSlotDuration"><option value="30">30</option><option value="45">45</option><option value="60">60</option></select></label>
-              <label class="full">צוותים <input dir="auto" id="settingsTeams" placeholder="מופרדים בפסיקים" /></label>
-              <div class="form-actions"><button type="submit">שמירה</button></div>
-            </form></div>
-          </article>
-          <article class="panel">
-            <h3>בקרה וגיבויים</h3>
-            <div class="template-links">
-              <button id="exportBackupBtn" class="secondary">ייצוא גיבוי (JSON)</button>
-              <label class="file-upload-label">שחזור <input dir="auto" type="file" id="backupUpload" accept=".json" /></label>
-              <button id="clearAuditBtn" class="secondary">נקה יומן</button>
-            </div>
-            <div id="adminAuditList" class="admin-list"></div>
-          </article>
+          <div data-admin-subtab="settings" class="admin-subtab-content hidden">
+            <article class="panel">
+              <h3 class="panel-title">הגדרות מרפאה</h3>
+              <div id="settingsForm"><form id="clinicSettingsForm" class="grid-form compact-form">
+                <label>שם מרפאה <input dir="auto" id="settingsClinicName" /></label>
+                <label>טלפון <input dir="auto" id="settingsClinicPhone" type="tel" dir="ltr" /></label>
+                <label>כתובת <input dir="auto" id="settingsClinicAddress" /></label>
+                <label>מדיניות ביטול (שעות) <input dir="auto" id="settingsCancelPolicy" type="number" min="0" /></label>
+                <label>משך משבצת (דקות) <select id="settingsSlotDuration"><option value="30">30</option><option value="45">45</option><option value="60">60</option></select></label>
+                <label class="full">צוותים <input dir="auto" id="settingsTeams" placeholder="מופרדים בפסיקים" /></label>
+                <div class="form-actions"><button type="submit">שמירה</button></div>
+              </form></div>
+            </article>
+          </div>
+          <div data-admin-subtab="audit" class="admin-subtab-content hidden">
+            <article class="panel">
+              <h3>בקרה וגיבויים</h3>
+              <div style="display:grid;gap:1rem">
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                  <button id="backupNowBtn" class="secondary">גיבוי עכשיו</button>
+                  <button id="exportBackupBtn" class="secondary">ייצוא (JSON)</button>
+                  <button id="exportEncryptedBtn" class="secondary">ייצוא מוצפן</button>
+                </div>
+                <div>
+                  <label style="font-weight:600;margin-bottom:.3rem">שחזור מגיבוי שמור:</label>
+                  <div style="display:flex;gap:.5rem;align-items:center">
+                    <select id="savedBackupSelect" style="max-width:300px"><option value="">-- בחר גיבוי --</option></select>
+                    <button id="restoreBackupBtn" class="btn-sm">שחזר</button>
+                    <button id="deleteBackupBtn" class="btn-sm secondary">מחק</button>
+                  </div>
+                </div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                  <label class="file-upload-label">טען מקובץ <input dir="auto" type="file" id="backupUpload" accept=".json" /></label>
+                  <label class="file-upload-label">טען מוצפן <input dir="auto" type="file" id="encryptedUpload" accept=".json" /></label>
+                </div>
+                <button id="clearAuditBtn" class="secondary">נקה יומן</button>
+              </div>
+            </article>
+            <article class="panel" style="margin-top:.75rem">
+              <h3 class="panel-title">גיבויים שמורים</h3>
+              <div id="savedBackupsList" class="admin-list"></div>
+            </article>
+            <article class="panel" style="margin-top:.75rem">
+              <h3>יומן בקרה</h3>
+              <div id="adminAuditList" class="admin-list"></div>
+            </article>
+          </div>
         </section>
 
       </main>

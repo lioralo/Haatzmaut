@@ -19,6 +19,7 @@ if (isProd) {
   mkdirSync("dist/templates", { recursive: true });
   copyFileSync("index.html", "dist/index.html");
   copyFileSync("display.html", "dist/display.html");
+  copyFileSync("accessibility.html", "dist/accessibility.html");
   copyFileSync("display.js", "dist/display.js");
   copyFileSync("styles.css", "dist/styles.css");
   copyFileSync("display.css", "dist/display.css");

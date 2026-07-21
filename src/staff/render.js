@@ -293,7 +293,7 @@ export function renderStaffDirectory() {
         <tbody>${staff.length ? staff.map(s => `
           <tr data-staff-id="${s.id}">
             <td><strong>${esc(s.fullName)}</strong></td>
-            <td dir="ltr">${esc(s.phone)}</td>
+            <td dir="ltr" style="text-align:center">${esc(s.phone)}</td>
             <td>${esc(s.email)}</td>
             <td>${esc(s.role)}</td>
             <td>${esc(s.team)}</td>
@@ -305,6 +305,23 @@ export function renderStaffDirectory() {
           </tr>
         `).join("") : '<tr><td colspan="7" class="empty-state">לא נמצאו אנשי צוות</td></tr>'}</tbody>
       </table>
+    </div>
+    <div class="section-head" style="margin-top:1.5rem"><h2>משתמשים</h2></div>
+    <div class="users-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-top:.5rem">
+      ${(state.users || []).length
+        ? state.users.map(u => {
+            const linkedStaff = u.staffId ? getStaffById(u.staffId) : null;
+            return `<div class="staff-card" style="display:flex;flex-direction:column;gap:.3rem;padding:.75rem">
+              <strong>${esc(u.username)}</strong>
+              <span class="user-role-badge ${u.role === 'admin' ? 'role-admin' : 'role-staff'}">${u.role === 'admin' ? 'מנהל' : 'צוות'}</span>
+              ${linkedStaff ? `<span class="muted small">משויך: ${esc(linkedStaff.fullName)}</span>` : `<span class="muted small">ללא שיוך</span>`}
+              <div style="margin-top:.25rem">
+                <button class="btn-sm" data-action="toggle-user-card" data-user-id="${u.id}">${u.active !== false ? 'השבת' : 'אפשר'}</button>
+              </div>
+            </div>`;
+          }).join("")
+        : '<p class="empty-state">אין משתמשים.</p>'
+      }
     </div>
   `;
 
@@ -323,6 +340,17 @@ export function renderStaffDirectory() {
       if (confirm("למחוק את איש הצוות?")) {
         import('./events.js').then(m => m.deleteStaffById(btn.dataset.delStaff));
       }
+    });
+  });
+
+  container.querySelectorAll("[data-action='toggle-user-card']").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const user = state.users.find(u => u.id === btn.dataset.userId);
+      if (!user) return;
+      user.active = !user.active;
+      persistState();
+      recordAudit("user.status.toggle", `${user.username} => ${user.active ? "active" : "inactive"}`, "critical", false);
+      renderStaffDirectory();
     });
   });
 }

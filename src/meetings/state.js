@@ -23,6 +23,48 @@ export function ensureDefaultGroups() {
   if (!state.meetingGroups.length) {
     state.meetingGroups = DEFAULT_GROUPS.map(g => ({ ...g }));
   }
+  ensureDefaultSundayMeetings();
+}
+
+export function ensureDefaultSundayMeetings() {
+  const now = localISO(new Date());
+  const existingSunday = state.meetings.find(m =>
+    m.date === now.split("-")[0] + "-" + now.split("-")[1] + "-" + now.split("-")[2] &&
+    m.time === "12:30" && m.groupIds && m.groupIds.length >= 2
+  );
+  if (existingSunday) return;
+
+  const defaultTeams = [
+    { name: "צוות מבוגרים", color: "#0072BC" },
+    { name: "צוות ילדים", color: "#F47B20" }
+  ];
+
+  defaultTeams.forEach((t, i) => {
+    let group = state.meetingGroups.find(g => g.name === t.name);
+    if (!group) {
+      group = normalizeGroup({
+        id: makeId("group"),
+        name: t.name,
+        color: t.color,
+        weeklyDay: 0,
+        defaultTime: "12:30"
+      });
+      state.meetingGroups.push(group);
+    }
+    const meeting = normalizeMeeting({
+      speaker: "",
+      title: `ישיבת ${t.name}`,
+      groupIds: [group.id],
+      date: now,
+      time: "12:30",
+      duration: 60,
+      recurringRule: "weekly",
+      agenda: `ישיבה שבועית של ${t.name}`
+    });
+    state.meetings.push(meeting);
+  });
+
+  persistState();
 }
 
 /* ============================================================

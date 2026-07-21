@@ -3,7 +3,7 @@
    Bootstraps core store, restores session, initializes all modules.
    ============================================================ */
 
-import { state, isAdmin, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState } from './core/store.js';
+import { state, isAdmin, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, startAutoBackup, exportFullBackup, exportEncryptedBackup, applyImportedState, importEncryptedBackup, saveManagedBackup, getManagedBackups, restoreManagedBackup, deleteManagedBackup } from './core/store.js';
 import { DEV_LOGIN_ENABLED, DEFAULT_ROOMS, DEFAULT_STAFF, DAY_DEFS } from './core/constants.js';
 import {
   byId, showToast, generatePassword, passwordForUser, makeId,
@@ -11,9 +11,9 @@ import {
 } from './core/utils.js';
 import {
   restoreSession, registerActivity, applyAccessControl,
-  renderSessionBar, logoutCurrentUser
+  renderSessionBar, logoutCurrentUser, clearSessionTimer
 } from './core/session.js';
-import { t, setLanguage, restoreLanguage } from './core/i18n.js';
+import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 
 import {
   ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
@@ -333,6 +333,7 @@ function renderActiveTab() {
 
   updateNotificationBell();
   applyTabMode(tab);
+  updateAllI18nBindings();
 }
 
 /* ----------------------------------------------------------
@@ -341,6 +342,7 @@ function renderActiveTab() {
 
 async function initialize() {
   restoreLanguage();
+  updateLangSwitchButton();
 
   /* Restore persisted state from localStorage */
   const stored = loadStoredState();
@@ -385,6 +387,8 @@ async function initialize() {
   expandRecurringEntries(8);
   autoMaintainMeetingWindow();
 
+  startAutoBackup();
+
   const loggedIn = restoreSession();
   if (loggedIn) {
     byId("loginSection").classList.add("hidden");
@@ -407,6 +411,8 @@ async function initialize() {
   initIssuesEvents();
   initResourcesEvents();
   initModeToolbars();
+  initAdminSubTabs();
+  initBackupHandlers();
 
   ensureSyncedScheduleWindow();
   runIntegrityAssistant();
@@ -559,11 +565,29 @@ function initLogin() {
    Language switch
    ---------------------------------------------------------- */
 
-byId("langSwitchBtn")?.addEventListener("click", () => {
-  const current = localStorage.getItem("ui_language") || "he";
+function updateLangSwitchButton() {
+  const lang = window.__APP_LANG__ || restoreLanguage();
+  const nextText = lang === "he" ? "English" : "עברית";
+  const sidebarBtn = byId("langSwitchBtn");
+  if (sidebarBtn) {
+    const label = sidebarBtn.querySelector(".sidebar-label");
+    if (label) label.textContent = nextText;
+    else sidebarBtn.textContent = nextText;
+  }
+  const loginBtn = byId("langSwitchBtnLogin");
+  if (loginBtn) loginBtn.textContent = nextText;
+}
+
+byId("langSwitchBtn")?.addEventListener("click", switchLang);
+byId("langSwitchBtnLogin")?.addEventListener("click", switchLang);
+
+function switchLang() {
+  const current = window.__APP_LANG__ || restoreLanguage();
   const next = current === "he" ? "en" : "he";
   setLanguage(next);
-});
+  updateLangSwitchButton();
+  showToast(next === "he" ? "השפה שונתה לעברית" : "Language switched to English", "info");
+}
 
 /* ----------------------------------------------------------
    Keyboard shortcuts
@@ -597,6 +621,8 @@ document.addEventListener("keydown", e => {
 byId("notificationBell")?.addEventListener("click", () => {
   const panel = byId("notificationPanel");
   panel.classList.toggle("hidden");
+  const expanded = !panel.classList.contains("hidden");
+  byId("notificationBell").setAttribute("aria-expanded", String(expanded));
   if (!panel.classList.contains("hidden")) renderNotificationPanel();
 });
 
@@ -630,6 +656,153 @@ byId("sidebarToggle")?.addEventListener("click", () => {
 });
 
 /* ----------------------------------------------------------
+   Admin sub-tabs
+   ---------------------------------------------------------- */
+
+function initAdminSubTabs() {
+  document.querySelectorAll("[data-admin-subtab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const subtab = btn.dataset.adminSubtab;
+      document.querySelectorAll("[data-admin-subtab]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      document.querySelectorAll(".admin-subtab-content").forEach(el => el.classList.add("hidden"));
+      const content = document.querySelector(`.admin-subtab-content[data-admin-subtab="${subtab}"]`);
+      if (content) content.classList.remove("hidden");
+    });
+  });
+}
+
+/* ----------------------------------------------------------
+   Backup handlers
+   ---------------------------------------------------------- */
+
+function initBackupHandlers() {
+  const exportBtn = byId("exportBackupBtn");
+  if (exportBtn) exportBtn.addEventListener("click", () => { exportFullBackup(); });
+
+  const exportEncBtn = byId("exportEncryptedBtn");
+  if (exportEncBtn) exportEncBtn.addEventListener("click", () => { exportEncryptedBackup(); });
+
+  const backupNowBtn = byId("backupNowBtn");
+  if (backupNowBtn) {
+    backupNowBtn.addEventListener("click", () => {
+      const b = saveManagedBackup("");
+      showToast(`גיבוי נשמר: ${b.label}`, "info");
+      renderManagedBackups();
+    });
+  }
+
+  const restoreBtn = byId("restoreBackupBtn");
+  if (restoreBtn) {
+    restoreBtn.addEventListener("click", () => {
+      const sel = byId("savedBackupSelect");
+      if (!sel || !sel.value) return;
+      if (!confirm("שחזור גיבוי יחליף את כל הנתונים. להמשיך?")) return;
+      try {
+        restoreManagedBackup(sel.value);
+        showToast("גיבוי שוחזר, טוען מחדש...", "info");
+        setTimeout(() => window.location.reload(), 800);
+      } catch (err) { showToast(err.message, "error"); }
+    });
+  }
+
+  const deleteBtn = byId("deleteBackupBtn");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", () => {
+      const sel = byId("savedBackupSelect");
+      if (!sel || !sel.value) return;
+      if (!confirm("למחוק את הגיבוי?")) return;
+      deleteManagedBackup(sel.value);
+      showToast("גיבוי נמחק.", "info");
+      renderManagedBackups();
+    });
+  }
+
+  const backupUpload = byId("backupUpload");
+  if (backupUpload) {
+    backupUpload.addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!confirm("שחזור גיבוי יחליף את כל הנתונים. להמשיך?")) { e.target.value = ""; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          applyImportedState(JSON.parse(reader.result));
+          showToast("גיבוי שוחזר, טוען מחדש...", "info");
+          setTimeout(() => window.location.reload(), 800);
+        } catch (err) { showToast("שגיאה בקובץ הגיבוי.", "error"); }
+      };
+      reader.readAsText(file);
+      e.target.value = "";
+    });
+  }
+
+  const encUpload = byId("encryptedUpload");
+  if (encUpload) {
+    encUpload.addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      importEncryptedBackup(file).then(() => {
+        setTimeout(() => window.location.reload(), 800);
+      });
+      e.target.value = "";
+    });
+  }
+
+  const clearAudit = byId("clearAuditBtn");
+  if (clearAudit) {
+    clearAudit.addEventListener("click", () => {
+      if (!confirm("לנקות את יומן הבקרה?")) return;
+      state.auditLog = [];
+      persistStateImmediate();
+      renderAuditLog();
+      renderManagedBackups();
+    });
+  }
+
+  renderManagedBackups();
+}
+
+function renderManagedBackups() {
+  const sel = byId("savedBackupSelect");
+  const list = byId("savedBackupsList");
+  const backups = getManagedBackups();
+
+  if (sel) {
+    sel.innerHTML = '<option value="">-- בחר גיבוי --</option>' +
+      backups.map(b => `<option value="${b.id}">${esc(b.label)} (${esc(b.createdAt)})</option>`).join("");
+  }
+
+  if (list) {
+    list.innerHTML = backups.length ? backups.map(b => `
+      <div class="admin-row">
+        <div class="admin-row-info">
+          <strong>${esc(b.label)}</strong>
+          <span class="muted small">${esc(b.createdAt)} · ${Math.round(b.size / 1024)}KB · ${b.rooms} חדרים · ${b.entries} הזמנות · ${b.meetings} ישיבות</span>
+        </div>
+        <div class="admin-row-acts">
+          <span class="user-role-badge role-admin">${Math.round(b.size / 1024)}KB</span>
+        </div>
+      </div>
+    `).join("") : '<p class="empty-state">אין גיבויים שמורים.</p>';
+  }
+}
+
+function renderAuditLog() {
+  const list = byId("adminAuditList");
+  if (!list) return;
+  list.innerHTML = (state.auditLog || []).slice(0, 50).map(a => `
+    <div class="admin-row">
+      <div class="admin-row-info">
+        <strong>${esc(a.action)}</strong>
+        <span class="muted small">${esc(a.user)} · ${esc(a.at)}</span>
+        ${a.detail ? `<span class="muted small">${esc(a.detail)}</span>` : ""}
+      </div>
+    </div>
+  `).join("") || '<p class="empty-state">אין רשומות.</p>';
+}
+
+/* ----------------------------------------------------------
    Boot
    ---------------------------------------------------------- */
 
@@ -638,6 +811,7 @@ window.addEventListener("beforeunload", persistStateImmediate);
 initNavigation();
 initLogin();
 await initialize();
+startAutoBackup();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

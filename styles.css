@@ -6,12 +6,12 @@
   --bg:          #f7f5f0;
   --surface:     #fbfaf7;
   --surface-2:   #f5f2ec;
-  --text:        #2d2d3a;
-  --muted:       #8c8279;
+  --text:        #1a1a26;
+  --muted:       #5c5450;
   --line:        #e4dfd6;
-  --primary:     #5d7b6f;
-  --primary-2:   #4a665b;
-  --primary-soft:#edf2ef;
+  --primary:     #1a2a20;
+  --primary-2:   #0f1a14;
+  --primary-soft:#e8efe9;
   --accent:      #c4a882;
   --accent-soft: #f6f1ea;
   --danger:      #c47b7b;
@@ -47,6 +47,8 @@ html { scroll-behavior: smooth; }
 body {
   margin: 0;
   min-height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Assistant', system-ui, sans-serif;
   font-size: 0.9375rem;
   color: var(--text);
@@ -105,10 +107,20 @@ h3 { font-size: 0.95rem; }
   border-inline-end: none;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: hidden;
   transition: width 200ms ease;
   position: relative;
+  height: 100%;
+  max-height: 100vh;
 }
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-nav::-webkit-scrollbar { display: none; }
 .sidebar-collapsed .sidebar-nav .sidebar-label,
 .sidebar-collapsed .sidebar-nav .sidebar-badge,
 .sidebar-collapsed .sidebar-footer .sidebar-label { display: none; }
@@ -576,12 +588,15 @@ textarea { min-height: 90px; resize: vertical; }
   border: 1.5px solid rgba(93,123,111,.2);
   background: rgba(255,255,255,.88);
   cursor: pointer; font-size: .88rem;
+  color: var(--text);
+  font-weight: 500;
 }
 .chip input { width: auto; padding: 0; box-shadow: none; border: none; background: transparent; }
 .chip-active, .chip:has(input:checked) {
-  background: rgba(93,123,111,.14);
-  border-color: rgba(93,123,111,.42);
+  background: rgba(93,123,111,.18);
+  border-color: var(--primary);
   font-weight: 700;
+  color: var(--primary);
 }
 
 /* ============================================================
@@ -721,6 +736,7 @@ textarea { min-height: 90px; resize: vertical; }
 .tc-default{ background: #f0fdf4;          color: #14532d;            border-color: #86efac; }
 
 .bcard-onetime { outline: 2px dashed var(--accent); }
+.bcard-meeting { border-inline-start: 3px solid var(--accent); }
 
 .bcard-head {
   display: flex; align-items: flex-start; justify-content: space-between;
@@ -846,7 +862,7 @@ dialog::backdrop {
    NOTIFICATION BELL & PANEL
    ============================================================ */
 .notification-bell {
-  position: fixed; bottom: 24px; inset-inline-start: 24px; z-index: 100;
+  position: fixed; bottom: 24px; inset-inline-end: 24px; z-index: 100;
   width: 50px; height: 50px; border-radius: 50%;
   background: var(--surface-2); border: 1px solid var(--line);
   box-shadow: 0 2px 8px rgba(0,0,0,0.12); cursor: pointer;
@@ -863,7 +879,7 @@ dialog::backdrop {
 }
 
 .notification-panel {
-  position: fixed; bottom: 84px; inset-inline-start: 24px; z-index: 99;
+  position: fixed; bottom: 84px; inset-inline-end: 24px; z-index: 99;
   width: 320px; max-height: 400px;
   background: var(--surface-2); border-radius: 12px;
   box-shadow: var(--shadow-lg); overflow: hidden;
@@ -1325,6 +1341,32 @@ h4 { font-size: 0.875rem; font-weight: 500; }
    ============================================================ */
 .empty-state { padding: 2rem 1rem; text-align: center; color: var(--muted); font-size: 0.875rem; }
 .empty-state::before { display: block; content: ""; font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.4; }
+
+/* Transition for tab content switching */
+.tab-content { transition: opacity 150ms ease; opacity: 1; }
+.tab-content.hidden { opacity: 0; pointer-events: none; }
+
+/* Table scroll shadow indicator */
+.table-scroll { position: relative; }
+.table-scroll::after {
+  content: "";
+  position: sticky; inset-inline-start: 0; bottom: 0;
+  width: 100%; height: 0;
+  box-shadow: none;
+  transition: box-shadow 200ms ease;
+  pointer-events: none;
+  z-index: 0;
+}
+.table-scroll.has-scroll::after {
+  box-shadow: inset 0 -8px 8px -8px rgba(45,45,58,0.12);
+}
+
+/* Slot hover transition */
+.slot-empty { transition: background 150ms ease; }
+
+/* Card hover lift */
+.bcard { transition: transform 150ms ease, box-shadow 150ms ease; }
+.bcard:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(45,45,58,0.1); }
 
 /* ============================================================
    FORM INPUT POLISH — dir="auto" for mixed content

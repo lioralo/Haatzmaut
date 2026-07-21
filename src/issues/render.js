@@ -87,6 +87,7 @@ export function renderIssuesBoard() {
     const renderCard = (issue) => {
       const ms = Date.now() - new Date(issue.createdAt.split('/').reverse().join('-')).getTime();
       const daysAgo = Math.max(0, Math.floor(ms / 86400000));
+      const canComplete = issue.status === "in_progress";
       return `
         <div class="kanban-card" draggable="true" data-issue-id="${issue.id}">
           <div class="kc-room">${esc(issue.roomId ? getRoomName(issue.roomId) : (issue.room || "כללי"))}</div>
@@ -97,6 +98,10 @@ export function renderIssuesBoard() {
             ${issue.assignedTo ? `<span>&#x1F4CC; ${esc(getStaffById(issue.assignedTo)?.fullName || issue.assignedTo)}</span>` : ""}
           </div>
           <div class="kc-meta" style="margin-top:.2rem">&#x05DC;&#x05E4;&#x05E0;&#x05D9; ${daysAgo} &#x05D9;&#x05DE;&#x05D9;&#x05DD;</div>
+          <div style="display:flex;gap:.25rem;margin-top:.3rem">
+            <button class="btn-sm" data-action="expand" data-issue-id="${issue.id}">&#x05E4;&#x05E8;&#x05D8;&#x05D9;&#x05DD;</button>
+            ${canComplete ? `<button class="btn-sm" data-action="quick-complete" data-issue-id="${issue.id}">&#x05D4;&#x05E9;&#x05DC;&#x05DD; &#x05D8;&#x05D9;&#x05E4;&#x05D5;&#x05DC;</button>` : ""}
+          </div>
         </div>`;
     };
 
@@ -187,6 +192,13 @@ export function renderIssueDetail(issue) {
         ${staff ? `<div><strong>&#x05DE;&#x05E9;&#x05D5;&#x05D9;&#x05DA; &#x05DC;:</strong> ${esc(staff.fullName)}</div>` : ""}
       </div>
       <div class="detail-details">${esc(iss.details)}</div>
+      ${isAdmin() ? `
+        <div class="detail-assign" style="margin:.5rem 0">
+          <label>עריכת תיאור:</label>
+          <textarea data-action="edit-details" data-issue="${iss.id}" rows="3" style="width:100%">${esc(iss.details)}</textarea>
+          <button class="btn-sm" data-action="save-details" data-issue="${iss.id}" style="margin-top:.25rem">שמור תיאור</button>
+        </div>
+      ` : ""}
 
       <div class="detail-actions">
         ${allowedTransitions.map(st =>
@@ -205,6 +217,19 @@ export function renderIssueDetail(issue) {
               `<option value="${s.id}"${iss.assignedTo === s.id ? " selected" : ""}>${esc(s.fullName)}</option>`
             ).join("")}
           </select>
+        </div>
+        <div class="detail-assign">
+          <label>&#x05D0;&#x05D7;&#x05E8;&#x05D0;&#x05D9; &#x05EA;&#x05D9;&#x05E7;&#x05D5;&#x05DF;:</label>
+          <select data-action="fixer" data-issue="${iss.id}">
+            <option value="">-- &#x05D1;&#x05D7;&#x05E8; &#x05D0;&#x05D7;&#x05E8;&#x05D0;&#x05D9; &#x05EA;&#x05D9;&#x05E7;&#x05D5;&#x05DF; --</option>
+            ${state.staff.map(s =>
+              `<option value="${s.id}"${iss.fixer === s.id ? " selected" : ""}>${esc(s.fullName)}</option>`
+            ).join("")}
+          </select>
+        </div>
+        <div class="detail-assign">
+          <label>&#x05EA;&#x05D0;&#x05E8;&#x05D9;&#x05DA; &#x05D9;&#x05E2;&#x05D3; &#x05DC;&#x05EA;&#x05D9;&#x05E7;&#x05D5;&#x05DF;:</label>
+          <input type="date" data-action="target-fix-date" data-issue="${iss.id}" value="${esc(iss.targetFixDate || "")}" />
         </div>
       ` : ""}
 

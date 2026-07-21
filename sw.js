@@ -1,6 +1,6 @@
 const CACHE_NAME = "haatzmaut-v1";
 const ASSETS = [
-  "/", "/index.html", "/styles.css", "/display.html", "/display.css", "/display.js",
+  "/", "/index.html", "/styles.css", "/display.html", "/display.css", "/display.js", "/accessibility.html",
   "/src/main.js", "/src/core/constants.js", "/src/core/utils.js", "/src/core/store.js", "/src/core/session.js", "/src/core/index.js",
   "/src/calendar/state.js", "/src/calendar/render.js", "/src/calendar/events.js",
   "/src/staff/state.js", "/src/staff/render.js", "/src/staff/events.js",

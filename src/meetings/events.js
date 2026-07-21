@@ -18,7 +18,8 @@ import {
 import {
   renderMeetingGroups, renderGroupForm,
   renderMeetingForm, renderAllMeetings,
-  setMeetingGroupFilter, renderMeetingTimeline
+  setMeetingGroupFilter, renderMeetingTimeline,
+  setMeetingSubTab
 } from './render.js';
 
 /* ============================================================
@@ -213,6 +214,14 @@ function bindDelegatedClicks() {
     if (filterBtn) {
       const gid = filterBtn.dataset.meetingGroupFilter;
       setMeetingGroupFilter(gid || null);
+      renderMeetingTimeline();
+      return;
+    }
+
+    const subTabBtn = e.target.closest("[data-meeting-sub-tab]");
+    if (subTabBtn) {
+      const subtab = subTabBtn.dataset.meetingSubTab;
+      setMeetingSubTab(subtab);
       renderMeetingTimeline();
       return;
     }

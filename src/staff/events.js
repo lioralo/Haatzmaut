@@ -7,7 +7,9 @@ import {
   normalizeUser,
   enforceMaxLength,
   normalizeUsernameInput,
-  showToast
+  showToast,
+  validatePhoneIL,
+  formatPhoneForDisplay
 } from '../core/index.js';
 import {
   state,
@@ -89,6 +91,15 @@ export function initStaffEvents() {
       role:     byId("adminStaffRole").value,
       team:     byId("adminStaffTeam").value
     };
+
+    const phoneValidation = validatePhoneIL(formData.phone);
+    if (formData.phone && !phoneValidation.valid) {
+      showToast(`טלפון: ${phoneValidation.error}`, "error");
+      return;
+    }
+    if (phoneValidation.valid) {
+      formData.phone = phoneValidation.localized;
+    }
 
     try {
       const person = id

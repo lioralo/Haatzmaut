@@ -215,6 +215,90 @@ export function exportFullBackup() {
   triggerJsonDownload(`haatzmaut_backup_${ts}.json`, payload);
 }
 
+async function deriveKey(password) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: new TextEncoder().encode("haatzmaut-salt-v1"), iterations: 200000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+export async function exportEncryptedBackup() {
+  const password = prompt("הזן סיסמה להצפנת הגיבוי:");
+  if (!password) return;
+  try {
+    const payload = {
+      _schemaVersion: STORAGE_VERSION,
+      exportedAt: new Date().toISOString(),
+      app: "haatzmaut",
+      data: serializedState()
+    };
+    const json = JSON.stringify(payload);
+    const key = await deriveKey(password);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const enc = new TextEncoder();
+    const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(json));
+    const result = { enc: true, iv: Array.from(iv), data: Array.from(new Uint8Array(encrypted)) };
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    triggerJsonDownload(`haatzmaut_encrypted_${ts}.json`, result);
+    showToast("גיבוי מוצפן יוצא.", "info");
+  } catch (err) { showToast("שגיאה בהצפנה: " + err.message, "error"); }
+}
+
+export async function importEncryptedBackup(file) {
+  const password = prompt("הזן סיסמה לפענוח הגיבוי:");
+  if (!password) return;
+  try {
+    const text = await file.text();
+    const blob = JSON.parse(text);
+    if (!blob.enc || !blob.data || !blob.iv) throw new Error("קובץ מוצפן לא תקין.");
+    const key = await deriveKey(password);
+    const iv = new Uint8Array(blob.iv);
+    const ciphertext = new Uint8Array(blob.data);
+    const decrypted = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+    const json = new TextDecoder().decode(decrypted);
+    const payload = JSON.parse(json);
+    applyImportedState(payload);
+    showToast("גיבוי מוצפן שוחזר בהצלחה.", "info");
+  } catch (err) { showToast("שגיאה בפענוח - ייתכן שהסיסמה שגויה.", "error"); }
+}
+
+const AUTOBACKUP_KEY = "haatzmaut_autobackup";
+const AUTOBACKUP_INTERVAL_MS = 60 * 60 * 1000;
+const AUTOBACKUP_MAX = 24;
+
+let _autoBackupTimer = null;
+
+export function autoBackup() {
+  try {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      data: serializedState()
+    };
+    let backups = [];
+    try {
+      backups = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]");
+    } catch {}
+    if (!Array.isArray(backups)) backups = [];
+    backups.push(payload);
+    if (backups.length > AUTOBACKUP_MAX) {
+      backups = backups.slice(backups.length - AUTOBACKUP_MAX);
+    }
+    localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(backups));
+    showToast("גיבוי אוטומטי נשמר.", "info");
+  } catch {}
+}
+
+export function startAutoBackup() {
+  if (_autoBackupTimer) return;
+  autoBackup();
+  _autoBackupTimer = setInterval(autoBackup, AUTOBACKUP_INTERVAL_MS);
+}
+
 export function applyImportedState(rawState) {
   if (!rawState || typeof rawState !== "object") throw new Error("קובץ גיבוי לא תקין.");
   const candidate = rawState.data && typeof rawState.data === "object" ? rawState.data : rawState;
@@ -293,4 +377,53 @@ export function runIntegrityAssistant() {
   persistState();
   recordAudit("integrity.scan.repaired", integrity.report.join(" | "), "critical", true);
   showToast("תיקון הנתונים הושלם.", "info");
+}
+
+/* ============================================================
+   MANAGED BACKUPS (localStorage)
+   ============================================================ */
+
+const MANAGED_BACKUPS_KEY = "haatzmaut_managed_backups";
+const MAX_MANAGED = 50;
+
+export function saveManagedBackup(label = "") {
+  const payload = serializedState();
+  const backup = {
+    id: makeId("backup"),
+    label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
+    timestamp: new Date().toISOString(),
+    createdAt: new Date().toLocaleString("he-IL"),
+    size: JSON.stringify(payload).length,
+    rooms: (state.rooms || []).length,
+    entries: (state.schedule || []).length,
+    meetings: (state.meetings || []).length,
+    data: payload
+  };
+  let backups = [];
+  try { backups = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); } catch {}
+  if (!Array.isArray(backups)) backups = [];
+  backups.unshift(backup);
+  if (backups.length > MAX_MANAGED) backups = backups.slice(0, MAX_MANAGED);
+  localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+  return backup;
+}
+
+export function getManagedBackups() {
+  try { return JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); } catch {}
+  return [];
+}
+
+export function restoreManagedBackup(backupId) {
+  const backups = getManagedBackups();
+  const backup = backups.find(b => b.id === backupId);
+  if (!backup || !backup.data) throw new Error("גיבוי לא נמצא.");
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(backup.data));
+  persistStateImmediate();
+  recordAudit("state.restore", `שוחזר גיבוי: ${backup.label}`, "critical", false);
+}
+
+export function deleteManagedBackup(backupId) {
+  let backups = getManagedBackups();
+  backups = backups.filter(b => b.id !== backupId);
+  localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
 }

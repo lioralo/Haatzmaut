@@ -225,6 +225,7 @@ const translations = {
 
     /* Misc */
     "lang.switch": "English",
+    "accessibility.statement": "הצהרת נגישות",
     "notifications.clear": "נקה",
     "notifications.empty": "אין התראות",
     "toast.saved": "נשמר",
@@ -451,6 +452,7 @@ const translations = {
     "display.liveView": "Live Clinic Display (Waiting Room)",
 
     "lang.switch": "עברית",
+    "accessibility.statement": "Accessibility Statement",
     "notifications.clear": "Clear",
     "notifications.empty": "No notifications",
     "toast.saved": "Saved",
@@ -479,6 +481,34 @@ export function setLanguage(lang) {
   document.documentElement.lang = lang;
   document.documentElement.dir = lang === "he" ? "rtl" : "ltr";
   localStorage.setItem("app_lang", lang);
+  updateAllI18nBindings();
+}
+
+export function updateAllI18nBindings() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.dataset.i18n;
+    const text = t(key);
+    if (text && text !== key) {
+      if (el.children.length === 0) {
+        el.textContent = text;
+      } else {
+        const firstText = el.childNodes[0];
+        if (firstText && firstText.nodeType === 3) {
+          firstText.textContent = text;
+        }
+      }
+    }
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+    const key = el.dataset.i18nPlaceholder;
+    const text = t(key);
+    if (text && text !== key) el.placeholder = text;
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => {
+    const key = el.dataset.i18nTitle;
+    const text = t(key);
+    if (text && text !== key) el.title = text;
+  });
 }
 
 export function restoreLanguage() {
@@ -486,6 +516,7 @@ export function restoreLanguage() {
   window.__APP_LANG__ = saved;
   document.documentElement.lang = saved;
   document.documentElement.dir = saved === "he" ? "rtl" : "ltr";
+  updateAllI18nBindings();
   return saved;
 }
 

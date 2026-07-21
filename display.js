@@ -96,7 +96,16 @@ function getSettingsSignature(settings) {
 
 function activeMessages(state) {
   const now = Date.now();
-  return getDisplaySettings(state).messages.filter(message => !message.expiresAt || Date.parse(message.expiresAt) > now);
+  const displaySettings = state.displaySettings || {};
+  const allMessages = Array.isArray(displaySettings.messages) ? displaySettings.messages : [];
+  const active = allMessages.filter(message => !message.expiresAt || Date.parse(message.expiresAt) > now);
+  if (active.length !== allMessages.length) {
+    displaySettings.messages = active;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) { /* ignore */ }
+  }
+  return active;
 }
 
 function defaultRooms() {
@@ -115,17 +124,44 @@ function getTodaysEntries(state) {
   const weekISO = sundayISO(now);
   const day = now.getDay();
   const schedule = Array.isArray(state.schedule) ? state.schedule : [];
+  const staffList = Array.isArray(state.staff) ? state.staff : [];
+  const meetings = Array.isArray(state.meetings) ? state.meetings : [];
+  const rooms = Array.isArray(state.rooms) ? state.rooms : [];
 
-  return schedule
+  const getStaffFullName = (name) => {
+    const s = staffList.find(st => (st.fullName || "").trim() === name.trim());
+    return s ? s.fullName : name;
+  };
+
+  const scheduleEntries = schedule
     .filter(e => String(e.weekISO) === weekISO && Number(e.day) === day)
     .map(e => ({
       roomId: String(e.roomId || ""),
       start: String(e.start || "08:00"),
       duration: Math.max(30, Number(e.duration || 60)),
-      staff: String(e.staff || ""),
+      staff: getStaffFullName(String(e.staff || "")),
       team: String(e.team || ""),
-      note: String(e.note || "")
+      note: String(e.note || ""),
+      noteType: String(e.noteType || ""),
+      recurring: String(e.recurring || "")
     }));
+
+  const todayISO = localISO(now);
+  const meetingRoom = rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || rooms[0];
+  const meetingEntries = meetings
+    .filter(m => m.date === todayISO)
+    .map(m => ({
+      roomId: meetingRoom ? String(meetingRoom.id) : "",
+      start: String(m.time || "12:30"),
+      duration: Math.max(30, Number(m.duration || 60)),
+      staff: String(m.speaker || "צוות"),
+      team: "אדמיניסטרציה",
+      note: String(m.title || ""),
+      noteType: "meeting",
+      recurring: ""
+    }));
+
+  return [...scheduleEntries, ...meetingEntries];
 }
 
 function getWindowSlots(now, settings) {
@@ -161,6 +197,32 @@ function formatDateTime(now) {
   }).format(now);
 
   return { dayLabel, dateLabel, timeLabel };
+}
+
+function renderDailyStats(rooms, entries, now) {
+  const box = byId("dailyStatsBox");
+  if (!box) return;
+
+  const totalBookings = entries.length;
+  const nowMin = (now.getHours() * 60) + now.getMinutes();
+  const occupiedRooms = entries.filter(entry => {
+    const s = timeToMin(entry.start);
+    const e = s + entry.duration;
+    return nowMin >= s && nowMin < e;
+  });
+  const currentHourOccupancy = `${occupiedRooms.length}/${rooms.length}`;
+
+  const bookedRoomIds = new Set(entries.map(e => e.roomId));
+  const nextAvailableRoom = rooms.find(r => !bookedRoomIds.has(r.id));
+  const nextStr = nextAvailableRoom ? esc(nextAvailableRoom.name) : "אין";
+
+  box.innerHTML = `
+    <div class="stats-row">
+      <div class="stat-chip">הזמנות היום: <strong>${totalBookings}</strong></div>
+      <div class="stat-chip">תפוסה נוכחית: <strong>${currentHourOccupancy}</strong></div>
+      <div class="stat-chip">חדר פנוי הבא: <strong>${nextStr}</strong></div>
+    </div>
+  `;
 }
 
 function renderClock() {
@@ -224,8 +286,10 @@ function renderTable() {
 
       const content = matches.map(m => {
         const end = minToTime(timeToMin(m.start) + m.duration);
+        const recurringLabel = m.recurring ? ` · ${m.recurring === "weekly" ? "שבועית" : m.recurring === "biweekly" ? "דו-שבועית" : m.recurring === "monthly" ? "חודשית" : "חוזרת"}` : "";
+        const noteTypeLabel = m.noteType ? ` · ${esc(m.noteType)}` : "";
         const note = m.note ? `<span class="meta">${esc(m.note)}</span>` : "";
-        return `${esc(m.staff || "צוות")}${m.team ? ` · ${esc(m.team)}` : ""}<span class="meta">${esc(m.start)}-${end}</span>${note}`;
+        return `${esc(m.staff || "צוות")}${m.team ? ` · ${esc(m.team)}` : ""}${noteTypeLabel}${recurringLabel}<span class="meta">${esc(m.start)}-${end}</span>${note}`;
       }).join("<hr>");
 
       return `<td><div class="slot-booked">${content}</div></td>`;
@@ -240,6 +304,7 @@ function renderTable() {
 
   byId("displayTable").innerHTML = `${weekendMsg}<thead><tr><th class="time-col">שעה</th>${headCells}</tr></thead><tbody>${bodyRows}</tbody>`;
   renderNotifications(state);
+  renderDailyStats(rooms, entries, now);
 }
 
 function setupMessagesAutoScroll(box) {

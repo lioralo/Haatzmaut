@@ -13,6 +13,7 @@ import { byId, esc, showToast, enforceMaxLength } from '../core/utils.js';
 import {
   createIssue,
   updateIssueStatus,
+  updateIssue,
   addComment,
   assignIssue
 } from './state.js';
@@ -219,13 +220,16 @@ function handleBoardClick(e) {
     return;
   }
 
-  const cardMain = e.target.closest("[data-action='expand']");
-  if (cardMain) {
-    const card = cardMain.closest("[data-issue-id]");
-    if (card) {
-      expandIssue(card.dataset.issueId);
-      return;
-    }
+  const quickComplete = e.target.closest("[data-action='quick-complete']");
+  if (quickComplete) {
+    handleQuickComplete(quickComplete.dataset.issueId);
+    return;
+  }
+
+  const expandBtn = e.target.closest("[data-action='expand']");
+  if (expandBtn) {
+    expandIssue(expandBtn.dataset.issueId);
+    return;
   }
 
   const statusBtn = e.target.closest("[data-action='status-change']");
@@ -252,9 +256,21 @@ function handleBoardClick(e) {
 }
 
 function handleBoardChange(e) {
-  const target = e.target.closest("[data-action='assign']");
-  if (target) {
-    handleAssign(target.dataset.issue, target.value);
+  const assignTarget = e.target.closest("[data-action='assign']");
+  if (assignTarget) {
+    handleAssign(assignTarget.dataset.issue, assignTarget.value);
+    return;
+  }
+
+  const fixerTarget = e.target.closest("[data-action='fixer']");
+  if (fixerTarget) {
+    handleFixerChange(fixerTarget.dataset.issue, fixerTarget.value);
+    return;
+  }
+
+  const dateTarget = e.target.closest("[data-action='target-fix-date']");
+  if (dateTarget) {
+    handleTargetFixDate(dateTarget.dataset.issue, dateTarget.value);
     return;
   }
 }
@@ -300,6 +316,41 @@ function handleAssign(issueId, staffId) {
 function handleAddComment(issueId, text) {
   try {
     addComment(issueId, state.currentUser?.username || "system", text);
+    setExpanded(issueId);
+    renderIssuesBoard();
+    bindBoardEvents();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function handleQuickComplete(issueId) {
+  try {
+    const issue = state.issues.find(i => i.id === issueId);
+    if (!issue) return;
+    const nextStatus = issue.status === "in_progress" ? "resolved" : issue.status;
+    updateIssueStatus(issueId, nextStatus);
+    renderIssuesBoard();
+    bindBoardEvents();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function handleFixerChange(issueId, staffId) {
+  try {
+    updateIssue(issueId, { fixer: staffId || "" });
+    setExpanded(issueId);
+    renderIssuesBoard();
+    bindBoardEvents();
+  } catch (err) {
+    showToast(err.message, "error");
+  }
+}
+
+function handleTargetFixDate(issueId, dateVal) {
+  try {
+    updateIssue(issueId, { targetFixDate: dateVal || "" });
     setExpanded(issueId);
     renderIssuesBoard();
     bindBoardEvents();

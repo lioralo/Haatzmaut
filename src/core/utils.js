@@ -194,6 +194,15 @@ export function ensureUploadAllowed(file, label = "קובץ", allowedExt = ["csv
     showToast(`${label} גדול מדי. מקסימום ${Math.round(MAX_UPLOAD_SIZE / 1024)}KB.`, "error");
     return false;
   }
+  const validTypes = {
+    csv: ["text/csv", "text/plain", "application/vnd.ms-excel", "application/csv"],
+    json: ["application/json", "text/plain"]
+  };
+  const allowedTypes = allowedExt.flatMap(e => validTypes[e] || []);
+  if (allowedTypes.length && file.type && !allowedTypes.includes(file.type) && file.type !== "") {
+    showToast(`${label}: סוג קובץ לא מורשה (${file.type}).`, "error");
+    return false;
+  }
   return true;
 }
 
@@ -321,6 +330,46 @@ export function teamColorClass(team) {
   return map[team] || "tc-default";
 }
 
+export function validatePhoneIL(raw) {
+  const stripped = String(raw || "").replace(/[\s\-().]/g, "");
+  if (!stripped) return { valid: false, formatted: "", localized: "", type: "", error: "ריק" };
+  if (/^\+972/.test(stripped)) {
+    const local = "0" + stripped.slice(4);
+    return validatePhoneIL(local);
+  }
+  const mobileRegex = /^0(5[0-689]\d{7})$/;
+  if (mobileRegex.test(stripped)) {
+    const num = stripped;
+    return { valid: true, formatted: `${num.slice(0,3)}-${num.slice(3)}`, localized: num, type: "mobile", error: "" };
+  }
+  const landlineRegex = /^0([23489]\d{7})$/;
+  if (landlineRegex.test(stripped)) {
+    const num = stripped;
+    return { valid: true, formatted: `${num.slice(0,2)}-${num.slice(2)}`, localized: num, type: "landline", error: "" };
+  }
+  const nongeoRegex = /^0(7[2-9]\d{7})$/;
+  if (nongeoRegex.test(stripped)) {
+    const num = stripped;
+    return { valid: true, formatted: `${num.slice(0,3)}-${num.slice(3)}`, localized: num, type: "nongeo", error: "" };
+  }
+  const tollfreeRegex = /^1-?800\d{6}$/;
+  if (tollfreeRegex.test(stripped.replace("-", ""))) {
+    return { valid: true, formatted: stripped, localized: stripped, type: "tollfree", error: "" };
+  }
+  return { valid: false, formatted: stripped, localized: stripped, type: "", error: "מספר לא תקין" };
+}
+
+export function formatPhoneForDisplay(raw) {
+  const r = validatePhoneIL(raw);
+  return r.valid ? r.formatted : String(raw || "");
+}
+
+export function toE164(raw) {
+  const r = validatePhoneIL(raw);
+  if (!r.valid || r.type === "tollfree") return null;
+  return "+972" + r.localized.slice(1);
+}
+
 export function showToast(text, type = "info") {
   const toast = byId("toast");
   if (!toast) return;
@@ -328,4 +377,9 @@ export function showToast(text, type = "info") {
   toast.className    = `toast toast-${type} show`;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => toast.classList.remove("show"), 3200);
+  const live = byId("ariaLive");
+  if (live && (type === "error" || type === "warn")) {
+    live.textContent = text;
+    setTimeout(() => { if (live.textContent === text) live.textContent = ""; }, 4000);
+  }
 }

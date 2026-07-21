@@ -232,12 +232,12 @@ export function renderOccupancy() {
   const admin = isAdmin();
 
   const thRooms = rooms.map(r =>
-    `<th class="room-col-head" data-room-id="${r.id}">
+    `<th class="room-col-head" scope="col" role="columnheader" data-room-id="${r.id}">
        <span class="rcol-name">${esc(r.name)}</span>
        <small class="rcol-tags">${r.tags.map(t => esc(t)).join(" · ")}</small>
      </th>`
   ).join("");
-  const thead = `<thead><tr><th class="time-col-head">שעה</th>${thRooms}</tr></thead>`;
+  const thead = `<thead><tr role="row"><th class="time-col-head" scope="col" role="columnheader">שעה</th>${thRooms}</tr></thead>`;
 
   const skipSet = new Set();
 
@@ -255,13 +255,13 @@ export function renderOccupancy() {
       if (!cell) {
         const clickAttrs = `data-room-id="${room.id}" data-slot="${si}"`;
         if (admin) {
-          return `<td class="slot-empty slot-droptarget" ${clickAttrs}
-                    tabindex="0" role="button"
+          return `<td class="slot-empty slot-droptarget" ${clickAttrs} role="gridcell"
+                    tabindex="0"
                     aria-label="הוסף ב${esc(room.name)} ${timeLabel}">
                     <span class="slot-plus" aria-hidden="true">+</span>
                   </td>`;
         }
-        return `<td class="slot-empty" ${clickAttrs}></td>`;
+        return `<td class="slot-empty" ${clickAttrs} role="gridcell"></td>`;
       }
 
       if (!cell.isStart) return "";
@@ -271,37 +271,41 @@ export function renderOccupancy() {
         if (si + k < SLOT_COUNT) skipSet.add(`${room.id}:${si + k}`);
       }
 
+      const isMeeting = entry._isMeeting;
       const endTime = minToTime(timeToMin(entry.start) + entry.duration);
       const teamColor = teamColorClass(entry.team);
       const roomBand = roomColorClass(entry.roomId);
 
-      return `<td class="slot-booked ${roomBand}" rowspan="${span}" data-entry-id="${entry.id}">
-         <div class="bcard ${teamColor}${entry.oneTime ? " bcard-onetime" : ""}"
-              draggable="${admin}"
+      return `<td class="slot-booked ${roomBand}" rowspan="${span}" data-entry-id="${entry.id}" role="gridcell" aria-label="${esc(getRoomName(entry.roomId))} · ${esc(entry.staff)} · ${esc(entry.start)}-${endTime} · ${esc(entry.team)}">
+         <div class="bcard ${teamColor}${entry.oneTime ? " bcard-onetime" : ""}${isMeeting ? " bcard-meeting" : ""}"
+              draggable="${!isMeeting && admin}"
               data-entry-id="${entry.id}"
               data-room-id="${entry.roomId}"
               data-start-slot="${slotOf(entry.start)}">
            <div class="bcard-head">
-             <strong class="bcard-staff">${esc(entry.clientName || entry.staff)}</strong>
+             <strong class="bcard-staff">${isMeeting ? '&#x1F4CB; ' : ''}${esc(entry.clientName || entry.staff)}</strong>
+             ${isMeeting ? `<span class="bcard-badge" style="background:var(--accent)">ישיבה</span>` : ""}
              ${entry.oneTime ? `<span class="bcard-badge">חד-פעמי</span>` : ""}
              ${entry.sessionStatus && entry.sessionStatus !== "scheduled" ? `<span class="bcard-badge bcard-status-${entry.sessionStatus}">${entry.sessionStatus === "in-session" ? "בטיפול" : "הסתיים"}</span>` : ""}
            </div>
            <div class="bcard-room">${esc(getRoomName(entry.roomId))}${entry.clientName && entry.staff !== entry.clientName ? ` · ${esc(entry.staff)}` : ""}</div>
            <div class="bcard-time">${esc(entry.start)} – ${endTime}</div>
            <div class="bcard-dur">${entry.duration} דק׳${entry.noteType ? ` · ${esc(entry.noteType)}` : ""}</div>
-           ${admin ? `<button type="button" class="bcard-move-btn" data-entry-id="${entry.id}">העבר</button>` : ""}
+           ${admin && !isMeeting ? `<button type="button" class="bcard-move-btn" data-entry-id="${entry.id}">העבר</button>` : ""}
            ${entry.note ? `<div class="bcard-note">${esc(entry.note)}</div>` : ""}
          </div>
        </td>`;
     }).join("");
 
-    return `<tr class="slot-row${isHour ? " slot-full-hour" : ""}" data-slot="${si}">
-      <th class="time-cell${isHour ? " time-hour" : ""}">${timeLabel}</th>
+    return `<tr class="slot-row${isHour ? " slot-full-hour" : ""}" role="row" data-slot="${si}">
+      <th class="time-cell${isHour ? " time-hour" : ""}" scope="row" role="rowheader">${timeLabel}</th>
       ${cells}
     </tr>`;
   }).join("");
 
-  table.innerHTML = `${thead}<tbody>${rows}</tbody>`;
+  table.setAttribute("role", "grid");
+  table.setAttribute("aria-label", "לוח הזמנות יומי");
+  table.innerHTML = `<caption class="sr-only">לוח הזמנות – ${rooms.length} חדרים, שעות 08:00 עד 20:00</caption>${thead}<tbody>${rows}</tbody>`;
   bindTableInteractions(table, admin);
 }
 
@@ -402,7 +406,47 @@ export function renderTagFilters() {
    REQUESTS
    ============================================================ */
 
+export function populateRequestForm() {
+  const teamSel = byId("requestTeam");
+  const roomSel = byId("requestRoom");
+  const daySel  = byId("requestDay");
+  const startSel = byId("requestStart");
+  const endSel   = byId("requestEnd");
+  const staffList = byId("requestStaffList");
+  const staffInput = byId("requestStaff");
+
+  if (teamSel) teamSel.innerHTML = TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+  if (roomSel) roomSel.innerHTML = state.rooms.map(r => `<option value="${r.id}">${esc(r.name)}</option>`).join("");
+  if (daySel) daySel.innerHTML = DAY_DEFS.map(d => `<option value="${d.key}">${d.label}</option>`).join("");
+  if (startSel) startSel.innerHTML = Array.from({ length: SLOT_COUNT }, (_, i) => {
+    const t = minToTime(slotStart(i));
+    return `<option value="${t}">${t}</option>`;
+  }).join("");
+  if (endSel) {
+    const updateEndTimes = () => {
+      const startMin = timeToMin(startSel.value);
+      endSel.innerHTML = Array.from({ length: SLOT_COUNT + 1 }, (_, i) => {
+        const m = slotStart(i);
+        if (m <= startMin) return "";
+        const t = minToTime(m);
+        return `<option value="${t}">${t}</option>`;
+      }).join("");
+      if (!endSel.value || timeToMin(endSel.value) <= startMin) {
+        endSel.value = minToTime(Math.min(startMin + 60, WORK_END));
+      }
+    };
+    startSel.onchange = updateEndTimes;
+    updateEndTimes();
+  }
+  if (staffList) staffList.innerHTML = state.staff.map(s => `<option value="${esc(s.fullName)}">`).join("");
+  if (staffInput && !staffInput.value && state.currentUser?.staffId) {
+    const currentStaff = state.staff.find(s => s.id === state.currentUser.staffId);
+    if (currentStaff) staffInput.value = currentStaff.fullName;
+  }
+}
+
 export function renderRequests() {
+  populateRequestForm();
   const list = byId("requestsList");
   if (!list) return;
   if (!state.requests.length) {
@@ -487,9 +531,32 @@ export function renderRequests() {
 export function openBookingModal({ roomId, slot, entry } = {}) {
   const modal  = byId("bookingModal");
   const isEdit = Boolean(entry?.id);
+  const isMeeting = entry?._isMeeting;
   const admin  = isAdmin();
 
-  byId("bookingModalTitle").textContent = isEdit ? "עריכת הזמנה" : (admin ? "הוספת הזמנה" : "פרטי הזמנה");
+  if (isMeeting) {
+    byId("bookingModalTitle").textContent = "פרטי ישיבה";
+    byId("bookingEntryId").value = entry?.id || "";
+    byId("bookingDay").value = String(state.activeDay);
+    const meetingData = entry._meetingData || {};
+    const dialogBody = document.querySelector("#bookingModal .dialog-body");
+    if (dialogBody) {
+      dialogBody.innerHTML = `
+        <div style="display:grid;gap:.5rem;font-size:.9rem">
+          <strong>${esc(meetingData.title || entry.note || 'ישיבה')}</strong>
+          <div><strong>דובר:</strong> ${esc(meetingData.speaker || entry.staff || '—')}</div>
+          <div><strong>שעה:</strong> ${esc(entry.start)} – ${minToTime(timeToMin(entry.start) + entry.duration)}</div>
+          <div><strong>חדר:</strong> ${esc(getRoomName(entry.roomId))}</div>
+          ${meetingData.agenda ? `<div><strong>סדר יום:</strong> ${esc(meetingData.agenda)}</div>` : ''}
+          ${meetingData.link ? `<div><strong>קישור:</strong> <a href="${esc(meetingData.link)}" target="_blank">${esc(meetingData.link)}</a></div>` : ''}
+        </div>
+      `;
+    }
+    byId("bookingSubmit").classList.add("hidden");
+    byId("bookingDelete").classList.add("hidden");
+    byId("bookingClose2").textContent = "סגור";
+  } else {
+    byId("bookingModalTitle").textContent = isEdit ? "עריכת הזמנה" : (admin ? "הוספת הזמנה" : "פרטי הזמנה");
   byId("bookingEntryId").value = entry?.id  || "";
   byId("bookingDay").value     = String(entry?.day ?? state.activeDay);
 
@@ -549,8 +616,15 @@ export function openBookingModal({ roomId, slot, entry } = {}) {
   byId("bookingSubmit").classList.toggle("hidden", !admin);
   byId("bookingSuggestChange")?.classList.toggle("hidden", !isEdit);
   byId("bookingDelete").classList.toggle("hidden", !(admin && isEdit));
+  }
 
+  let _lastFocus = document.activeElement;
   modal.showModal();
+  const closeHandler = () => {
+    modal.removeEventListener("close", closeHandler);
+    if (_lastFocus && _lastFocus.focus) _lastFocus.focus();
+  };
+  modal.addEventListener("close", closeHandler);
 }
 
 export function closeBookingModal() { byId("bookingModal").close(); }
@@ -596,4 +670,44 @@ export function renderStatsDashboard() {
   }
 
   container.innerHTML = html;
+}
+
+export function renderRoomStatusStrip() {
+  const strip = document.getElementById("roomStatusStrip");
+  if (!strip) return;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const entries = activeDayEntries();
+  const rooms = state.rooms || [];
+  strip.innerHTML = rooms.map(room => {
+    const current = entries.find(e => {
+      const start = timeToMin(e.start);
+      const end = start + e.duration;
+      return e.roomId === room.id && start <= nowMin && nowMin < end;
+    });
+    const next = !current ? entries.find(e => {
+      return e.roomId === room.id && timeToMin(e.start) > nowMin;
+    }) : null;
+    let statusClass = "room-status-free";
+    let statusText = "פנוי";
+    let sessionText = "—";
+    let timeText = "";
+    if (current) {
+      statusClass = "room-status-occupied";
+      statusText = "בטיפול";
+      sessionText = esc(current.clientName || current.staff);
+      const end = timeToMin(current.start) + current.duration;
+      timeText = `עד ${minToTime(end)}`;
+    } else if (next && timeToMin(next.start) - nowMin < 15) {
+      statusClass = "room-status-soon";
+      statusText = "קרוב";
+      sessionText = esc(next.clientName || next.staff);
+      timeText = `${next.start}`;
+    }
+    return `<div class="room-status-card">
+      <div class="rs-room"><span class="room-status-dot ${statusClass}"></span>${esc(room.name)}</div>
+      <div class="rs-session">${sessionText}</div>
+      <div class="rs-time">${statusText} · ${timeText}</div>
+    </div>`;
+  }).join("");
 }

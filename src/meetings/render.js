@@ -22,9 +22,14 @@ import {
    ============================================================ */
 
 let meetingGroupFilter = null;
+let meetingSubTab = "upcoming";
 
 export function setMeetingGroupFilter(val) {
   meetingGroupFilter = val;
+}
+
+export function setMeetingSubTab(val) {
+  meetingSubTab = val;
 }
 
 /* ============================================================
@@ -272,18 +277,23 @@ export function renderMeetingTimeline() {
     }).join("");
   };
 
-  const renderCard = (m) => `
+  const renderCard = (m) => {
+    const [y, mo, d] = (m.date || "").split("-");
+    const dateStr = d && mo ? `${d}/${mo}` : "";
+    const isJoint = (m.groupIds || []).length > 1;
+    return `
     <div class="mt-card" data-meeting-id="${m.id}">
-      <div class="mt-time">${esc(m.time)}</div>
+      <div class="mt-time">${esc(m.time)}${dateStr ? `<span class="mt-date-chip">${dateStr}</span>` : ""}</div>
       <div class="mt-body">
         <div class="mt-title">${esc(m.title || m.speaker)}</div>
         <div class="mt-speaker">${esc(m.staffIds?.length ? getStaffNamesByIds(m.staffIds).join(", ") : m.speaker)} · ${m.duration} &#x05D3;&#x05E7;׳</div>
-        <div class="mt-badges">${renderGroupBadges(m.groupIds)}${(m.groupIds || []).length > 1 ? '<span class="mt-badge">&#x2727; &#x05DE;&#x05E9;&#x05D5;&#x05EA;&#x05E4;&#x05EA;</span>' : ''}</div>
+        <div class="mt-badges">${isJoint ? '<span class="mt-badge" style="background:var(--primary)20;color:var(--primary)">&#x05DE;&#x05E9;&#x05D5;&#x05EA;&#x05E4;&#x05EA;</span>' : renderGroupBadges(m.groupIds)}</div>
         ${RECURRING_PARENT_RULES.includes(m.recurringRule) ? `<div class="mt-recur">&#x1F501; &#x05EA;&#x05D1;&#x05E0;&#x05D9;&#x05EA; — ${recurringRuleLabel(m.recurringRule)}</div>` : ''}
         ${m.agenda ? `<div class="mt-recur">${esc(m.agenda.substring(0, 120))}${m.agenda.length > 120 ? "..." : ""}</div>` : ''}
       </div>
       ${admin ? `<div style="display:flex;gap:.25rem;align-items:center"><button class="btn-sm" data-action="edit-meeting" data-meeting-id="${m.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button><button class="btn-sm secondary" data-action="del-meeting" data-meeting-id="${m.id}">&#x05DE;&#x05D7;&#x05D9;&#x05E7;&#x05D4;</button><button class="btn-sm secondary" data-go-to-date="${m.date}">&#x1F4C5; &#x05E6;&#x05E4;&#x05D9;&#x05D4; &#x05D1;&#x05DC;&#x05D5;&#x05D7;</button></div>` : ''}
     </div>`;
+  };
 
   const filteredUpcoming = meetingGroupFilter
     ? upcoming.filter(m => (m.groupIds || []).includes(meetingGroupFilter))
@@ -294,18 +304,51 @@ export function renderMeetingTimeline() {
 
   let html = '';
 
-  html += `<div class="meeting-group-filters">
-    <button type="button" class="chip ${!meetingGroupFilter ? "chip-active" : ""}" data-meeting-group-filter="">&#x05D4;&#x05DB;&#x05DC;</button>
-    ${renderGroupFilterChips()}
+  html += `<div class="meeting-sub-tabs" style="display:flex;gap:.5rem;margin-bottom:.75rem">
+    <button type="button" class="chip ${meetingSubTab === "upcoming" ? "chip-active" : ""}" data-meeting-sub-tab="upcoming">ישיבות קרובות</button>
+    <button type="button" class="chip ${meetingSubTab === "past" ? "chip-active" : ""}" data-meeting-sub-tab="past">ישיבות שהתקיימו</button>
+    <button type="button" class="chip ${meetingSubTab === "groups" ? "chip-active" : ""}" data-meeting-sub-tab="groups">קבוצות</button>
   </div>`;
 
-  if (filteredUpcoming.length) {
-    html += `<h3>&#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D5;&#x05EA; &#x05E7;&#x05E8;&#x05D5;&#x05D1;&#x05D5;&#x05EA;</h3><div class="meeting-timeline">${filteredUpcoming.map(renderCard).join("")}</div>`;
+  if (meetingSubTab === "groups") {
+    html += `<div class="admin-list">
+      ${(state.meetingGroups || []).map(g => {
+        const dl = dayLabel(g.weeklyDay);
+        return `<div class="admin-row">
+          <div class="admin-row-info">
+            <span class="group-color-dot" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(g.color)};margin:0 0 0 6px;vertical-align:middle;"></span>
+            <strong>${esc(g.name)}</strong>
+            <span class="muted small">${dl} · ${esc(g.defaultTime)}</span>
+          </div>
+          ${admin ? `<div class="admin-row-acts">
+            <button class="btn-sm" data-action="edit-group" data-group-id="${g.id}">עריכה</button>
+            <button class="btn-sm danger" data-action="del-group" data-group-id="${g.id}">מחיקה</button>
+          </div>` : ""}
+        </div>`;
+      }).join("") || `<p class="empty-state">אין קבוצות.</p>`}
+    </div>`;
   } else {
-    html += `<p class="empty-state">&#x05D0;&#x05D9;&#x05DF; &#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D5;&#x05EA; &#x05E7;&#x05E8;&#x05D5;&#x05D1;&#x05D5;&#x05EA;.</p>`;
-  }
-  if (filteredPast.length) {
-    html += `<h3>&#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D5;&#x05EA; &#x05E9;&#x05D4;&#x05EA;&#x05E7;&#x05D9;&#x05D9;&#x05DE;&#x05D5;</h3><div class="meeting-timeline">${filteredPast.slice(0, 10).map(renderCard).join("")}</div>`;
+    html += `<div class="meeting-group-filters">
+      <button type="button" class="chip ${!meetingGroupFilter ? "chip-active" : ""}" data-meeting-group-filter="">הכל</button>
+      ${renderGroupFilterChips()}
+    </div>`;
+
+    if (meetingSubTab === "upcoming") {
+      if (filteredUpcoming.length) {
+        html += `<h3>ישיבות קרובות</h3><div class="meeting-timeline">${filteredUpcoming.map(renderCard).join("")}</div>`;
+      } else {
+        html += `<p class="empty-state">אין ישיבות קרובות.</p>`;
+      }
+    } else {
+      const allFilteredPast = meetingGroupFilter
+        ? past.filter(m => (m.groupIds || []).includes(meetingGroupFilter))
+        : past;
+      if (allFilteredPast.length) {
+        html += `<h3>ישיבות שהתקיימו (${allFilteredPast.length})</h3><div class="meeting-timeline">${allFilteredPast.map(renderCard).join("")}</div>`;
+      } else {
+        html += `<p class="empty-state">אין ישיבות שהתקיימו.</p>`;
+      }
+    }
   }
 
   list.innerHTML = html;

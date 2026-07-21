@@ -44,7 +44,8 @@ import {
   importScheduleFromFile,
   exportBookingsCSV,
   exportStaffCSV,
-  exportRoomsCSV
+  exportRoomsCSV,
+  resolveUnknownStaff
 } from './state.js';
 
 import {
@@ -196,11 +197,11 @@ export function initCalendarEvents() {
   /* Schedule file upload */
   const scheduleUpload = byId("scheduleUpload");
   if (scheduleUpload) {
-    scheduleUpload.addEventListener("change", e => {
+    scheduleUpload.addEventListener("change", async e => {
       const file = e.target.files?.[0];
       if (!ensureUploadAllowed(file, "קובץ לו\"ז")) { e.target.value = ""; return; }
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         try {
           const text = String(reader.result || "").trim();
           let records;
@@ -211,7 +212,21 @@ export function initCalendarEvents() {
           }
           const rows = Array.isArray(records) ? records : [];
           const validRows = rows.filter(isValidScheduleTemplateRecord);
-          const template = templateFromEntries(validRows, state.rooms);
+
+          const unknownStaff = validRows.map(r => String(r.staff || "").trim()).filter(Boolean);
+          const staffMap = await resolveUnknownStaff(unknownStaff);
+          if (staffMap === null) { showToast("ייבוא בוטל.", "info"); return; }
+          
+          const resolvedRows = validRows.map(r => ({
+            ...r,
+            staff: staffMap[String(r.staff || "").trim()] || r.staff,
+            clientName: r.clientName || "",
+            noteType: r.noteType || "therapy",
+            recurring: r.recurring || "",
+            recurringEnd: r.recurringEnd || ""
+          }));
+
+          const template = templateFromEntries(resolvedRows, state.rooms);
           if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
           const scope = byId("scheduleReplaceScope")?.value || "current-upcoming";
           const approved = confirmImportPreview("לו\"ז", rows.length, template.length, `טווח החלפה: ${scope}`);
@@ -327,6 +342,52 @@ export function initCalendarEvents() {
           addNotification(`יובא קובץ צוות: ${validRows.length} רשומות תקינות מתוך ${rows.length}. סה"כ צוות: ${state.staff.length} (לפני: ${beforeCount}).`);
         } catch (err) {
           showToast(`שגיאה בייבוא צוות: ${err.message}`, "error");
+        } finally {
+          e.target.value = "";
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
+
+  /* Meeting group CSV upload (from admin tab) */
+  const meetingGroupUpload = byId("meetingGroupUpload");
+  if (meetingGroupUpload) {
+    meetingGroupUpload.addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (!ensureUploadAllowed(file, "קובץ ישיבות")) { e.target.value = ""; return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const text = String(reader.result || "").trim();
+          const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
+          const rows = Array.isArray(records) ? records : [];
+          const validRows = rows.filter(r => r && typeof r === "object" && String(r.name || "").trim());
+          if (!validRows.length) throw new Error("לא נמצאו רשומות ישיבות תקינות בקובץ");
+          const approved = confirmImportPreview("ישיבות", rows.length, validRows.length);
+          if (!approved) { showToast("ייבוא ישיבות בוטל.", "info"); return; }
+          let imported = 0;
+          validRows.forEach(row => {
+            const g = {
+              id: makeId("group"),
+              name: String(row.name || "").trim(),
+              color: String(row.color || "#0072BC").trim(),
+              weeklyDay: Number.isFinite(Number(row.weeklyDay)) ? Math.min(4, Math.max(0, Number(row.weeklyDay))) : 0,
+              defaultTime: String(row.defaultTime || "09:00").trim()
+            };
+            if (!g.name) return;
+            state.meetingGroups = state.meetingGroups || [];
+            const idx = state.meetingGroups.findIndex(mg => mg.name === g.name);
+            if (idx >= 0) state.meetingGroups[idx] = g;
+            else state.meetingGroups.push(g);
+            imported++;
+          });
+          persistState();
+          addNotification(`יובאו ${imported} קבוצות ישיבות מתוך ${rows.length} רשומות.`);
+          const status = byId("meetingImportStatus");
+          if (status) status.innerHTML = `<span style="color:var(--primary)">יובאו ${imported} קבוצות.</span>`;
+        } catch (err) {
+          showToast(`שגיאה בייבוא: ${err.message}`, "error");
         } finally {
           e.target.value = "";
         }

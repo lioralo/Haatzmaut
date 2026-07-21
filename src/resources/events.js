@@ -1,46 +1,54 @@
-/* ============================================================
-   RESOURCES EVENTS - DOM event binding for file browser
-   ============================================================ */
-
 import { byId, esc, showToast, safeRender } from '../core/index.js';
+import { state } from '../core/store.js';
 import {
   createFolder, renameFolder, deleteFolder,
   uploadFile, deleteFileMeta, renameFile, moveFile,
-  getChildFolders, getFilesInFolder, getFolderPath
+  getChildFolders, getFilesInFolder
 } from './state.js';
 import {
   renderResourceBrowser, renderFolderTree,
   renderUploadProgress, hideUploadProgress,
-  setSearchQuery, getCurrentFolderId
+  showFilePreview, setCurrentFolderId
 } from './render.js';
 import { downloadFile as downloadFileFromDB } from './db.js';
 
-let _bound = false;
+let _folderId = null;
 
 function refreshAll() {
-  safeRender(() => renderResourceBrowser(getCurrentFolderId()), "resourceBrowser");
+  safeRender(() => renderResourceBrowser(_folderId), "resourceBrowser");
+  safeRender(renderFolderTree, "folderTree");
+}
+
+function navigateTo(folderId) {
+  _folderId = folderId || null;
+  setCurrentFolderId(_folderId);
+  renderResourceBrowser(_folderId);
   safeRender(renderFolderTree, "folderTree");
 }
 
 export function initResourcesEvents() {
-  if (_bound) return;
-  _bound = true;
-
   const list = byId("resourceList");
   if (!list) return;
 
-  // Delegate all resource browser clicks from #resourceList
   list.addEventListener("click", async (e) => {
     const btn = e.target.closest("[data-action]");
     if (!btn) return;
     const action = btn.dataset.action;
 
+    if (action === "navigate-folder") {
+      const folderId = btn.dataset.folderId || null;
+      navigateTo(folderId);
+      return;
+    }
+
     if (action === "new-folder") {
       const name = prompt("שם תיקיה חדשה:");
       if (!name) return;
+      const safeName = esc(String(name).trim());
+      if (!safeName) return;
       try {
-        createFolder(name, getCurrentFolderId());
-        showToast(`תיקיה "${name}" נוצרה.`);
+        createFolder(safeName, _folderId);
+        showToast(`תיקיה "${safeName}" נוצרה.`);
         refreshAll();
       } catch (err) {
         showToast(err.message, "error");
@@ -48,19 +56,14 @@ export function initResourcesEvents() {
       return;
     }
 
-    if (action === "navigate-folder") {
-      const folderId = btn.dataset.folderId || null;
-      renderResourceBrowser(folderId);
-      safeRender(renderFolderTree, "folderTree");
-      return;
-    }
-
     if (action === "rename-folder") {
       const folderId = btn.dataset.folderId;
       const newName = prompt("שם חדש לתיקיה:");
       if (!newName) return;
+      const safeName = esc(String(newName).trim());
+      if (!safeName) return;
       try {
-        renameFolder(folderId, newName);
+        renameFolder(folderId, safeName);
         showToast("שם התיקיה עודכן.");
         refreshAll();
       } catch (err) {
@@ -82,11 +85,23 @@ export function initResourcesEvents() {
       return;
     }
 
+    if (action === "open-file") {
+      const fileId = btn.dataset.fileId;
+      if (!fileId) return;
+      showFilePreview(fileId);
+      return;
+    }
+
     if (action === "download-file") {
       const fileId = btn.dataset.fileId;
       const fileName = btn.dataset.fileName || "file";
+      const fileObj = state.files.find(f => f.id === fileId);
+      if (!fileObj || !fileObj.dbId) {
+        showToast("שגיאה: הקובץ לא נמצא.", "error");
+        return;
+      }
       try {
-        await downloadFileFromDB(fileId, fileName);
+        await downloadFileFromDB(fileObj.dbId, fileName);
       } catch (err) {
         showToast("שגיאה בהורדת הקובץ.", "error");
       }
@@ -106,20 +121,6 @@ export function initResourcesEvents() {
       return;
     }
 
-    if (action === "rename-file") {
-      const fileId = btn.dataset.fileId;
-      const newName = prompt("שם חדש לקובץ:");
-      if (!newName) return;
-      try {
-        renameFile(fileId, newName);
-        showToast("שם הקובץ עודכן.");
-        refreshAll();
-      } catch (err) {
-        showToast(err.message, "error");
-      }
-      return;
-    }
-
     if (action === "move-file") {
       const fileId = btn.dataset.fileId;
       const allFolders = getChildFolders(null);
@@ -132,20 +133,17 @@ export function initResourcesEvents() {
         return options;
       };
       const folderOptions = `<option value="">שורש</option>\n${collectAll(allFolders)}`;
-      const selectHTML = `<select id="moveFileSelect" style="width:100%;margin-top:8px">${folderOptions}</select>`;
-      const wrapper = document.createElement("div");
-      wrapper.innerHTML = `<p style="margin-bottom:8px">בחר תיקית יעד:</p>${selectHTML}`;
       const dialog = document.createElement("dialog");
-      dialog.style.cssText = "padding:16px;border-radius:8px;border:1px solid #ccc;max-width:320px";
-      dialog.innerHTML = `<h3 style="margin:0 0 12px">העברת קובץ</h3>`;
-      dialog.appendChild(wrapper);
-      const btnRow = document.createElement("div");
-      btnRow.style.cssText = "margin-top:12px;display:flex;gap:8px;justify-content:flex-end";
-      btnRow.innerHTML = `
-        <button id="moveFileCancel" class="btn-sm secondary">ביטול</button>
-        <button id="moveFileConfirm" class="btn-sm">העבר</button>
+      dialog.style.cssText = "padding:16px;border-radius:12px;border:1px solid var(--line);max-width:320px;background:var(--surface-2);box-shadow:0 16px 48px rgba(0,0,0,0.2)";
+      dialog.innerHTML = `
+        <h3 style="margin:0 0 12px">העברת קובץ</h3>
+        <p style="margin-bottom:8px">בחר תיקית יעד:</p>
+        <select id="moveFileSelect" style="width:100%">${folderOptions}</select>
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button id="moveFileCancel" class="btn-sm secondary">ביטול</button>
+          <button id="moveFileConfirm" class="btn-sm">העבר</button>
+        </div>
       `;
-      dialog.appendChild(btnRow);
       document.body.appendChild(dialog);
       dialog.showModal();
       dialog.querySelector("#moveFileCancel").onclick = () => { dialog.close(); dialog.remove(); };
@@ -162,48 +160,38 @@ export function initResourcesEvents() {
     }
   });
 
-  // Upload file input change
-  const uploadInput = byId("resourceFileUpload");
-  if (uploadInput) {
-    uploadInput.addEventListener("change", async (e) => {
-      const files = e.target.files;
-      if (!files || !files.length) return;
-      renderUploadProgress();
-      let uploaded = 0;
-      for (const file of files) {
-        try {
-          await uploadFile(file, getCurrentFolderId());
-          uploaded++;
-        } catch (err) {
-          showToast(`שגיאה בהעלאת "${file.name}": ${err.message}`, "error");
-        }
+  list.addEventListener("change", async (e) => {
+    if (e.target.id !== "resourceFileUpload") return;
+    const files = e.target.files;
+    if (!files || !files.length) return;
+    renderUploadProgress();
+    let uploaded = 0;
+    for (const file of files) {
+      try {
+        await uploadFile(file, _folderId);
+        uploaded++;
+      } catch (err) {
+        showToast(`שגיאה בהעלאת "${file.name}": ${err.message}`, "error");
       }
-      hideUploadProgress();
-      if (uploaded > 0) showToast(`הועלו ${uploaded} קבצים.`);
-      e.target.value = "";
-      refreshAll();
-    });
-  }
+    }
+    hideUploadProgress();
+    if (uploaded > 0) showToast(`הועלו ${uploaded} קבצים.`);
+    e.target.value = "";
+    refreshAll();
+  });
 
-  // Search input
   list.addEventListener("input", (e) => {
     if (e.target.id === "resourceSearch") {
-      setSearchQuery(e.target.value.trim());
-      safeRender(() => renderResourceBrowser(getCurrentFolderId()), "resourceBrowser");
+      safeRender(() => renderResourceBrowser(_folderId), "resourceBrowser");
     }
   });
 
-  // Breadcrumb clicks are handled by the delegated click handler above
-
-  // Folder tree clicks in dedicated container
   const folderTreeBox = byId("folderTree");
   if (folderTreeBox) {
     folderTreeBox.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-action='navigate-folder']");
       if (!btn) return;
-      const folderId = btn.dataset.folderId || null;
-      renderResourceBrowser(folderId);
-      safeRender(renderFolderTree, "folderTree");
+      navigateTo(btn.dataset.folderId || null);
     });
   }
 }

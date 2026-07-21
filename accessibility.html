@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הצהרת נגישות</title>
+  <link rel="stylesheet" href="styles.css?v=20260720" />
+  <style>
+    .a11y-statement { max-width: 800px; margin: 2rem auto; padding: 2rem; }
+    .a11y-statement h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    .a11y-statement h2 { font-size: 1.15rem; margin-top: 1.5rem; margin-bottom: .5rem; }
+    .a11y-statement ul { margin: 0; padding-inline-start: 1.2rem; }
+    .a11y-statement li { margin-bottom: .35rem; line-height: 1.6; }
+    .a11y-statement .back-link { display: inline-block; margin-bottom: 1.5rem; color: var(--primary); font-weight: 700; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">דלג לתוכן הראשי</a>
+
+  <main id="main-content">
+    <article class="card a11y-statement">
+      <a href="index.html" class="back-link">← חזרה למערכת</a>
+
+      <h1>הצהרת נגישות</h1>
+
+      <p>אנו במרפאה מחויבים להנגשת האתר והמערכת לאנשים עם מוגבלויות בהתאם
+         לתקן הישראלי <strong>IS 5568</strong>, המעוגן ב-<strong>WCAG 2.0 ברמה AA</strong>,
+         כנדרש בחוק שוויון זכויות לאנשים עם מוגבלות (תשנ"ח-1998) ובתקנות שוויון זכויות
+         לאנשים עם מוגבלות (התאמות נגישות לשירות), התשע"ג-2013.</p>
+
+      <h2>אמצעי נגישות במערכת</h2>
+      <ul>
+        <li>המערכת תומכת בניווט מלא באמצעות <strong>מקלדת</strong> – כל הכפתורים, התפריטים והטפסים ניתנים להפעלה במקלדת</li>
+        <li>המערכת תומכת ב<strong>קוראי מסך</strong> (NVDA, JAWS, VoiceOver) – תוויות ARIA, תיאורי תפקידים, וניווט תקין</li>
+        <li>כל רכיבי הממשק מוגדרים עם <strong>תפקידי ARIA</strong> מתאימים (grid, row, columnheader, gridcell, dialog, alert)</li>
+        <li>לוח ההזמנות מוגדר כגריד נגיש (<code>role="grid"</code>) עם תאי כותרת ותוכן מזוהים</li>
+        <li><strong>דילוג לתוכן</strong> – קישור נסתר זמין להקשה ראשונה במקלדת לדילוג ישיר לתוכן המרכזי</li>
+        <li><strong>אזור התראות חיות</strong> (<code>aria-live</code>) – שינויי תוכן דינמיים מדווחים אוטומטית לקוראי מסך</li>
+        <li><strong>ניגודיות צבעים</strong> – עומדת ביחס 4.5:1 לפחות לטקסט רגיל ו-3:1 לטקסט גדול</li>
+        <li>שדות טופס <strong>משויכים לתוויות</strong> (<code>label</code>) ומוגדרים עם <code>aria-required</code> ו-<code>aria-describedby</code> לשגיאות</li>
+        <li><strong>שדות קלט דו-כיווניים</strong> – שדות טקסט חופשי מוגדרים עם <code>dir="auto"</code> לזיהוי אוטומטי של כיוון הכתיבה</li>
+        <li><strong>הפחתת תנועה</strong> – אנימציות מבוטלות אוטומטית עבור משתמשים שהגדירו <code>prefers-reduced-motion</code></li>
+        <li>המערכת בנויה עם <strong>מאפייני CSS לוגיים</strong> (<code>border-inline-start</code>, <code>margin-inline-end</code> וכו׳) כך שהפריסה מותאמת אוטומטית ל-RTL</li>
+      </ul>
+
+      <h2>מגבלות נגישות ידועות</h2>
+      <ul>
+        <li>טבלת לוח ההזמנות (גריד יומי) עשויה לדרוש גלילה אופקית במסכים קטנים – אנו ממליצים על שימוש במסך ברוחב 1200px לפחות לחוויית אדמין מלאה</li>
+        <li>גרירת הזמנות (drag & drop) נתמכת גם דרך מקלדת – יש להשתמש בכפתור "העבר" להעברה נגישה</li>
+        <li>חלק מקבצי ה-CSV המיוצאים אינם מותאמים למסמכים נגישים (IS 5568 Part 2) – אנו פועלים להוסיף ייצוא בפורמטים נתמכים</li>
+      </ul>
+
+      <h2>פנייה בנושא נגישות</h2>
+      <p><strong>רכז/ת נגישות:</strong> מנהל מערכת</p>
+      <p><strong>טלפון:</strong> <span dir="ltr">050-0000000</span></p>
+      <p><strong>דוא"ל:</strong> <a href="mailto:negishut@clinic.org">negishut@clinic.org</a></p>
+
+      <p>במידה ונתקלתם בבעיית נגישות במערכת, נשמח שתעדכנו אותנו ונפעל לתיקון בהקדם,
+         בהתאם לחוק (עד 60 ימים מקבלת הפנייה).</p>
+
+      <p><strong>תאריך ביקורת הנגישות האחרונה:</strong> 21 ביולי 2026</p>
+      <p><strong>תאריך עדכון ההצהרה:</strong> 21 ביולי 2026</p>
+    </article>
+  </main>
+</body>
+</html>

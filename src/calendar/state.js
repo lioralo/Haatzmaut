@@ -84,14 +84,15 @@ export function normalizeEntry(e, weekISO, roomsList) {
     start:    e.start    || e.startTime || e.hour || "08:00",
     duration: Math.max(30, Number(e.duration || 60)),
     staff:    String(e.staff  || "").trim(),
+    clientName: String(e.clientName || "").trim(),
     team:     String(e.team   || TEAMS[0]),
     oneTime:  Boolean(e.oneTime),
     note:     String(e.note   || e.notes || "").trim(),
     noteType: String(e.noteType || "therapy"),
     sessionStatus: e.sessionStatus || "scheduled",
     source:   String(e.source || "manual"),
-    recurringRule: e.recurringRule || null,
-    recurringEndDate: e.recurringEndDate || "",
+    recurringRule: e.recurringRule || e.recurring || null,
+    recurringEndDate: e.recurringEndDate || e.recurringEnd || "",
     parentRecurringId: e.parentRecurringId || "",
     cancelReason: e.cancelReason || "",
     cancelledAt: e.cancelledAt || ""
@@ -134,7 +135,11 @@ export function normalizeTemplateEntry(e, roomsList) {
     team: n.team,
     oneTime: n.oneTime,
     note: n.note,
-    noteType: n.noteType,
+    noteType: n.noteType || "therapy",
+    recurringRule: n.recurringRule || "",
+    recurringEndDate: n.recurringEndDate || "",
+    clientName: String(e.clientName || "").trim(),
+    sessionStatus: n.sessionStatus || "scheduled",
     source: n.source || "template"
   };
 }
@@ -272,9 +277,34 @@ export function mergeStaffWithLinkedPriority(existingStaff, incomingRecords, use
 export function activeDayDate() { return addDays(isoDate(state.weekISO), state.activeDay); }
 
 export function activeDayEntries() {
-  return state.schedule
+  const scheduleEntries = state.schedule
     .filter(e => e.weekISO === state.weekISO && e.day === state.activeDay)
     .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
+
+  const activeDate = localISO(activeDayDate());
+  const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
+
+  const meetingEntries = (state.meetings || [])
+    .filter(m => m.date === activeDate)
+    .map(m => ({
+      id: m.id,
+      weekISO: state.weekISO,
+      day: state.activeDay,
+      roomId: meetingRoom?.id || (state.rooms[0]?.id || ""),
+      start: m.time || "12:30",
+      duration: m.duration || 60,
+      staff: m.speaker || "",
+      team: "אדמיניסטרציה",
+      note: m.title || "",
+      oneTime: false,
+      source: "meeting",
+      _isMeeting: true,
+      _meetingData: m
+    }));
+
+  const all = [...scheduleEntries, ...meetingEntries];
+  all.sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
+  return all;
 }
 
 export function filteredRooms() {
@@ -293,7 +323,7 @@ export function weekRange() {
 
 export const getRoomById = id => state.rooms.find(r => r.id === id);
 export const getRoomName = id => getRoomById(id)?.name || id;
-export const getEntryById = id => state.schedule.find(e => e.id === id);
+export const getEntryById = id => state.schedule.find(e => e.id === id) || (state.meetings || []).find(m => m.id === id);
 
 /* ============================================================
    BUILD DEFAULT
@@ -528,4 +558,73 @@ export function getResolutionTimeAvg() {
 
 export function getSettings() {
   return state.settings || {};
+}
+
+export function resolveUnknownStaff(unknownNames) {
+  return new Promise((resolve) => {
+    const names = [...new Set(unknownNames.map(n => String(n).trim()).filter(Boolean))];
+    if (!names.length) { resolve({}); return; }
+    
+    const existingNames = new Set((state.staff || []).map(s => s.fullName));
+    const trulyUnknown = names.filter(n => !existingNames.has(n));
+    if (!trulyUnknown.length) { resolve({}); return; }
+
+    const dialog = document.createElement("dialog");
+    dialog.style.cssText = "padding:20px;border-radius:12px;border:1px solid var(--line);max-width:520px;width:90vw;background:var(--surface-2);box-shadow:0 16px 48px rgba(0,0,0,0.2)";
+    let html = '<h3 style="margin:0 0 8px">אנשי צוות לא מוכרים</h3><p class="muted small" style="margin:0 0 12px">השמות הבאים לא נמצאו ברשימת הצוות. בחר פעולה לכל אחד:</p>';
+    
+    const staffOptions = (state.staff || []).map(s => `<option value="${s.id}">${s.fullName}</option>`).join("");
+    
+    trulyUnknown.forEach((name, i) => {
+      html += `
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="min-width:80px">${name}</strong>
+          <select data-unknown-staff="${i}" data-name="${name}" style="width:auto;flex:1;min-width:140px">
+            <option value="create">הוסף לצוות</option>
+            <option value="text">השאר כטקסט חופשי</option>
+            ${state.staff.length ? `<optgroup label="שייך לאיש צוות קיים">${staffOptions}</optgroup>` : ''}
+          </select>
+        </div>`;
+    });
+
+    html += `
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+        <button id="unknownStaffCancel" class="btn-sm secondary">בטל</button>
+        <button id="unknownStaffConfirm" class="btn-sm">אישור</button>
+      </div>`;
+    
+    dialog.innerHTML = html;
+    document.body.appendChild(dialog);
+    dialog.showModal();
+
+    dialog.querySelector("#unknownStaffConfirm").onclick = () => {
+      const result = {};
+      dialog.querySelectorAll("[data-unknown-staff]").forEach(sel => {
+        const name = sel.dataset.name;
+        const val = sel.value;
+        if (val === "create") {
+          const id = makeId("staff");
+          const newStaff = { id, fullName: name, team: "מבוגרים", role: "", phone: "", email: "" };
+          state.staff.push(newStaff);
+          persistState();
+          recordAudit("staff.create.auto", `נוסף "${name}" במהלך ייבוא.`, "info");
+          result[name] = name;
+        } else if (val === "text") {
+          result[name] = name;
+        } else {
+          const s = (state.staff || []).find(st => st.id === val);
+          result[name] = s ? s.fullName : name;
+        }
+      });
+      dialog.close();
+      dialog.remove();
+      resolve(result);
+    };
+
+    dialog.querySelector("#unknownStaffCancel").onclick = () => {
+      dialog.close();
+      dialog.remove();
+      resolve(null);
+    };
+  });
 }
