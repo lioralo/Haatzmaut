@@ -8,7 +8,7 @@ await esbuild.build({
   outfile: "dist/app.min.js",
   minify: isProd,
   sourcemap: !isProd,
-  target: "es2020",
+  target: "es2022",
   legalComments: "none",
   format: "esm",
   define: { "__PROD__": isProd ? "true" : "false" }

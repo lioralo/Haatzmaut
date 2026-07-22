@@ -404,10 +404,7 @@ export function initCalendarEvents() {
       if (upl) upl.value = "";
     }
   });
-    });
-  }
 
-  /* Meeting group CSV upload (from admin tab) */
   const meetingGroupUpload = byId("meetingGroupUpload");
   if (meetingGroupUpload) {
     meetingGroupUpload.addEventListener("change", e => {

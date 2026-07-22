@@ -255,7 +255,22 @@ export function mergeStaffWithLinkedPriority(existingStaff, incomingRecords, use
           role: keeper.role || latestIncoming.role,
           team: keeper.team || latestIncoming.team,
           id: keeper.id
+        });
+      }
+    }
+
+    existing.forEach(s => {
+      if (s.id !== keeper.id) remap.set(s.id, keeper.id);
+    });
+    merged.push(keeper);
   });
+
+  const updatedUsers = (users || []).map(u => {
+    const mapped = remap.get(String(u.staffId || ""));
+    return mapped ? { ...u, staffId: mapped } : u;
+  });
+
+  return { staff: merged, users: updatedUsers };
 }
 
 export async function resolveUnmatchedStaffUsers(staffRecords, existingUsers) {
@@ -342,21 +357,6 @@ export async function resolveUnmatchedStaffUsers(staffRecords, existingUsers) {
     }
     resolve(results);
   });
-}
-    }
-
-    existing.forEach(s => {
-      if (s.id !== keeper.id) remap.set(s.id, keeper.id);
-    });
-    merged.push(keeper);
-  });
-
-  const updatedUsers = (users || []).map(u => {
-    const mapped = remap.get(String(u.staffId || ""));
-    return mapped ? { ...u, staffId: mapped } : u;
-  });
-
-  return { staff: merged, users: updatedUsers };
 }
 
 /* ============================================================

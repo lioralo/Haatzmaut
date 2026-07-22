@@ -1,0 +1,26 @@
+haatzmaut.lior-clinic.org {
+  tls {$TLS_EMAIL}
+
+  root * /srv/haatzmaut
+  file_server
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+
+  header /sw.js {
+    Cache-Control "public, max-age=3600"
+  }
+
+  header /manifest.json {
+    Cache-Control "public, max-age=3600"
+  }
+
+  header *.css *.js {
+    Cache-Control "public, max-age=86400"
+  }
+}
