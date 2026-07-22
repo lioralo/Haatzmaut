@@ -40,7 +40,10 @@ import {
   triggerCsvDownload,
   ensureUploadAllowed,
   confirmImportPreview,
-  enforceMaxLength
+  enforceMaxLength,
+  generatePassword,
+  passwordForUser,
+  normalizeUser
 } from '../core/utils.js';
 
 /* ============================================================
@@ -252,8 +255,94 @@ export function mergeStaffWithLinkedPriority(existingStaff, incomingRecords, use
           role: keeper.role || latestIncoming.role,
           team: keeper.team || latestIncoming.team,
           id: keeper.id
-        });
+  });
+}
+
+export async function resolveUnmatchedStaffUsers(staffRecords, existingUsers) {
+  const unmatched = staffRecords.filter(s => {
+    return !(existingUsers || []).some(u => u.staffId === s.id && u.active);
+  });
+
+  if (!unmatched.length) return [];
+
+  const unlinkedUsers = (existingUsers || []).filter(u => !u.staffId || !(state.staff || []).some(st => st.id === u.staffId));
+  const userOptions = unlinkedUsers.map(u => `<option value="${u.id}">${u.username} (${u.role})</option>`).join("");
+
+  return new Promise(async (resolve) => {
+    const results = [];
+    let applyToRemaining = null;
+
+    for (let i = 0; i < unmatched.length; i++) {
+      const s = unmatched[i];
+
+      if (applyToRemaining) {
+        if (applyToRemaining.choice === "create") {
+          const username = s.fullName.replace(/\s+/g, ".").replace(/[^a-zA-Z0-9._-]/g, "").substring(0, 50).toLowerCase() || `user${makeId("u")}`;
+          const rawPwd = generatePassword();
+          const { salt, passwordHash } = await passwordForUser(rawPwd);
+          results.push({ user: normalizeUser({ username, passwordHash, salt, role: "staff", staffId: s.id, active: true }), rawPassword: rawPwd, staffName: s.fullName });
+        } else if (applyToRemaining.existingUserId) {
+          results.push({ existingUserId: applyToRemaining.existingUserId, staffId: s.id, staffName: s.fullName });
+        }
+        continue;
       }
+
+      const remaining = unmatched.length - i;
+      const progress = remaining > 1 ? ` (${i + 1} מתוך ${unmatched.length})` : "";
+      const dialog = document.createElement("dialog");
+      dialog.style.cssText = "padding:20px;border-radius:12px;border:1px solid var(--line);max-width:540px;width:90vw;background:var(--surface-2);box-shadow:0 16px 48px rgba(0,0,0,0.2)";
+
+      const html = `
+        <h3 style="margin:0 0 8px">משתמש לא מזוהה${progress}</h3>
+        <p class="muted small" style="margin:0 0 12px" dir="rtl">איש הצוות <strong>${esc(s.fullName)}</strong> יובא אך לא מקושר למשתמש מערכת. מה לעשות?</p>
+        <div style="background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <strong style="min-width:80px">${esc(s.fullName)}</strong>
+          <select data-unmatched-action id="unmatchedAction_${i}" style="width:auto;flex:1;min-width:140px">
+            <option value="create">צור משתמש חדש</option>
+            ${unlinkedUsers.length ? `<optgroup label="שייך למשתמש קיים">${userOptions}</optgroup>` : ''}
+            <option value="none">השאר ללא משתמש</option>
+          </select>
+        </div>
+        ${remaining > 1 ? `<label style="display:flex;align-items:center;gap:.35rem;margin-bottom:6px;font-size:.85rem;cursor:pointer"><input type="checkbox" id="unmatchedApplyAll_${i}" /><span>החל פעולה זו על כל שאר ${remaining - 1} אנשי הצוות</span></label>` : ''}
+        <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" id="unmatchedCancel_${i}" class="btn-sm secondary">בטל הכל</button>
+          <button type="button" id="unmatchedConfirm_${i}" class="btn-sm">אישור</button>
+        </div>`;
+
+      dialog.innerHTML = html;
+      document.body.appendChild(dialog);
+      const doClose = () => { dialog.close(); dialog.remove(); };
+
+      const choice = await new Promise((res) => {
+        dialog.showModal();
+        dialog.querySelector(`#unmatchedConfirm_${i}`).onclick = () => {
+          const actionEl = dialog.querySelector(`#unmatchedAction_${i}`);
+          const applyAllEl = dialog.querySelector(`#unmatchedApplyAll_${i}`);
+          res({ action: actionEl ? actionEl.value : "none", applyAll: applyAllEl ? applyAllEl.checked : false });
+        };
+        dialog.querySelector(`#unmatchedCancel_${i}`).onclick = () => { res({ action: "cancel", applyAll: false }); };
+      });
+
+      if (choice.action === "cancel") { doClose(); resolve(null); return; }
+
+      if (choice.applyAll && remaining > 1) {
+        applyToRemaining = { choice: choice.action };
+        if (choice.action !== "create" && choice.action !== "none") applyToRemaining.existingUserId = choice.action;
+      }
+
+      if (choice.action === "create") {
+        const username = s.fullName.replace(/\s+/g, ".").replace(/[^a-zA-Z0-9._-]/g, "").substring(0, 50).toLowerCase() || `user${makeId("u")}`;
+        const rawPwd = generatePassword();
+        const { salt, passwordHash } = await passwordForUser(rawPwd);
+        results.push({ user: normalizeUser({ username, passwordHash, salt, role: "staff", staffId: s.id, active: true }), rawPassword: rawPwd, staffName: s.fullName });
+      } else if (choice.action && choice.action !== "none") {
+        results.push({ existingUserId: choice.action, staffId: s.id, staffName: s.fullName });
+      }
+      doClose();
+    }
+    resolve(results);
+  });
+}
     }
 
     existing.forEach(s => {

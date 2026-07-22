@@ -239,14 +239,23 @@ export function normalizeDisplayMessage(message) {
   };
 }
 
+export function activeDisplayMessages(settings) {
+  const now = Date.now();
+  return (settings?.messages || []).filter(message => !message.expiresAt || Date.parse(message.expiresAt) > now);
+}
+
 export function normalizeDisplaySettings(settings) {
-  return {
+  const base = {
     switchSeconds: Math.max(5, Number(settings?.switchSeconds || 30)),
     hoursBefore: Math.max(0, Number(settings?.hoursBefore ?? 1)),
     hoursAfter: Math.max(1, Number(settings?.hoursAfter ?? 3)),
     roomsPerPage: Math.max(1, Number(settings?.roomsPerPage || 10)),
-    messages: Array.isArray(settings?.messages) ? settings.messages.map(normalizeDisplayMessage).filter(m => m.text) : []
   };
+  if (settings && typeof settings === "object") {
+    base.messages = Array.isArray(settings.messages) ? settings.messages : [];
+    base.messagesLog = Array.isArray(settings.messagesLog) ? settings.messagesLog : [];
+  }
+  return base;
 }
 
 export function parseCsvRows(text) {

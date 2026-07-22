@@ -1,6 +1,6 @@
 weekISO,day,roomId,roomName,start,duration,staff,team,note,noteType,oneTime,recurring,recurringEnd,clientName,sessionStatus
 2026-07-19,0,r1,חדר 1,08:30,60,נועה כהן,ילדים,הדרכת הורה,therapy,FALSE,,,מטופל א',scheduled
-2026-07-19,0,r2,חדר 2,09:30,90,ד"ר לוי,מבוגרים,אבחון ראשוני,diagnosis,FALSE,,,מטופל ב',scheduled
+2026-07-19,0,r2,חדר 2,09:30,90,ד״ר לוי,מבוגרים,אבחון ראשוני,diagnosis,FALSE,,,מטופל ב',scheduled
 2026-07-19,1,r3,חדר 3,11:00,60,יואב בר,מבוגרים,מעקב,diagnosis,FALSE,weekly,2026-12-31,מטופל ג',scheduled
 2026-07-19,2,r4,חדר 4,13:30,60,עדי רוזן,ילדים,,intake,FALSE,,,,scheduled
 2026-07-19,3,r5,חדר 5,15:00,30,מנהל מערכת,אדמיניסטרציה,ישיבת צוות,,TRUE,,,,scheduled

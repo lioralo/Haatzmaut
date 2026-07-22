@@ -9,7 +9,7 @@ export const LOGIN_WINDOW_MS  = 10 * 60 * 1000;
 export const LOGIN_MAX_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_MS  = 15 * 60 * 1000;
 export const SESSION_TIMEOUT_MS = 30 * 60 * 1000;
-export const AUDIT_LOG_MAX = 500;
+export const AUDIT_LOG_MAX = 200;
 export const PERSIST_DEBOUNCE_MS = 400;
 
 export const DEV_LOGIN_ENABLED = (() => {

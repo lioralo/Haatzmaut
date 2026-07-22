@@ -1,4 +1,4 @@
-const STORAGE_KEY = "haatzmaut_v5";
+const STORAGE_KEY = "haatzmaut_v6";
 const DISPLAY_PAGE_VERSION = "20260610f";
 const WORK_START = 8 * 60;
 const WORK_END = 20 * 60;
@@ -281,18 +281,16 @@ function renderTable() {
         .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
 
       if (!matches.length) {
-        return '<td class="slot-empty">פנוי</td>';
+        return '<td class="slot-empty"></td>';
       }
 
-      const content = matches.map(m => {
-        const end = minToTime(timeToMin(m.start) + m.duration);
-        const recurringLabel = m.recurring ? ` · ${m.recurring === "weekly" ? "שבועית" : m.recurring === "biweekly" ? "דו-שבועית" : m.recurring === "monthly" ? "חודשית" : "חוזרת"}` : "";
-        const noteTypeLabel = m.noteType ? ` · ${esc(m.noteType)}` : "";
-        const note = m.note ? `<span class="meta">${esc(m.note)}</span>` : "";
-        return `${esc(m.staff || "צוות")}${m.team ? ` · ${esc(m.team)}` : ""}${noteTypeLabel}${recurringLabel}<span class="meta">${esc(m.start)}-${end}</span>${note}`;
-      }).join("<hr>");
-
-      return `<td><div class="slot-booked">${content}</div></td>`;
+      const first = matches[0];
+      const end = minToTime(timeToMin(first.start) + first.duration);
+      const name = first.staff ? esc(first.staff) : "";
+      const time = `${esc(first.start)}–${end}`;
+      return name
+        ? `<td><div class="slot-booked"><strong>${name}</strong><br><span class="meta">${time}</span></div></td>`
+        : `<td><div class="slot-booked"><span class="meta">${time}</span></div></td>`;
     }).join("");
 
     bodyRows += `<tr class="${rowClass}"><th class="time-col">${minToTime(slot)}</th>${roomCells}</tr>`;

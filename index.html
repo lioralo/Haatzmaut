@@ -205,6 +205,29 @@
             </div>
           </div>
 
+          <!-- Schedule import -->
+          <details class="filter-collapsible">
+            <summary>ייבוא לוח שנה מקובץ</summary>
+            <div class="admin-two-col" style="margin-top:.5rem">
+              <article class="panel">
+                <h4 class="panel-title">ייבוא</h4>
+                <div class="template-links">
+                  <a href="templates/calendar_full_template.csv" download>תבנית CSV מורחבת</a>
+                  <label class="file-upload-label">יבא לו"ז <input dir="auto" type="file" id="scheduleUploadInline" accept=".csv,.json" /></label>
+                </div>
+                <div style="margin-top:.35rem">
+                  <label class="small">טווח החלפה
+                    <select id="scheduleReplaceScopeInline" style="margin-right:.5rem">
+                      <option value="current-upcoming">שבוע נוכחי + הבאים</option>
+                      <option value="current">שבוע נוכחי בלבד</option>
+                      <option value="upcoming">שבועות הבאים בלבד</option>
+                    </select>
+                  </label>
+                </div>
+              </article>
+            </div>
+          </details>
+
           <!-- Stats row -->
           <div id="dashboardStats" class="stats-row"></div>
 
@@ -316,7 +339,11 @@
                 <div class="template-links">
                   <a href="templates/staff_template.csv" download>תבנית CSV</a>
                   <button id="exportStaffBtn" class="btn-link">הורד CSV נוכחי</button>
-                  <label class="file-upload-label">יבוא <input dir="auto" type="file" id="staffUpload" accept=".csv,.json" /></label>
+                </div>
+                <div class="staff-upload-row" style="margin-top:.35rem">
+                  <label class="file-upload-label">בחר קובץ <input dir="auto" type="file" id="staffUpload" accept=".csv,.json" /></label>
+                  <span id="staffFileSelected" class="small muted"></span>
+                  <button id="staffUploadStartBtn" class="btn-sm" disabled>העלה</button>
                 </div>
                 <form id="adminStaffForm" class="grid-form compact-form">
                   <input dir="auto" type="hidden" id="adminStaffId" />
@@ -475,24 +502,52 @@
               <p class="muted small">עמודות נדרשות: name, color, weeklyDay, defaultTime</p>
               <div id="meetingImportStatus"></div>
             </article>
+            <article class="panel">
+              <h3 class="panel-title">ייבוא לוח שנה</h3>
+              <div class="template-links">
+                <a href="templates/calendar_full_template.csv" download>תבנית CSV מורחבת</a>
+                <label class="file-upload-label">יבא לו"ז <input dir="auto" type="file" id="scheduleUpload" accept=".csv,.json" /></label>
+              </div>
+              <div style="margin-top:0.5rem">
+                <label class="small">טווח החלפה
+                  <select id="scheduleReplaceScope" style="margin-right:0.5rem">
+                    <option value="current-upcoming">שבוע נוכחי + הבאים</option>
+                    <option value="current">שבוע נוכחי בלבד</option>
+                    <option value="upcoming">שבועות הבאים בלבד</option>
+                  </select>
+                </label>
+              </div>
+              <p class="muted small">עמודות: weekISO, day, roomId, roomName, start, duration, staff, team, note, noteType, oneTime, recurring, recurringEnd, clientName, sessionStatus</p>
+            </article>
           </div>
           </div>
           <div data-admin-subtab="display" class="admin-subtab-content hidden">
             <article class="panel">
-              <h3 class="panel-title">מסך תצוגה</h3>
-              <form id="displaySettingsForm" class="grid-form compact-form">
+              <h3 class="panel-title">הגדרות מסך תצוגה</h3>
+              <div class="grid-form compact-form">
                 <label>החלפה בשניות <input dir="auto" id="displaySwitchSeconds" type="number" min="5" /></label>
                 <label>אחורה בשעות <input dir="auto" id="displayHoursBefore" type="number" min="0" /></label>
                 <label>קדימה בשעות <input dir="auto" id="displayHoursAfter" type="number" min="1" /></label>
                 <label>חדרים בעמוד <input dir="auto" id="displayRoomsPerPage" type="number" min="1" /></label>
-                <button type="submit">שמור</button>
-              </form>
+                <button id="displaySettingsSaveBtn" type="button">שמור</button>
+              </div>
+            </article>
+            <article class="panel">
+              <h3 class="panel-title">הודעות למסך</h3>
               <form id="displayMessageForm" class="grid-form compact-form">
-                <label>הודעה <textarea dir="auto" id="displayMessageText" rows="2"></textarea></label>
+                <input type="hidden" id="displayMessageEditId" />
+                <label>הודעה <textarea dir="auto" id="displayMessageText" rows="2" maxlength="300"></textarea></label>
                 <label>משך <select id="displayMessageDuration"><option value="5">5 דקות</option><option value="10">10</option><option value="30">30</option><option value="60">60</option><option value="unlimited">ללא הגבלה</option></select></label>
-                <button type="submit">הוסף</button>
+                <div class="form-actions">
+                  <button type="submit" id="displayMessageSubmitBtn">הוסף</button>
+                  <button type="button" id="displayMessageCancelBtn" class="secondary hidden">בטל עריכה</button>
+                </div>
               </form>
               <div id="displayMessagesList"></div>
+            </article>
+            <article class="panel">
+              <h3 class="panel-title">יומן הודעות</h3>
+              <div id="displayMessagesLog" class="admin-list"></div>
             </article>
           </div>
           <div data-admin-subtab="settings" class="admin-subtab-content hidden">

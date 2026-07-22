@@ -134,21 +134,40 @@ function serializedState() {
 }
 
 let _persistTimer = null;
+let _persistFailed = false;
 
 export function persistState() {
   clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
-    } catch {}
+    _writeStorage();
   }, PERSIST_DEBOUNCE_MS);
 }
 
 export function persistStateImmediate() {
   clearTimeout(_persistTimer);
+  _writeStorage();
+}
+
+function _writeStorage() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
-  } catch {}
+    _persistFailed = false;
+  } catch (e) {
+    if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
+      try {
+        try { const ab = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]"); if (Array.isArray(ab) && ab.length > 1) { localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(ab.slice(-1))); } } catch {}
+        try { const mb = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); if (Array.isArray(mb) && mb.length > 2) { localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(mb.slice(0, 2))); } } catch {}
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
+        _persistFailed = false;
+        showToast("פונה מקום אחסון — גיבויים ישנים נמחקו.", "info");
+        return;
+      } catch {}
+    }
+    if (!_persistFailed) {
+      showToast("שגיאה בשמירת נתונים — ייתכן שהאחסון המקומי מלא.", "error");
+      _persistFailed = true;
+    }
+  }
 }
 
 /* ============================================================
@@ -269,7 +288,7 @@ export async function importEncryptedBackup(file) {
 
 const AUTOBACKUP_KEY = "haatzmaut_autobackup";
 const AUTOBACKUP_INTERVAL_MS = 60 * 60 * 1000;
-const AUTOBACKUP_MAX = 24;
+const AUTOBACKUP_MAX = 3;
 
 let _autoBackupTimer = null;
 
@@ -384,7 +403,7 @@ export function runIntegrityAssistant() {
    ============================================================ */
 
 const MANAGED_BACKUPS_KEY = "haatzmaut_managed_backups";
-const MAX_MANAGED = 50;
+const MAX_MANAGED = 10;
 
 export function saveManagedBackup(label = "") {
   const payload = serializedState();
@@ -393,18 +412,25 @@ export function saveManagedBackup(label = "") {
     label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
     timestamp: new Date().toISOString(),
     createdAt: new Date().toLocaleString("he-IL"),
-    size: JSON.stringify(payload).length,
     rooms: (state.rooms || []).length,
     entries: (state.schedule || []).length,
     meetings: (state.meetings || []).length,
     data: payload
   };
+  backup.size = JSON.stringify(backup).length;
+
   let backups = [];
   try { backups = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); } catch {}
   if (!Array.isArray(backups)) backups = [];
   backups.unshift(backup);
   if (backups.length > MAX_MANAGED) backups = backups.slice(0, MAX_MANAGED);
-  localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+
+  try {
+    localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+  } catch (e) {
+    showToast("שגיאה בשמירת גיבוי — ייתכן שהאחסון מלא.", "error");
+    throw e;
+  }
   return backup;
 }
 

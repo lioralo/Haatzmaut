@@ -25,6 +25,8 @@ import {
   state,
   isAdmin,
   persistState,
+  persistStateImmediate,
+  autoBackup,
   recordAudit
 } from '../core/store.js';
 
@@ -45,7 +47,8 @@ import {
   exportBookingsCSV,
   exportStaffCSV,
   exportRoomsCSV,
-  resolveUnknownStaff
+  resolveUnknownStaff,
+  resolveUnmatchedStaffUsers
 } from './state.js';
 
 import {
@@ -194,64 +197,75 @@ export function initCalendarEvents() {
     });
   }
 
-  /* Schedule file upload */
+  /* Schedule file upload — shared handler */
+  async function handleScheduleUpload(file, scopeElId) {
+    if (!ensureUploadAllowed(file, "קובץ לו\"ז")) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const text = String(reader.result || "").trim();
+        let records;
+        if (file.name.toLowerCase().endsWith(".json")) {
+          records = JSON.parse(text);
+        } else {
+          records = parseCsvRows(text);
+        }
+        const rows = Array.isArray(records) ? records : [];
+        const validRows = rows.filter(isValidScheduleTemplateRecord);
+
+        const unknownStaff = validRows.map(r => String(r.staff || "").trim()).filter(Boolean);
+        const staffMap = await resolveUnknownStaff(unknownStaff);
+        if (staffMap === null) { showToast("ייבוא בוטל.", "info"); return; }
+        
+        const resolvedRows = validRows.map(r => ({
+          ...r,
+          staff: staffMap[String(r.staff || "").trim()] || r.staff,
+          clientName: r.clientName || "",
+          noteType: r.noteType || "therapy",
+          recurring: r.recurring || "",
+          recurringEnd: r.recurringEnd || ""
+        }));
+
+        const template = templateFromEntries(resolvedRows, state.rooms);
+        if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
+        const scope = byId(scopeElId)?.value || "current-upcoming";
+        const approved = confirmImportPreview("לו\"ז", rows.length, template.length, `טווח החלפה: ${scope}`);
+        if (!approved) {
+          showToast("ייבוא לו\"ז בוטל אחרי תצוגה מקדימה.", "info");
+          return;
+        }
+        state.defaultTemplate = template;
+        applyTemplateScope(template, scope);
+        recordAudit("schedule.import", `נטענו ${template.length} רשומות (${scope}).`, "warn", false);
+        persistState();
+        autoBackup();
+        safeRender(renderDayTabs, "dayTabs");
+        safeRender(renderWeekHeader, "weekHeader");
+        safeRender(renderStats, "stats");
+        safeRender(renderTagFilters, "tagFilters");
+        safeRender(renderOccupancy, "occupancy");
+        safeRender(renderRequests, "requests");
+        addNotification(`לוח הזמנים עודכן: נטענו ${template.length} רשומות תקינות מתוך ${rows.length}.`);
+      } catch (err) {
+        showToast(`שגיאה: ${err.message}`, "error");
+      }
+    };
+    reader.readAsText(file);
+  }
+
   const scheduleUpload = byId("scheduleUpload");
   if (scheduleUpload) {
-    scheduleUpload.addEventListener("change", async e => {
+    scheduleUpload.addEventListener("change", e => {
       const file = e.target.files?.[0];
-      if (!ensureUploadAllowed(file, "קובץ לו\"ז")) { e.target.value = ""; return; }
-      const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const text = String(reader.result || "").trim();
-          let records;
-          if (file.name.toLowerCase().endsWith(".json")) {
-            records = JSON.parse(text);
-          } else {
-            records = parseCsvRows(text);
-          }
-          const rows = Array.isArray(records) ? records : [];
-          const validRows = rows.filter(isValidScheduleTemplateRecord);
+      if (file) { handleScheduleUpload(file, "scheduleReplaceScope"); e.target.value = ""; }
+    });
+  }
 
-          const unknownStaff = validRows.map(r => String(r.staff || "").trim()).filter(Boolean);
-          const staffMap = await resolveUnknownStaff(unknownStaff);
-          if (staffMap === null) { showToast("ייבוא בוטל.", "info"); return; }
-          
-          const resolvedRows = validRows.map(r => ({
-            ...r,
-            staff: staffMap[String(r.staff || "").trim()] || r.staff,
-            clientName: r.clientName || "",
-            noteType: r.noteType || "therapy",
-            recurring: r.recurring || "",
-            recurringEnd: r.recurringEnd || ""
-          }));
-
-          const template = templateFromEntries(resolvedRows, state.rooms);
-          if (!template.length) throw new Error("הקובץ לא מכיל רשומות תקינות");
-          const scope = byId("scheduleReplaceScope")?.value || "current-upcoming";
-          const approved = confirmImportPreview("לו\"ז", rows.length, template.length, `טווח החלפה: ${scope}`);
-          if (!approved) {
-            showToast("ייבוא לו\"ז בוטל אחרי תצוגה מקדימה.", "info");
-            return;
-          }
-          state.defaultTemplate = template;
-          applyTemplateScope(template, scope);
-          recordAudit("schedule.import", `נטענו ${template.length} רשומות (${scope}).`, "warn", false);
-          persistState();
-          safeRender(renderDayTabs, "dayTabs");
-          safeRender(renderWeekHeader, "weekHeader");
-          safeRender(renderStats, "stats");
-          safeRender(renderTagFilters, "tagFilters");
-          safeRender(renderOccupancy, "occupancy");
-          safeRender(renderRequests, "requests");
-          addNotification(`לוח הזמנים עודכן: נטענו ${template.length} רשומות תקינות מתוך ${rows.length}.`);
-        } catch (err) {
-          showToast(`שגיאה: ${err.message}`, "error");
-        } finally {
-          e.target.value = "";
-        }
-      };
-      reader.readAsText(file);
+  const scheduleUploadInline = byId("scheduleUploadInline");
+  if (scheduleUploadInline) {
+    scheduleUploadInline.addEventListener("change", e => {
+      const file = e.target.files?.[0];
+      if (file) { handleScheduleUpload(file, "scheduleReplaceScopeInline"); e.target.value = ""; }
     });
   }
 
@@ -286,6 +300,7 @@ export function initCalendarEvents() {
           });
           recordAudit("room.import", `יובאו ${incoming.length} חדרים.`, "warn", false);
           persistState();
+          autoBackup();
           safeRender(renderDayTabs, "dayTabs");
           safeRender(renderWeekHeader, "weekHeader");
           safeRender(renderStats, "stats");
@@ -303,50 +318,92 @@ export function initCalendarEvents() {
     });
   }
 
-  /* Staff file upload */
-  const staffUpload = byId("staffUpload");
-  if (staffUpload) {
-    staffUpload.addEventListener("change", e => {
-      const file = e.target.files?.[0];
-      if (!ensureUploadAllowed(file, "קובץ צוות")) { e.target.value = ""; return; }
+  /* Staff file upload — two-step with delegation */
+  let staffUploadFile = null;
+  
+  document.addEventListener("change", e => {
+    if (!e.target.matches?.("#staffUpload")) return;
+    const file = e.target.files?.[0];
+    if (!ensureUploadAllowed(file, "קובץ צוות")) { e.target.value = ""; staffUploadFile = null; return; }
+    staffUploadFile = file;
+    const sel = document.getElementById("staffFileSelected");
+    const btn = document.getElementById("staffUploadStartBtn");
+    if (sel) sel.textContent = file.name;
+    if (btn) btn.disabled = false;
+  });
+
+  document.addEventListener("click", async e => {
+    if (!e.target.matches?.("#staffUploadStartBtn")) return;
+    const file = staffUploadFile;
+    if (!file) { showToast("יש לבחור קובץ תחילה.", "error"); return; }
+    const btn = e.target;
+    btn.disabled = true;
+    try {
       const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const text = String(reader.result || "").trim();
-          const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
-          const rows = Array.isArray(records) ? records : [];
-          const validRows = rows.filter(isValidStaffRecord);
-          if (!validRows.length) throw new Error("לא נמצאו רשומות צוות תקינות בקובץ");
-          const approved = confirmImportPreview("צוות", rows.length, validRows.length);
-          if (!approved) {
-            showToast("ייבוא צוות בוטל אחרי תצוגה מקדימה.", "info");
-            return;
+      const text = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve(String(reader.result || "").trim());
+        reader.onerror = () => reject(new Error("שגיאה בקריאת קובץ"));
+        reader.readAsText(file);
+      });
+
+      const records = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parseCsvRows(text);
+      const rows = Array.isArray(records) ? records : [];
+      const validRows = rows.filter(isValidStaffRecord);
+      if (!validRows.length) throw new Error("לא נמצאו רשומות צוות תקינות בקובץ");
+      const approved = confirmImportPreview("צוות", rows.length, validRows.length);
+      if (!approved) { showToast("ייבוא צוות בוטל אחרי תצוגה מקדימה.", "info"); return; }
+
+      const normalizedIncoming = validRows.map(r => normalizeStaff({
+        id: String(r.id || "").trim() || makeId("staff"),
+        fullName: r.fullName || r.name, phone: r.phone, email: r.email, role: r.role, team: r.team
+      }));
+
+      const beforeCount = state.staff.length;
+      const beforeUserCount = state.users.length;
+      const merged = mergeStaffWithLinkedPriority(state.staff, normalizedIncoming, state.users);
+      state.staff = merged.staff;
+      state.users = merged.users;
+      recordAudit("staff.import", `יובאו ${validRows.length} רשומות צוות.`, "warn", false);
+      persistStateImmediate();
+
+      const userMatchResults = await resolveUnmatchedStaffUsers(state.staff, state.users);
+      if (userMatchResults === null) { showToast("ייבוא צוות בוטל על-ידי המשתמש.", "info"); return; }
+
+      if (userMatchResults && userMatchResults.length) {
+        let newUserMsgs = [];
+        for (const r of userMatchResults) {
+          if (r.user) {
+            state.users.push(r.user);
+            newUserMsgs.push(`${r.staffName} ← ${r.user.username} (${r.rawPassword})`);
+            recordAudit("user.create.auto", `נוצר משתמש ${r.user.username} עבור ${r.staffName} במהלך ייבוא.`, "critical", false);
+          } else if (r.existingUserId) {
+            const existingUser = state.users.find(u => u.id === r.existingUserId);
+            if (existingUser) {
+              existingUser.staffId = r.staffId;
+              newUserMsgs.push(`${r.staffName} ← ${existingUser.username} (שויך)`);
+              recordAudit("user.link", `שויך ${existingUser.username} ל${r.staffName} במהלך ייבוא.`, "critical", false);
+            }
           }
-
-          const normalizedIncoming = validRows.map(r => normalizeStaff({
-            id: String(r.id || "").trim() || makeId("staff"),
-            fullName: r.fullName || r.name,
-            phone: r.phone,
-            email: r.email,
-            role: r.role,
-            team: r.team
-          }));
-
-          const beforeCount = state.staff.length;
-          const merged = mergeStaffWithLinkedPriority(state.staff, normalizedIncoming, state.users);
-          state.staff = merged.staff;
-          state.users = merged.users;
-          recordAudit("staff.import", `יובאו ${validRows.length} רשומות צוות.`, "warn", false);
-
-          persistState();
-          addNotification(`יובא קובץ צוות: ${validRows.length} רשומות תקינות מתוך ${rows.length}. סה"כ צוות: ${state.staff.length} (לפני: ${beforeCount}).`);
-        } catch (err) {
-          showToast(`שגיאה בייבוא צוות: ${err.message}`, "error");
-        } finally {
-          e.target.value = "";
         }
-      };
-      reader.readAsText(file);
+        if (newUserMsgs.length) showToast(`משתמשים שטופלו: ${newUserMsgs.join(" | ")}`, "info");
+      }
+
+      persistState();
+      autoBackup();
+      const newUsersCount = state.users.length - beforeUserCount + (userMatchResults || []).filter(r => r.existingUserId).length;
+      addNotification(`יובא קובץ צוות: ${validRows.length} רשומות תקינות מתוך ${rows.length}. סה"כ צוות: ${state.staff.length} (לפני: ${beforeCount}). נוצרו/שויכו ${newUsersCount} משתמשים.`);
+      showToast("ייבוא צוות הושלם.", "info");
+    } catch (err) {
+      showToast(`שגיאה בייבוא צוות: ${err.message}`, "error");
+    } finally {
+      staffUploadFile = null;
+      btn.disabled = true;
+      const sel = document.getElementById("staffFileSelected");
+      if (sel) sel.textContent = "";
+      const upl = document.getElementById("staffUpload");
+      if (upl) upl.value = "";
+    }
+  });
     });
   }
 

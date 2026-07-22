@@ -380,7 +380,11 @@ export function renderStaffAccordion() {
         <div class="template-links">
           <a href="templates/staff_template.csv" download>תבנית CSV</a>
           <button id="exportStaffBtn" class="btn-link">הורד CSV</button>
-          <label class="file-upload-label">יבוא <input type="file" id="staffUpload" accept=".csv,.json" /></label>
+        </div>
+        <div class="staff-upload-row" style="margin-top:.35rem">
+          <label class="file-upload-label">בחר קובץ <input type="file" id="staffUpload" accept=".csv,.json" /></label>
+          <span id="staffFileSelected" class="small muted"></span>
+          <button id="staffUploadStartBtn" class="btn-sm" disabled>העלה</button>
         </div>
         <div id="adminStaffList" class="admin-list"></div>
       </article>
