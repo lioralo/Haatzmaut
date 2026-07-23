@@ -15,14 +15,26 @@ await esbuild.build({
 });
 
 if (isProd) {
-  const { copyFileSync, mkdirSync, readdirSync } = await import("node:fs");
+  const { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = await import("node:fs");
+  const cacheBuster = Date.now().toString(36);
   mkdirSync("dist/templates", { recursive: true });
-  copyFileSync("index.html", "dist/index.html");
-  copyFileSync("display.html", "dist/display.html");
-  copyFileSync("accessibility.html", "dist/accessibility.html");
+
+  const indexHtml = readFileSync("index.html", "utf8")
+    .replace('src="src/main.js"', `src="app.min.js?v=${cacheBuster}"`)
+    .replace(/styles\.css\?v=\d+/g, `styles.css?v=${cacheBuster}`)
+    .replace(/display\.html\?v=\d+/g, `display.html?v=${cacheBuster}`)
+    .replace(/display\.css\?v=\d+/g, `display.css?v=${cacheBuster}`);
+  writeFileSync("dist/index.html", indexHtml);
+
+  const displayHtml = readFileSync("display.html", "utf8")
+    .replace(/display\.css\?v=\d+/g, `display.css?v=${cacheBuster}`)
+    .replace(/display\.js\?v=\d+/g, `display.js?v=${cacheBuster}`);
+  writeFileSync("dist/display.html", displayHtml);
+
   copyFileSync("display.js", "dist/display.js");
   copyFileSync("styles.css", "dist/styles.css");
   copyFileSync("display.css", "dist/display.css");
+  copyFileSync("accessibility.html", "dist/accessibility.html");
   for (const f of readdirSync("templates")) {
     copyFileSync(`templates/${f}`, `dist/templates/${f}`);
   }
