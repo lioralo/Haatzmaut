@@ -13,15 +13,34 @@ let _lastSavedHash = null;
    Encryption helpers
    ---------------------------------------------------------- */
 
-async function deriveEncryptionKey(passwordHash) {
+let _encryptionKey = null;
+
+export async function setEncryptionPassword(password) {
   const enc = new TextEncoder();
+  const salt = enc.encode('haatzmaut-sync-fixed-salt-v1');
   const keyMaterial = await crypto.subtle.importKey(
-    'raw', enc.encode(passwordHash), 'HKDF', false, ['deriveKey']
+    'raw', enc.encode(password), 'PBKDF2', false, ['deriveBits', 'deriveKey']
   );
-  return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('haatzmaut-cloud-sync'), info: enc.encode('aes-gcm-key') },
-    keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' },
+    keyMaterial, 256
   );
+  const cloudKey = await crypto.subtle.importKey(
+    'raw', derivedBits, 'HKDF', false, ['deriveKey']
+  );
+  _encryptionKey = await crypto.subtle.deriveKey(
+    { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('aes-gcm-sync'), info: enc.encode('aes-gcm-key') },
+    cloudKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+function clearEncryptionKey() {
+  _encryptionKey = null;
+}
+
+async function getEncryptionKey() {
+  if (!_encryptionKey) throw new Error('No encryption key set — login first');
+  return _encryptionKey;
 }
 
 async function encryptPayload(key, plaintext) {
@@ -120,13 +139,13 @@ export async function cloudAuth(username, passwordHash) {
 export async function saveToCloud() {
   if (!state.currentUser) return;
   const user = state.users?.find(u => u.username === state.currentUser.username);
-  if (!user || !user.passwordHash) {
-    showToast('אין סיסמה מוצפנת למשתמש — לא ניתן לשמור בענן.', 'warn');
+  if (!user?.passwordHash && !_encryptionKey) {
+    showToast('אין מפתח הצפנה — התחבר מחדש.', 'warn');
     return false;
   }
 
   try {
-    const key = await deriveEncryptionKey(user.passwordHash);
+    const key = await getEncryptionKey();
     const plain = serializedStateForSync();
 
     const dataHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
@@ -151,11 +170,6 @@ export async function saveToCloud() {
 
 export async function loadFromCloud() {
   if (!state.currentUser) return;
-  const user = state.users?.find(u => u.username === state.currentUser.username);
-  if (!user || !user.passwordHash) {
-    showToast('אין סיסמה מוצפנת למשתמש — לא ניתן לטעון מהענן.', 'warn');
-    return null;
-  }
 
   try {
     const info = await apiCall('GET', '/sync/info');
@@ -171,11 +185,13 @@ export async function loadFromCloud() {
 }
 
 export async function loadFromCloudAndApply() {
-  const user = state.users?.find(u => u.username === state.currentUser.username);
-  if (!user?.passwordHash) return;
+  if (!_encryptionKey) {
+    showToast('אין מפתח הצפנה — התחבר מחדש.', 'warn');
+    return;
+  }
 
   try {
-    const key = await deriveEncryptionKey(user.passwordHash);
+    const key = await getEncryptionKey();
     const data = await apiCall('GET', '/sync/load');
     if (!data.encryptedData) {
       showToast('לא נמצא מידע שמור בענן.', 'info');

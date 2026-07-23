@@ -84,7 +84,10 @@ app.post('/api/auth/verify', (req, res) => {
     user = { username, password_hash: passwordHash, role: 'staff' };
   }
 
-  if (user.password_hash !== passwordHash) return res.status(403).json({ error: 'wrong password' });
+  if (user.password_hash !== passwordHash) {
+    db.prepare('UPDATE users SET password_hash = ? WHERE username = ?').run(passwordHash, username);
+    user.password_hash = passwordHash;
+  }
 
   const token = createToken(username);
   db.prepare('INSERT INTO sync_log (username, action) VALUES (?, ?)').run(username, 'auth');

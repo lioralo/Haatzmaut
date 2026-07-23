@@ -17,7 +17,7 @@ import {
 import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 import {
   scheduleAutoSave, saveToCloudNow, loadFromCloud, loadFromCloudAndApply,
-  authenticateCloudSession
+  authenticateCloudSession, setEncryptionPassword
 } from './core/cloudSync.js';
 
 import {
@@ -575,6 +575,8 @@ function initLogin() {
     resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
+    // Set up cloud encryption key from raw password (same key across devices)
+    setEncryptionPassword(p).catch(() => {});
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
     byId("appSection").style.display = "";
