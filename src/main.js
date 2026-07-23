@@ -451,6 +451,8 @@ async function initialize() {
       : (state.activeTab || "dashboardTab");
     state.activeTab = firstTab;
     showTab(firstTab);
+    // Trigger initial cloud sync on first load
+    setTimeout(() => { authenticateCloudSession().then(ok => ok && saveToCloudNow()); }, 2000);
   }
 }
 
