@@ -24,8 +24,7 @@ import {
   ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
   expandRecurringEntries, cleanExpiredWaitlist, deleteRecurringSeries,
   updateRecurringInstance, addToWaitlist, removeFromWaitlist,
-  getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg,
-  buildDefaultSchedule, instantiateTemplateWeek
+  getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg
 } from './calendar/state.js';
 import {
   renderOccupancy, renderDayTabs, renderWeekHeader, renderStats,
@@ -412,7 +411,6 @@ async function initialize() {
     applyAccessControl();
     renderSessionBar();
     registerActivity();
-    // Restore encryption key from previous login (survives page reload)
     restoreEncryptionKey().catch(() => {});
   }
 
@@ -432,14 +430,6 @@ async function initialize() {
   initAdminSubTabs();
   initBackupHandlers();
 
-  if (!state.defaultTemplate || !state.defaultTemplate.length) {
-    state.defaultTemplate = buildDefaultSchedule(state.weekISO, state.rooms);
-    if (!state.schedule.length) {
-      state.schedule = instantiateTemplateWeek(state.defaultTemplate, state.weekISO, state.rooms);
-      persistStateImmediate();
-    }
-  }
-
   ensureSyncedScheduleWindow();
   runIntegrityAssistant();
   renderActiveTab();
@@ -453,8 +443,6 @@ async function initialize() {
       : (state.activeTab || "dashboardTab");
     state.activeTab = firstTab;
     showTab(firstTab);
-    // Trigger initial cloud sync on first load
-    setTimeout(() => { authenticateCloudSession().then(ok => ok && saveToCloudNow()); }, 2000);
   }
 }
 
@@ -577,7 +565,6 @@ function initLogin() {
     resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
-    // Set up cloud encryption key from raw password (same key across devices)
     setEncryptionPassword(p).catch(() => {});
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
@@ -590,7 +577,6 @@ function initLogin() {
 
     state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
     renderActiveTab();
-    authenticateCloudSession().catch(() => {});
   });
 }
 

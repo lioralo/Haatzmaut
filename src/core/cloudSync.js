@@ -5,7 +5,12 @@
 import { state, persistStateImmediate } from './store.js';
 import { showToast } from './utils.js';
 
-const API_BASE = '/api';
+const API_BASE = (() => {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+    return 'https://haatzmaut.lior-clinic.org/api';
+  }
+  return '/api';
+})();
 let _saveTimer = null;
 let _lastSavedHash = null;
 
