@@ -19,7 +19,7 @@ import {
   renderMeetingGroups, renderGroupForm,
   renderMeetingForm, renderAllMeetings,
   setMeetingGroupFilter, renderMeetingTimeline,
-  setMeetingSubTab
+  setMeetingSubTab, showMeetingInfoDialog
 } from './render.js';
 
 /* ============================================================
@@ -230,8 +230,17 @@ function bindDelegatedClicks() {
     if (goDateBtn) {
       const date = goDateBtn.dataset.goToDate;
       state.weekISO = date;
+      state.activeDay = new Date(date + "T00:00:00").getDay();
       import('../calendar/state.js').then(m => m.ensureSyncedScheduleWindow());
       import('../main.js').then(m => { m.showTab("dashboardTab"); m.renderActiveTab(); });
+      return;
+    }
+
+    const meetingCard = e.target.closest(".mt-card[data-meeting-id]");
+    if (meetingCard && !e.target.closest("button")) {
+      const mid = meetingCard.dataset.meetingId;
+      const meeting = state.meetings.find(m => m.id === mid);
+      if (meeting) showMeetingInfoDialog(meeting);
       return;
     }
 
@@ -273,11 +282,19 @@ function bindDelegatedClicks() {
 
   document.getElementById("meetingList")?.addEventListener("click", e => {
     const btn = e.target.closest("[data-go-to-date]");
-    if (!btn) return;
-    const date = btn.dataset.goToDate;
-    state.weekISO = date;
-    import('../calendar/state.js').then(m => m.ensureSyncedScheduleWindow());
-    import('../main.js').then(m => { m.showTab("dashboardTab"); m.renderActiveTab(); });
+    if (btn) {
+      const date = btn.dataset.goToDate;
+      state.weekISO = date;
+      state.activeDay = new Date(date + "T00:00:00").getDay();
+      import('../calendar/state.js').then(m => m.ensureSyncedScheduleWindow());
+      import('../main.js').then(m => { m.showTab("dashboardTab"); m.renderActiveTab(); });
+      return;
+    }
+    const card = e.target.closest(".mt-card[data-meeting-id]");
+    if (card && !e.target.closest("button")) {
+      const meeting = state.meetings.find(m => m.id === card.dataset.meetingId);
+      if (meeting) showMeetingInfoDialog(meeting);
+    }
   });
 }
 

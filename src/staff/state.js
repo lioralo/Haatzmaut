@@ -103,6 +103,9 @@ export async function createUser(formData) {
   const username = formData.username;
   const role = formData.role || "staff";
   const staffId = formData.staffId || "";
+  const fullName = formData.fullName || "";
+  const email = formData.email || "";
+  const phone = formData.phone || "";
   const rawPwd = generatePassword();
   const { salt, passwordHash } = await passwordForUser(rawPwd);
   const newUser = normalizeUser({
@@ -111,6 +114,9 @@ export async function createUser(formData) {
     salt,
     role,
     staffId,
+    fullName,
+    email,
+    phone,
     active: true
   });
   state.users.push(newUser);

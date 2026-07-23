@@ -280,6 +280,9 @@ async function bootstrapAdmin() {
     salt,
     role: "admin",
     staffId: "",
+    fullName: "מנהל מערכת",
+    email: "",
+    phone: "",
     active: true,
     createdAt: new Date().toLocaleString("he-IL")
   });

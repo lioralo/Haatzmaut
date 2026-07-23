@@ -362,3 +362,47 @@ export function renderAllMeetings() {
   renderMeetingGroups();
   renderMeetingTimeline();
 }
+
+export function showMeetingInfoDialog(meeting) {
+  const [y, mo, d] = (meeting.date || "").split("-");
+  const dateStr = d && mo ? `${d}/${mo}/${y}` : meeting.date || "—";
+  const speaker = meeting.speaker || "—";
+  const agenda = meeting.agenda || "—";
+  const link = meeting.link || "";
+  const files = (meeting.files || []).length ? meeting.files.join(", ") : "—";
+  const duration = meeting.duration || 60;
+  const time = meeting.time || "—";
+  const groups = (meeting.groupIds || [])
+    .map(gid => (state.meetingGroups || []).find(g => g.id === gid)?.name || gid)
+    .join(", ") || "—";
+
+  const existing = document.getElementById("meetingInfoDialog");
+  if (existing) existing.remove();
+
+  const dialog = document.createElement("dialog");
+  dialog.id = "meetingInfoDialog";
+  dialog.style.cssText = "padding:0;border:none;border-radius:12px;box-shadow:0 32px 80px rgba(15,23,42,.32);max-width:480px;width:90vw;background:var(--surface-2);";
+  dialog.innerHTML = `
+    <div class="dialog-head">
+      <h3>${esc(meeting.title || "ישיבה")}</h3>
+      <button type="button" class="dialog-close-btn" aria-label="סגור" id="meetingInfoClose">✕</button>
+    </div>
+    <div class="dialog-body" style="display:grid;gap:.6rem;font-size:.9rem">
+      <div><strong>📅 תאריך:</strong> ${esc(dateStr)} · ${esc(time)} (${duration} דק')</div>
+      <div><strong>👤 דובר/מנהל:</strong> ${esc(speaker)}</div>
+      <div><strong>👥 קבוצה:</strong> ${esc(groups)}</div>
+      <div><strong>📋 סדר יום:</strong> ${esc(agenda)}</div>
+      ${link ? `<div><strong>🔗 קישור:</strong> <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a></div>` : ""}
+      <div><strong>📎 קבצים:</strong> ${esc(files)}</div>
+    </div>
+    <div class="dialog-footer">
+      <button type="button" class="secondary" id="meetingInfoClose2">סגור</button>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+  dialog.showModal();
+  dialog.querySelector("#meetingInfoClose")?.addEventListener("click", () => { dialog.close(); dialog.remove(); });
+  dialog.querySelector("#meetingInfoClose2")?.addEventListener("click", () => { dialog.close(); dialog.remove(); });
+  dialog.addEventListener("click", e => { if (e.target === dialog) { dialog.close(); dialog.remove(); } });
+}

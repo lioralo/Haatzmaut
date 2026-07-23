@@ -285,7 +285,7 @@ export function renderOccupancy() {
            <div class="bcard-head">
              <strong class="bcard-staff">${isMeeting ? '&#x1F4CB; ' : ''}${esc(entry.clientName || entry.staff)}</strong>
              ${isMeeting ? `<span class="bcard-badge" style="background:var(--accent)">ישיבה</span>` : ""}
-             ${!isMeeting && entry.oneTime ? `<span class="bcard-badge">חד-פעמי</span>` : ""}
+             ${!isMeeting && entry.oneTime && !entry.recurringRule && !entry.parentRecurringId ? `<span class="bcard-badge">חד-פעמי</span>` : ""}
              ${entry.sessionStatus && entry.sessionStatus !== "scheduled" ? `<span class="bcard-badge bcard-status-${entry.sessionStatus}">${entry.sessionStatus === "in-session" ? "בטיפול" : "הסתיים"}</span>` : ""}
            </div>
            <div class="bcard-room">${esc(getRoomName(entry.roomId))}${entry.clientName && entry.staff !== entry.clientName ? ` · ${esc(entry.staff)}` : ""}</div>

@@ -40,7 +40,7 @@ export function ensureDefaultSundayMeetings() {
     d.setDate(d.getDate() + 7);
   }
 
-  const teams = state.settings?.teams || TEAMS;
+  const teams = ["מבוגרים", "ילדים"];
 
   const hasAugustMeeting = state.meetings.some(m =>
     augustSundays.includes(m.date) && m.time === "12:30"

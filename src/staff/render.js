@@ -9,6 +9,7 @@ export function renderAdminUsers() {
     <div class="admin-row">
       <div class="admin-row-info">
         <strong>${esc(u.username)}</strong>
+        <span class="muted small">${esc(u.fullName || "—")} · ${esc(u.email || "—")} · ${esc(u.phone || "—")}</span>
         <span class="user-role-badge ${u.role === "admin" ? "role-admin" : "role-staff"}">${u.role === "admin" ? "מנהל" : "צוות"}</span>
         <span class="muted small">${u.staffId ? `משויך: ${esc(getStaffById(u.staffId)?.fullName || "לא נמצא")}` : "ללא שיוך לאיש צוות"}</span>
         ${!u.active ? `<span class="muted small">מושבת פעולה</span>` : ""}
@@ -281,8 +282,25 @@ export function renderStaffDirectory() {
   let staff = state.staff || [];
   if (search) staff = staff.filter(s => s.fullName.toLowerCase().includes(search) || s.role.toLowerCase().includes(search));
 
+  const currentUser = state.currentUser;
+  const selfUser = currentUser ? state.users.find(u => u.username === currentUser.username) : null;
+
   container.innerHTML = `
     <div class="section-head"><h2>צוות המרפאה</h2></div>
+    ${selfUser ? `
+    <details class="filter-collapsible" id="profileEditSection">
+      <summary>הפרופיל שלי (${esc(selfUser.username)})</summary>
+      <form id="profileEditForm" class="grid-form compact-form" style="margin-top:.5rem">
+        <label>שם מלא <input id="profileFullName" value="${esc(selfUser.fullName || '')}" /></label>
+        <label>דוא"ל <input id="profileEmail" type="email" value="${esc(selfUser.email || '')}" /></label>
+        <label>טלפון <input id="profilePhone" type="tel" value="${esc(selfUser.phone || '')}" /></label>
+        <label>סיסמה חדשה <input id="profileNewPassword" type="password" placeholder="השאר ריק ללא שינוי" /></label>
+        <div class="form-actions">
+          <button type="submit" class="btn-sm">שמירת פרופיל</button>
+        </div>
+      </form>
+    </details>
+    ` : ""}
     <input id="staffSearchInput" class="search-input" placeholder="חיפוש בצוות..." value="${esc(search || "")}" style="width:100%;margin-bottom:.75rem" />
     <div class="table-scroll" style="border-radius:8px">
       <table class="occ-table" style="font-size:.84rem;width:100%">
@@ -353,6 +371,27 @@ export function renderStaffDirectory() {
       renderStaffDirectory();
     });
   });
+
+  const profileForm = container.querySelector("#profileEditForm");
+  if (profileForm) {
+    profileForm.addEventListener("submit", async e => {
+      e.preventDefault();
+      if (!selfUser) return;
+      selfUser.fullName = container.querySelector("#profileFullName").value.trim();
+      selfUser.email = container.querySelector("#profileEmail").value.trim();
+      selfUser.phone = container.querySelector("#profilePhone").value.trim();
+      const newPwd = container.querySelector("#profileNewPassword").value;
+      if (newPwd) {
+        const { passwordForUser } = await import('../core/utils.js');
+        const { salt, passwordHash } = await passwordForUser(newPwd);
+        selfUser.passwordHash = passwordHash;
+        selfUser.salt = salt;
+      }
+      persistState();
+      showToast("פרופיל עודכן.", "info");
+      recordAudit("user.profile.edit", `${selfUser.username} ערך/ערכה את הפרופיל.`, "info", false);
+    });
+  }
 }
 
 /* ----------------------------------------------------------
@@ -393,6 +432,9 @@ export function renderStaffAccordion() {
         <form id="adminUserForm" class="grid-form compact-form">
           <input type="hidden" id="adminUserId" />
           <label>שם משתמש <input id="adminUserName" required /></label>
+          <label>שם מלא <input id="adminUserFullName" /></label>
+          <label>דוא"ל <input id="adminUserEmail" type="email" /></label>
+          <label>טלפון <input id="adminUserPhone" type="tel" /></label>
           <label>תפקיד <select id="adminUserRole"><option value="staff">צוות</option><option value="admin">מנהל</option></select></label>
           <label>שיוך <select id="adminUserStaff"><option value="">ללא</option></select></label>
           <div class="form-actions">

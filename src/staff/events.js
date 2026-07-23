@@ -54,6 +54,9 @@ export function initStaffEvents() {
     }
     const role = byId("adminUserRole").value;
     const staffId = byId("adminUserStaff").value;
+    const fullName = (byId("adminUserFullName")?.value || "").trim();
+    const email = (byId("adminUserEmail")?.value || "").trim();
+    const phone = (byId("adminUserPhone")?.value || "").trim();
     if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
     if (state.users.find(u => u.username === uname)) { showToast("שם משתמש תפוס.", "error"); return; }
     if (role === "staff" && !staffId) { showToast("יש לשייך משתמש צוות לאיש צוות.", "error"); return; }
@@ -63,7 +66,10 @@ export function initStaffEvents() {
       const { rawPassword } = await createUser({
         username: uname,
         role,
-        staffId
+        staffId,
+        fullName,
+        email,
+        phone
       });
       showNewPassword(uname, rawPassword);
       byId("adminUserForm").reset();

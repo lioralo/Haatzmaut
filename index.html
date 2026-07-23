@@ -183,25 +183,25 @@
           <!-- Week header + nav -->
           <div class="section-head">
             <div>
-              <h2>לוח הזמנות</h2>
+              <h2 data-i18n="calendar.title">לוח הזמנות</h2>
               <p id="weekLabel" class="muted"></p>
             </div>
             <div class="week-nav">
-              <button id="weekPrev" type="button" class="secondary icon-btn" title="שבוע קודם">&#8249;</button>
-              <button id="weekToday" type="button">שבוע נוכחי</button>
-              <button id="weekNext" type="button" class="secondary icon-btn" title="שבוע הבא">&#8250;</button>
+              <button id="weekPrev" type="button" class="secondary icon-btn" data-i18n-title="week.prev">&#8249;</button>
+              <button id="weekToday" type="button" data-i18n="week.today">שבוע נוכחי</button>
+              <button id="weekNext" type="button" class="secondary icon-btn" data-i18n-title="week.next">&#8250;</button>
             </div>
           </div>
 
           <!-- Mode toolbar for calendar -->
           <div class="mode-toolbar">
             <div class="mode-tabs">
-              <button data-calendar-mode="schedule" class="mode-tab active">תרשים יומי</button>
-              <button data-calendar-mode="list" class="mode-tab">רשימת פגישות</button>
-              <button data-calendar-mode="stats" class="mode-tab">סטטיסטיקה</button>
+              <button data-calendar-mode="schedule" class="mode-tab active" data-i18n="calendar.mode.schedule">תרשים יומי</button>
+              <button data-calendar-mode="list" class="mode-tab" data-i18n="calendar.mode.list">רשימת פגישות</button>
+              <button data-calendar-mode="stats" class="mode-tab" data-i18n="calendar.mode.stats">סטטיסטיקה</button>
             </div>
             <div class="mode-actions">
-              <input dir="auto" id="bookingSearch" class="search-input" placeholder="חיפוש לפי שם מטפל או חדר..." />
+              <input dir="auto" id="bookingSearch" class="search-input" data-i18n-placeholder="calendar.search" placeholder="חיפוש לפי שם מטפל או חדר..." />
             </div>
           </div>
 

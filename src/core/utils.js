@@ -161,6 +161,9 @@ export function normalizeUser(u) {
     salt:        String(u.salt || ""),
     role:      ["admin","staff"].includes(u.role) ? u.role : "staff",
     staffId:   String(u.staffId || ""),
+    fullName:  String(u.fullName || "").trim(),
+    email:     String(u.email || "").trim(),
+    phone:     String(u.phone || "").trim(),
     active:    u.active !== false,
     createdAt: u.createdAt || new Date().toLocaleString("he-IL")
   };
