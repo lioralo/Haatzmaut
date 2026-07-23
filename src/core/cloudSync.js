@@ -13,47 +13,54 @@ let _encryptionKey = null;
 let _lastSavedHash = null;
 
 /* --- Serialize state safely (strip circular refs, functions, Sets) --- */
-function safeSerialize(val) {
-  const seen = new WeakSet();
-  return JSON.stringify(val, (key, value) => {
-    if (typeof value === 'function') return undefined;
-    if (typeof value === 'object' && value !== null) {
-      if (seen.has(value)) return undefined;
-      seen.add(value);
-      if (value instanceof Set) return [...value];
-      if (value instanceof Map) return Object.fromEntries(value);
-      if (value instanceof Date) return value.toISOString();
+/* --- Serialize state safely --- */
+function copyArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    if (Array.isArray(item)) return copyArray(item);
+    const out = {};
+    for (const k of Object.keys(item)) {
+      const v = item[k];
+      if (typeof v === 'function') continue;
+      if (v instanceof Set) { out[k] = [...v]; continue; }
+      if (v instanceof Map) { out[k] = Object.fromEntries(v); continue; }
+      if (v instanceof Date) { out[k] = v.toISOString(); continue; }
+      if (Array.isArray(v)) { out[k] = copyArray(v); continue; }
+      if (v && typeof v === 'object') { out[k] = Object.assign({}, v); continue; }
+      out[k] = v;
     }
-    return value;
+    return out;
   });
 }
 
 function serializedStateForSync() {
-  return safeSerialize({
+  const data = {
     _schemaVersion: 2,
-    auditLog: state.auditLog || [],
-    loginSecurity: state.loginSecurity || { failures: [], lockUntil: 0 },
+    auditLog: copyArray(state.auditLog),
+    loginSecurity: { failures: Array.isArray(state.loginSecurity?.failures) ? [...state.loginSecurity.failures] : [], lockUntil: state.loginSecurity?.lockUntil || 0 },
     activeTab: state.activeTab || 'dashboardTab',
-    schedule: state.schedule || [],
-    rooms: state.rooms || [],
-    defaultTemplate: state.defaultTemplate || [],
-    weekTemplates: state.weekTemplates || {},
-    requests: state.requests || [],
-    selectedTags: [...(state.selectedTags || [])],
+    schedule: copyArray(state.schedule),
+    rooms: copyArray(state.rooms),
+    defaultTemplate: copyArray(state.defaultTemplate),
+    weekTemplates: typeof state.weekTemplates === 'object' ? Object.assign({}, state.weekTemplates) : {},
+    requests: copyArray(state.requests),
+    selectedTags: state.selectedTags instanceof Set ? [...state.selectedTags] : [],
     weekISO: state.weekISO || '',
     activeDay: state.activeDay || 0,
-    staff: state.staff || [],
-    users: state.users || [],
-    passwordResets: state.passwordResets || [],
-    folders: state.folders || [],
-    files: state.files || [],
-    meetingGroups: state.meetingGroups || [],
-    meetings: state.meetings || [],
-    issues: state.issues || [],
-    waitlist: state.waitlist || [],
-    settings: state.settings || {},
-    displaySettings: state.displaySettings || {}
-  });
+    staff: copyArray(state.staff),
+    users: copyArray(state.users),
+    passwordResets: copyArray(state.passwordResets),
+    folders: copyArray(state.folders),
+    files: copyArray(state.files),
+    meetingGroups: copyArray(state.meetingGroups),
+    meetings: copyArray(state.meetings),
+    issues: copyArray(state.issues),
+    waitlist: copyArray(state.waitlist),
+    settings: state.settings && typeof state.settings === 'object' ? JSON.parse(JSON.stringify(state.settings)) : {},
+    displaySettings: state.displaySettings && typeof state.displaySettings === 'object' ? JSON.parse(JSON.stringify(state.displaySettings)) : {}
+  };
+  return JSON.stringify(data);
 }
 
 /* --- Encryption --- */

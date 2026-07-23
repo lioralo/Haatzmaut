@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head><meta charset="UTF-8" /><title>Cloud Export Helper</title></head>
+<body style="font-family:sans-serif;padding:2rem">
+<h2>Cloud Export Helper</h2>
+<p>Open this from <b>http://localhost:8002/</b> to share localStorage origin.</p>
+<button id="go" style="padding:.5rem 1rem;font-size:1.1rem">Upload Local Data to Cloud</button>
+<pre id="status" style="margin-top:1rem;background:#f0f0f0;padding:1rem;white-space:pre-wrap"></pre>
+
+<script>
+const API = 'https://haatzmaut.lior-clinic.org/api';
+const log = (msg) => { document.getElementById('status').textContent += msg + '\n'; };
+
+function copyArray(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    if (Array.isArray(item)) return copyArray(item);
+    const out = {};
+    for (const k of Object.keys(item)) {
+      const v = item[k];
+      if (typeof v === 'function') continue;
+      if (v instanceof Set) { out[k] = [...v]; continue; }
+      if (v instanceof Date) { out[k] = v.toISOString(); continue; }
+      if (Array.isArray(v)) { out[k] = copyArray(v); continue; }
+      if (v && typeof v === 'object' && !Array.isArray(v)) {
+        out[k] = JSON.parse(JSON.stringify(v)); continue;
+      }
+      out[k] = v;
+    }
+    return out;
+  });
+}
+
+document.getElementById('go').onclick = async () => {
+  log('Reading localStorage...');
+  const raw = localStorage.getItem('haatzmaut_v6');
+  if (!raw) { log('ERROR: No data found in localStorage'); return; }
+  let state;
+  try { state = JSON.parse(raw); } catch(e) { log('ERROR parsing: ' + e.message); return; }
+
+  log(`Found: ${state.rooms?.length||0} rooms, ${state.staff?.length||0} staff, ${state.schedule?.length||0} entries, ${state.users?.length||0} users`);
+
+  const users = copyArray(state.users);
+  const adminUser = users.find(u => u.username === 'admin');
+  if (!adminUser?.passwordHash) { log('ERROR: No admin user with passwordHash'); return; }
+
+  log('Auth to cloud...');
+  const authRes = await fetch(`${API}/auth/verify`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:'admin', passwordHash: adminUser.passwordHash})
+  });
+  const authData = await authRes.json();
+  if (!authData.token) { log('AUTH FAILED: ' + JSON.stringify(authData)); return; }
+  log('Token obtained');
+
+  log('Deriving encryption key...');
+  const enc = new TextEncoder();
+  const salt = enc.encode('haatzmaut-sync-fixed-salt-v1');
+  const km = await crypto.subtle.importKey('raw', enc.encode('admin123'), 'PBKDF2', false, ['deriveBits','deriveKey']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2',salt,iterations:210000,hash:'SHA-256'}, km, 256);
+  const ck = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    {name:'HKDF',hash:'SHA-256',salt:enc.encode('aes-gcm-sync'),info:enc.encode('aes-gcm-key')},
+    ck, {name:'AES-GCM',length:256}, false, ['encrypt','decrypt']
+  );
+
+  log('Building payload...');
+  const partial = {
+    _schemaVersion:2, auditLog:copyArray(state.auditLog),
+    loginSecurity: state.loginSecurity || {failures:[],lockUntil:0},
+    activeTab: state.activeTab || 'dashboardTab',
+    schedule: copyArray(state.schedule),
+    rooms: copyArray(state.rooms),
+    defaultTemplate: copyArray(state.defaultTemplate),
+    weekTemplates: state.weekTemplates || {},
+    requests: copyArray(state.requests),
+    selectedTags: state.selectedTags instanceof Set ? [...state.selectedTags] : [],
+    weekISO: state.weekISO || '', activeDay: state.activeDay || 0,
+    staff: copyArray(state.staff), users,
+    passwordResets: copyArray(state.passwordResets),
+    folders: copyArray(state.folders), files: copyArray(state.files),
+    meetingGroups: copyArray(state.meetingGroups),
+    meetings: copyArray(state.meetings),
+    issues: copyArray(state.issues),
+    waitlist: copyArray(state.waitlist),
+    settings: JSON.parse(JSON.stringify(state.settings || {})),
+    displaySettings: JSON.parse(JSON.stringify(state.displaySettings || {}))
+  };
+  const plain = JSON.stringify(partial);
+  log(`Payload: ${plain.length} bytes`);
+
+  log('Encrypting...');
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM',iv}, key, enc.encode(plain));
+  const encryptedData = btoa(String.fromCharCode(...new Uint8Array(ct)));
+  const ivB64 = btoa(String.fromCharCode(...iv));
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(plain));
+  const hashHex = Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  log(`Encrypted: ${encryptedData.length} bytes`);
+
+  log('Saving to cloud...');
+  const saveRes = await fetch(`${API}/sync/save`, {
+    method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authData.token},
+    body: JSON.stringify({encryptedData, iv:ivB64, dataHash:hashHex})
+  });
+  const saveData = await saveRes.json();
+  if (saveData.ok) {
+    log('SUCCESS! Data uploaded to cloud.');
+  } else {
+    log('FAILED: ' + JSON.stringify(saveData));
+  }
+};
+</script>
+</body>
+</html>
