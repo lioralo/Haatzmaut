@@ -103,9 +103,20 @@ body {
   font-weight: 700;
 }
 
-.back-link {
-  color: var(--primary-dark);
+.back-link, .back-btn {
+  display: inline-block;
+  color: #ffffff;
+  background: var(--primary);
   font-weight: 700;
+  padding: .35rem .75rem;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  font-size: .85rem;
+  margin-top: .35rem;
+  transition: background 150ms;
+}
+.back-link:hover, .back-btn:hover {
+  background: var(--primary-2);
 }
 
 .notifications-wrap {

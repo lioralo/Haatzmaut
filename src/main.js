@@ -20,7 +20,8 @@ import {
   ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
   expandRecurringEntries, cleanExpiredWaitlist, deleteRecurringSeries,
   updateRecurringInstance, addToWaitlist, removeFromWaitlist,
-  getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg
+  getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg,
+  buildDefaultSchedule, instantiateTemplateWeek
 } from './calendar/state.js';
 import {
   renderOccupancy, renderDayTabs, renderWeekHeader, renderStats,
@@ -424,6 +425,14 @@ async function initialize() {
   initModeToolbars();
   initAdminSubTabs();
   initBackupHandlers();
+
+  if (!state.defaultTemplate || !state.defaultTemplate.length) {
+    state.defaultTemplate = buildDefaultSchedule(state.weekISO, state.rooms);
+    if (!state.schedule.length) {
+      state.schedule = instantiateTemplateWeek(state.defaultTemplate, state.weekISO, state.rooms);
+      persistStateImmediate();
+    }
+  }
 
   ensureSyncedScheduleWindow();
   runIntegrityAssistant();
