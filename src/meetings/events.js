@@ -316,6 +316,8 @@ function deleteGroupHandler(groupId) {
 function editMeetingHandler(meetingId) {
   const meeting = state.meetings.find(m => m.id === meetingId);
   if (!meeting) return;
+  byId("meetingsViewMode")?.classList.add("hidden");
+  byId("meetingsEditMode")?.classList.remove("hidden");
   renderMeetingForm(meeting);
   const submitBtn = byId("meetingForm")?.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.textContent = "עדכון";

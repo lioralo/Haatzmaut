@@ -599,6 +599,7 @@ function switchLang() {
   const next = current === "he" ? "en" : "he";
   setLanguage(next);
   updateLangSwitchButton();
+  if (state.currentUser) renderActiveTab();
   showToast(next === "he" ? "השפה שונתה לעברית" : "Language switched to English", "info");
 }
 

@@ -46,24 +46,34 @@ export function ensureDefaultSundayMeetings() {
     augustSundays.includes(m.date) && m.time === "12:30"
   );
 
-  if (hasAugustMeeting) return;
-
-  state.meetings = [];
+  if (!hasAugustMeeting) {
+    state.meetings = [];
+  } else {
+    state.meetings = state.meetings.filter(m =>
+      augustSundays.includes(m.date) && m.time === "12:30"
+    );
+  }
 
   let created = 0;
   augustSundays.forEach(sundayISO => {
     teams.forEach(team => {
-      state.meetings.push(normalizeMeeting({
-        speaker: "",
-        title: `ישיבת ${team}`,
-        groupIds: [],
-        date: sundayISO,
-        time: "12:30",
-        duration: 90,
-        recurringRule: null,
-        agenda: `ישיבת צוות ${team} — אוגוסט`
-      }));
-      created++;
+      const exists = state.meetings.find(m =>
+        m.date === sundayISO && m.time === "12:30" &&
+        (m.title || "").includes(team)
+      );
+      if (!exists) {
+        state.meetings.push(normalizeMeeting({
+          speaker: "",
+          title: `ישיבת ${team}`,
+          groupIds: [],
+          date: sundayISO,
+          time: "12:30",
+          duration: 90,
+          recurringRule: null,
+          agenda: `ישיבת צוות ${team} — אוגוסט`
+        }));
+        created++;
+      }
     });
   });
 

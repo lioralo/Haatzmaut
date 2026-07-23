@@ -86,6 +86,8 @@ const translations = {
     "staff.resetRequests": "בקשות איפוס",
     "staff.resetPassword": "איפוס סיסמה",
     "staff.toggleActive": "השבת/אפשר",
+    "staff.disable": "השבת",
+    "staff.enable": "אפשר",
     "staff.downloadCSV": "הורד CSV",
 
     /* Meetings */
@@ -231,6 +233,7 @@ const translations = {
     "toast.saved": "נשמר",
     "toast.deleted": "נמחק",
     "toast.error": "שגיאה",
+    "dashboard.rooms": "חדרים",
     "dashboard.weekAppts": "פגישות השבוע",
     "dashboard.todayAppts": "פגישות היום",
     "dashboard.inSession": "בטיפול כעת",
@@ -271,6 +274,11 @@ const translations = {
     "meeting.info.agenda": "סדר יום",
     "meeting.info.link": "קישור",
     "meeting.info.files": "קבצים",
+    "day.sunday": "ראשון",
+    "day.monday": "שני",
+    "day.tuesday": "שלישי",
+    "day.wednesday": "רביעי",
+    "day.thursday": "חמישי",
   },
 
   en: {
@@ -351,6 +359,8 @@ const translations = {
     "staff.resetRequests": "Reset Requests",
     "staff.resetPassword": "Reset Password",
     "staff.toggleActive": "Enable/Disable",
+    "staff.disable": "Disable",
+    "staff.enable": "Enable",
     "staff.downloadCSV": "Download CSV",
 
     "meetings.title": "Team Meetings",
@@ -488,6 +498,7 @@ const translations = {
     "toast.saved": "Saved",
     "toast.deleted": "Deleted",
     "toast.error": "Error",
+    "dashboard.rooms": "Rooms",
     "dashboard.weekAppts": "Week Appointments",
     "dashboard.todayAppts": "Today's Appointments",
     "dashboard.inSession": "In Session Now",
@@ -528,6 +539,11 @@ const translations = {
     "meeting.info.agenda": "Agenda",
     "meeting.info.link": "Link",
     "meeting.info.files": "Files",
+    "day.sunday": "Sunday",
+    "day.monday": "Monday",
+    "day.tuesday": "Tuesday",
+    "day.wednesday": "Wednesday",
+    "day.thursday": "Thursday",
   }
 };
 

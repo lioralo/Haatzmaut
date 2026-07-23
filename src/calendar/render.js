@@ -11,6 +11,8 @@ import {
   SLOT_COUNT
 } from '../core/constants.js';
 
+import { t } from '../core/i18n.js';
+
 import {
   byId,
   esc,
@@ -237,7 +239,7 @@ export function renderOccupancy() {
        <small class="rcol-tags">${r.tags.map(t => esc(t)).join(" · ")}</small>
      </th>`
   ).join("");
-  const thead = `<thead><tr role="row"><th class="time-col-head" scope="col" role="columnheader">שעה</th>${thRooms}</tr></thead>`;
+  const thead = `<thead><tr role="row"><th class="time-col-head" scope="col" role="columnheader">${t("table.time")}</th>${thRooms}</tr></thead>`;
 
   const skipSet = new Set();
 
@@ -322,9 +324,10 @@ export function renderDayTabs() {
     const date   = addDays(ws, d.key);
     const active = d.key === state.activeDay;
     const count  = state.schedule.filter(e => e.weekISO === isoWk && e.day === d.key).length;
+    const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][d.key] || d.label;
     return `<button type="button" class="day-tab${active ? " active" : ""}" data-day="${d.key}">
       <span class="dt-short">${d.short}</span>
-      <span class="dt-label">${d.label}</span>
+      <span class="dt-label">${t(dayKey)}</span>
       <span class="dt-date">${fmtShort(date)}</span>
       ${count ? `<span class="dt-count">${count}</span>` : ""}
     </button>`;
@@ -354,7 +357,8 @@ export function renderWeekHeader() {
   const dh = byId("dayHeading");
   if (dh) {
     const d = DAY_DEFS[state.activeDay];
-    dh.textContent = `${d?.label || ""} · ${fmtDate(activeDayDate())}`;
+    const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][state.activeDay] || "day.sunday";
+    dh.textContent = `${t(dayKey)} · ${fmtDate(activeDayDate())}`;
   }
   const awl = byId("adminWeekLabel");
   if (awl) awl.textContent = `שבוע: ${weekRange()}`;
@@ -367,14 +371,14 @@ export function renderWeekHeader() {
 export function renderStats() {
   const box = byId("dashboardStats");
   if (!box) return;
-  const today  = activeDayEntries().length;
+  const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length;
   const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
   const pendingRequests = state.requests.filter(r => r.status === "pending").length;
   box.innerHTML = `
-    <div class="stat-card"><span>חדרים</span>          <strong>${state.rooms.length}</strong></div>
-    <div class="stat-card"><span>הזמנות היום</span>    <strong>${today}</strong></div>
-    <div class="stat-card"><span>הזמנות בשבוע</span>  <strong>${weekly}</strong></div>
-    <div class="stat-card"><span>בקשות ממתינות</span>  <strong>${pendingRequests}</strong></div>
+    <div class="stat-card"><span>${t("dashboard.rooms") || "חדרים"}</span><strong>${state.rooms.length}</strong></div>
+    <div class="stat-card"><span>${t("dashboard.todayAppts")}</span><strong>${today}</strong></div>
+    <div class="stat-card"><span>${t("dashboard.weekAppts")}</span><strong>${weekly}</strong></div>
+    <div class="stat-card"><span>${t("dashboard.pendingReqs")}</span><strong>${pendingRequests}</strong></div>
   `;
 }
 

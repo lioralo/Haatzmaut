@@ -45,6 +45,7 @@ export function initStaffEvents() {
   byId("adminUserForm")?.addEventListener("submit", async e => {
     e.preventDefault();
     if (!isAdmin()) return;
+    const editId = byId("adminUserId").value;
     let uname;
     try {
       uname = normalizeUsernameInput(byId("adminUserName").value);
@@ -57,6 +58,33 @@ export function initStaffEvents() {
     const fullName = (byId("adminUserFullName")?.value || "").trim();
     const email = (byId("adminUserEmail")?.value || "").trim();
     const phone = (byId("adminUserPhone")?.value || "").trim();
+
+    if (editId) {
+      const existing = state.users.find(u => u.id === editId);
+      if (!existing) { showToast("משתמש לא נמצא.", "error"); return; }
+      const dupName = state.users.find(u => u.username === uname && u.id !== editId);
+      if (dupName) { showToast("שם משתמש תפוס.", "error"); return; }
+      if (role === "staff" && !staffId) { showToast("יש לשייך משתמש צוות לאיש צוות.", "error"); return; }
+      if (staffId && state.users.some(u => u.staffId === staffId && u.id !== editId)) {
+        showToast("איש צוות זה כבר משויך למשתמש אחר.", "error"); return;
+      }
+      existing.username = uname;
+      existing.role = role;
+      existing.staffId = staffId;
+      existing.fullName = fullName;
+      existing.email = email;
+      existing.phone = phone;
+      persistState();
+      showToast(`משתמש ${uname} עודכן.`, "info");
+      byId("adminUserForm").reset();
+      byId("adminUserId").value = "";
+      byId("adminUserSaveBtn").textContent = "צור משתמש";
+      byId("adminUserClearBtn").classList.add("hidden");
+      renderAdminUsers();
+      addNotification(`משתמש ${uname} עודכן.`);
+      return;
+    }
+
     if (!uname) { showToast("יש להזין שם משתמש.", "error"); return; }
     if (state.users.find(u => u.username === uname)) { showToast("שם משתמש תפוס.", "error"); return; }
     if (role === "staff" && !staffId) { showToast("יש לשייך משתמש צוות לאיש צוות.", "error"); return; }

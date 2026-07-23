@@ -9,6 +9,7 @@ import {
 import {
   state, isAdmin
 } from '../core/index.js';
+import { t } from '../core/i18n.js';
 import {
   ensureDefaultGroups,
   getGroupById,
@@ -291,7 +292,7 @@ export function renderMeetingTimeline() {
         ${RECURRING_PARENT_RULES.includes(m.recurringRule) ? `<div class="mt-recur">&#x1F501; &#x05EA;&#x05D1;&#x05E0;&#x05D9;&#x05EA; — ${recurringRuleLabel(m.recurringRule)}</div>` : ''}
         ${m.agenda ? `<div class="mt-recur">${esc(m.agenda.substring(0, 120))}${m.agenda.length > 120 ? "..." : ""}</div>` : ''}
       </div>
-      ${admin ? `<div style="display:flex;gap:.25rem;align-items:center"><button class="btn-sm" data-action="edit-meeting" data-meeting-id="${m.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button><button class="btn-sm secondary" data-action="del-meeting" data-meeting-id="${m.id}">&#x05DE;&#x05D7;&#x05D9;&#x05E7;&#x05D4;</button><button class="btn-sm secondary" data-go-to-date="${m.date}">&#x1F4C5; &#x05E6;&#x05E4;&#x05D9;&#x05D4; &#x05D1;&#x05DC;&#x05D5;&#x05D7;</button></div>` : ''}
+      ${admin ? `<div style="display:flex;gap:.25rem;align-items:center"><button class="btn-sm" data-action="edit-meeting" data-meeting-id="${m.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button><button class="btn-sm secondary" data-action="del-meeting" data-meeting-id="${m.id}">&#x05DE;&#x05D7;&#x05D9;&#x05E7;&#x05D4;</button></div>` : ''}
     </div>`;
   };
 
@@ -384,19 +385,19 @@ export function showMeetingInfoDialog(meeting) {
   dialog.style.cssText = "padding:0;border:none;border-radius:12px;box-shadow:0 32px 80px rgba(15,23,42,.32);max-width:480px;width:90vw;background:var(--surface-2);";
   dialog.innerHTML = `
     <div class="dialog-head">
-      <h3>${esc(meeting.title || "ישיבה")}</h3>
+      <h3>${esc(meeting.title || t("meetings.title"))}</h3>
       <button type="button" class="dialog-close-btn" aria-label="סגור" id="meetingInfoClose">✕</button>
     </div>
     <div class="dialog-body" style="display:grid;gap:.6rem;font-size:.9rem">
-      <div><strong>📅 תאריך:</strong> ${esc(dateStr)} · ${esc(time)} (${duration} דק')</div>
-      <div><strong>👤 דובר/מנהל:</strong> ${esc(speaker)}</div>
-      <div><strong>👥 קבוצה:</strong> ${esc(groups)}</div>
-      <div><strong>📋 סדר יום:</strong> ${esc(agenda)}</div>
-      ${link ? `<div><strong>🔗 קישור:</strong> <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a></div>` : ""}
-      <div><strong>📎 קבצים:</strong> ${esc(files)}</div>
+      <div><strong>📅 ${t("meeting.info.date")}:</strong> ${esc(dateStr)} · ${esc(time)} (${duration} ${t("meeting.duration")})</div>
+      <div><strong>👤 ${t("meeting.info.speaker")}:</strong> ${esc(speaker)}</div>
+      <div><strong>👥 ${t("meeting.info.group")}:</strong> ${esc(groups)}</div>
+      <div><strong>📋 ${t("meeting.info.agenda")}:</strong> ${esc(agenda)}</div>
+      ${link ? `<div><strong>🔗 ${t("meeting.info.link")}:</strong> <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a></div>` : ""}
+      <div><strong>📎 ${t("meeting.info.files")}:</strong> ${esc(files)}</div>
     </div>
     <div class="dialog-footer">
-      <button type="button" class="secondary" id="meetingInfoClose2">סגור</button>
+      <button type="button" class="secondary" id="meetingInfoClose2">${t("common.close")}</button>
     </div>
   `;
 

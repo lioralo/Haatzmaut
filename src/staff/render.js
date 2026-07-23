@@ -1,5 +1,6 @@
 import { byId, esc, generatePassword, passwordForUser, showToast, makeId } from '../core/index.js';
 import { state, isAdmin, getStaffById, persistState, recordAudit } from '../core/index.js';
+import { t } from '../core/i18n.js';
 import { DEFAULT_PERMISSIONS } from './state.js';
 
 export function renderAdminUsers() {
@@ -15,6 +16,7 @@ export function renderAdminUsers() {
         ${!u.active ? `<span class="muted small">מושבת פעולה</span>` : ""}
       </div>
       <div class="admin-row-acts">
+        <button class="btn-sm" data-action="edit-user" data-user-id="${u.id}">עריכה</button>
         <button class="btn-sm" data-action="reset-pwd" data-user-id="${u.id}">איפוס סיסמה</button>
         <button class="btn-sm ${u.active ? "secondary" : ""}" data-action="toggle-user" data-user-id="${u.id}">${u.active ? "השבת" : "אפשר"}</button>
       </div>
@@ -25,6 +27,21 @@ export function renderAdminUsers() {
     btn.addEventListener("click", () => {
       const user = state.users.find(u => u.id === btn.dataset.userId);
       if (!user) return;
+      if (btn.dataset.action === "edit-user") {
+        byId("adminUserId").value = user.id;
+        byId("adminUserName").value = user.username;
+        byId("adminUserRole").value = user.role;
+        byId("adminUserStaff").value = user.staffId || "";
+        const fn = byId("adminUserFullName");
+        if (fn) fn.value = user.fullName || "";
+        const em = byId("adminUserEmail");
+        if (em) em.value = user.email || "";
+        const ph = byId("adminUserPhone");
+        if (ph) ph.value = user.phone || "";
+        byId("adminUserSaveBtn").textContent = "עדכן משתמש";
+        byId("adminUserClearBtn").classList.remove("hidden");
+        return;
+      }
       if (btn.dataset.action === "reset-pwd") {
         const rawPwd = generatePassword();
         passwordForUser(rawPwd).then(({ salt, passwordHash }) => {
@@ -286,27 +303,27 @@ export function renderStaffDirectory() {
   const selfUser = currentUser ? state.users.find(u => u.username === currentUser.username) : null;
 
   container.innerHTML = `
-    <div class="section-head"><h2>צוות המרפאה</h2></div>
+    <div class="section-head"><h2>${t("staff.title")}</h2></div>
     ${selfUser ? `
     <details class="filter-collapsible" id="profileEditSection">
-      <summary>הפרופיל שלי (${esc(selfUser.username)})</summary>
+      <summary>${t("profile.myProfile")} (${esc(selfUser.username)})</summary>
       <form id="profileEditForm" class="grid-form compact-form" style="margin-top:.5rem">
-        <label>שם מלא <input id="profileFullName" value="${esc(selfUser.fullName || '')}" /></label>
-        <label>דוא"ל <input id="profileEmail" type="email" value="${esc(selfUser.email || '')}" /></label>
-        <label>טלפון <input id="profilePhone" type="tel" value="${esc(selfUser.phone || '')}" /></label>
-        <label>סיסמה חדשה <input id="profileNewPassword" type="password" placeholder="השאר ריק ללא שינוי" /></label>
+        <label>${t("profile.fullName")} <input id="profileFullName" value="${esc(selfUser.fullName || '')}" /></label>
+        <label>${t("staff.email")} <input id="profileEmail" type="email" value="${esc(selfUser.email || '')}" /></label>
+        <label>${t("staff.phone")} <input id="profilePhone" type="tel" value="${esc(selfUser.phone || '')}" /></label>
+        <label>${t("profile.newPassword")} <input id="profileNewPassword" type="password" placeholder="${t("profile.passwordPlaceholder")}" /></label>
         <div class="form-actions">
-          <button type="submit" class="btn-sm">שמירת פרופיל</button>
+          <button type="submit" class="btn-sm">${t("profile.saveProfile")}</button>
         </div>
       </form>
     </details>
     ` : ""}
-    <input id="staffSearchInput" class="search-input" placeholder="חיפוש בצוות..." value="${esc(search || "")}" style="width:100%;margin-bottom:.75rem" />
+    <input id="staffSearchInput" class="search-input" placeholder="${t("staff.search")}" value="${esc(search || "")}" style="width:100%;margin-bottom:.75rem" />
     <div class="table-scroll" style="border-radius:8px">
       <table class="occ-table" style="font-size:.84rem;width:100%">
         <thead><tr>
-          <th>שם מלא</th><th>טלפון</th><th>דוא"ל</th><th>תפקיד</th><th>צוות</th><th>סטטוס</th>
-          ${isAdmin() ? '<th style="width:auto;white-space:nowrap">פעולות</th>' : ''}
+          <th>${t("table.column.fullName")}</th><th>${t("table.column.phone")}</th><th>${t("table.column.email")}</th><th>${t("table.column.role")}</th><th>${t("table.column.team")}</th><th>${t("table.column.status")}</th>
+          ${isAdmin() ? `<th style="width:auto;white-space:nowrap">${t("table.column.actions")}</th>` : ''}
         </tr></thead>
         <tbody>${staff.length ? staff.map(s => `
           <tr data-staff-id="${s.id}">
@@ -315,7 +332,7 @@ export function renderStaffDirectory() {
             <td>${esc(s.email)}</td>
             <td>${esc(s.role)}</td>
             <td>${esc(s.team)}</td>
-            <td>${s.active !== false ? 'פעיל' : 'מושבת'}</td>
+            <td>${s.active !== false ? t("table.column.active") : t("table.column.inactive")}</td>
             ${isAdmin() ? `<td style="white-space:nowrap">
               <button class="btn-sm" data-edit-staff="${s.id}">עריכה</button>
               <button class="btn-sm danger" data-del-staff="${s.id}">מחיקה</button>
@@ -324,7 +341,7 @@ export function renderStaffDirectory() {
         `).join("") : '<tr><td colspan="7" class="empty-state">לא נמצאו אנשי צוות</td></tr>'}</tbody>
       </table>
     </div>
-    <div class="section-head" style="margin-top:1.5rem"><h2>משתמשים</h2></div>
+    <div class="section-head" style="margin-top:1.5rem"><h2>${t("staff.users")}</h2></div>
     <div class="users-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-top:.5rem">
       ${(state.users || []).length
         ? state.users.map(u => {
@@ -334,7 +351,7 @@ export function renderStaffDirectory() {
               <span class="user-role-badge ${u.role === 'admin' ? 'role-admin' : 'role-staff'}">${u.role === 'admin' ? 'מנהל' : 'צוות'}</span>
               ${linkedStaff ? `<span class="muted small">משויך: ${esc(linkedStaff.fullName)}</span>` : `<span class="muted small">ללא שיוך</span>`}
               <div style="margin-top:.25rem">
-                <button class="btn-sm" data-action="toggle-user-card" data-user-id="${u.id}">${u.active !== false ? 'השבת' : 'אפשר'}</button>
+                <button class="btn-sm" data-action="toggle-user-card" data-user-id="${u.id}">${u.active !== false ? t("staff.disable") : t("staff.enable")}</button>
               </div>
             </div>`;
           }).join("")
@@ -377,12 +394,12 @@ export function renderStaffDirectory() {
     profileForm.addEventListener("submit", async e => {
       e.preventDefault();
       if (!selfUser) return;
-      selfUser.fullName = container.querySelector("#profileFullName").value.trim();
-      selfUser.email = container.querySelector("#profileEmail").value.trim();
-      selfUser.phone = container.querySelector("#profilePhone").value.trim();
-      const newPwd = container.querySelector("#profileNewPassword").value;
+      selfUser.fullName = byId("profileFullName")?.value?.trim() || "";
+      selfUser.email = byId("profileEmail")?.value?.trim() || "";
+      selfUser.phone = byId("profilePhone")?.value?.trim() || "";
+      const newPwd = byId("profileNewPassword")?.value || "";
       if (newPwd) {
-        const { passwordForUser } = await import('../core/utils.js');
+        const { passwordForUser } = await import('../core/index.js');
         const { salt, passwordHash } = await passwordForUser(newPwd);
         selfUser.passwordHash = passwordHash;
         selfUser.salt = salt;
@@ -390,6 +407,8 @@ export function renderStaffDirectory() {
       persistState();
       showToast("פרופיל עודכן.", "info");
       recordAudit("user.profile.edit", `${selfUser.username} ערך/ערכה את הפרופיל.`, "info", false);
+      addNotification("פרופיל עודכן בהצלחה.");
+      renderStaffDirectory();
     });
   }
 }
