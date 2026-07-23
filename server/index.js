@@ -38,6 +38,18 @@ db.exec(`
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1') || origin === 'https://haatzmaut.lior-clinic.org')) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
+
 function createToken(username) {
   const payload = JSON.stringify({ username, exp: Date.now() + TOKEN_TTL_MS });
   const iv = crypto.randomBytes(16);
