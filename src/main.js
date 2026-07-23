@@ -16,8 +16,8 @@ import {
 } from './core/session.js';
 import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 import {
-  scheduleAutoSave, saveToCloudNow, loadFromCloud, loadFromCloudAndApply,
-  authenticateCloudSession, setEncryptionPassword, restoreEncryptionKey
+  saveToCloud, loadFromCloud, loadFromCloudAndApply,
+  setEncryptionPassword, restoreEncryptionKey
 } from './core/cloudSync.js';
 
 import {
@@ -577,7 +577,6 @@ function initLogin() {
 
     state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
     renderActiveTab();
-    authenticateCloudSession().catch(() => {});
   });
 }
 
@@ -1034,11 +1033,6 @@ window.addEventListener("beforeunload", persistStateImmediate);
 
 initNavigation();
 initLogin();
-
-import('./core/store.js').then(m => {
-  m.onPersist(() => { import('./core/cloudSync.js').then(cs => cs.scheduleAutoSave()); });
-});
-
 await initialize();
 startAutoBackup();
 
@@ -1049,13 +1043,18 @@ if ('serviceWorker' in navigator) {
 /* Wire cloud sync buttons */
 byId("cloudSaveBtn")?.addEventListener("click", async () => {
   const btn = byId("cloudSaveBtn");
+  const status = byId("cloudSyncStatus");
   btn.disabled = true;
   btn.textContent = "שומר…";
-  const ok = await saveToCloudNow();
-  const status = byId("cloudSyncStatus");
-  if (status) status.textContent = ok
-    ? `נשמר בהצלחה ${new Date().toLocaleString("he-IL")}`
-    : "שמירה נכשלה — בדוק חיבור רשת";
+  if (status) status.textContent = "";
+  try {
+    const ok = await saveToCloud();
+    if (status) status.textContent = ok
+      ? `נשמר בהצלחה ${new Date().toLocaleString("he-IL")}`
+      : "הנתונים לא השתנו";
+  } catch (e) {
+    if (status) status.textContent = "שמירה נכשלה — " + e.message;
+  }
   btn.disabled = false;
   btn.textContent = "שמור לענן";
 });
@@ -1063,16 +1062,16 @@ byId("cloudSaveBtn")?.addEventListener("click", async () => {
 byId("cloudLoadBtn")?.addEventListener("click", async () => {
   const status = byId("cloudSyncStatus");
   if (status) status.textContent = "בודק ענן…";
-  const info = await loadFromCloud();
-  if (!info) return;
-
-  const cloudDate = info.updatedAt ? new Date(info.updatedAt).toLocaleString("he-IL") : "לא ידוע";
-  const ok = confirm(`נמצא מידע בענן מתאריך ${cloudDate} (${Math.round(info.sizeBytes / 1024)}KB).\n\nלטעון ולהחליף את המידע המקומי?`);
-  if (!ok) {
-    if (status) status.textContent = "טעינה בוטלה.";
-    return;
+  try {
+    const info = await loadFromCloud();
+    if (!info) { if (status) status.textContent = ""; return; }
+    const cloudDate = info.updatedAt ? new Date(info.updatedAt).toLocaleString("he-IL") : "לא ידוע";
+    const ok = confirm(`נמצא מידע בענן מתאריך ${cloudDate} (${Math.round(info.sizeBytes / 1024)}KB).\n\nלטעון ולהחליף את המידע המקומי?`);
+    if (!ok) { if (status) status.textContent = "טעינה בוטלה."; return; }
+    await loadFromCloudAndApply();
+  } catch (e) {
+    if (status) status.textContent = "טעינה נכשלה — " + e.message;
   }
-  await loadFromCloudAndApply();
 });
 
 export { showTab, renderActiveTab, addNotification, renderBookingList, renderIssuesSummary, updateNotificationBell };
