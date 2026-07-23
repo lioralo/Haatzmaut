@@ -192,8 +192,10 @@ export async function loadFromCloudAndApply() {
     state.files = parsed.files || [];
     state.auditLog = parsed.auditLog || [];
     state.passwordResets = parsed.passwordResets || [];
-    state.weekISO = parsed.weekISO || state.weekISO;
-    state.activeDay = parsed.activeDay ?? state.activeDay;
+    // Reset to current week, not the exported one
+    state.weekISO = '';
+    state.activeDay = (new Date()).getDay();
+    if (state.activeDay > 4) state.activeDay = 0;
     if (parsed.selectedTags) state.selectedTags = new Set(parsed.selectedTags);
     if (parsed.loginSecurity) state.loginSecurity = parsed.loginSecurity;
 
