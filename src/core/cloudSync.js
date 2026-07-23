@@ -173,9 +173,37 @@ export async function loadFromCloudAndApply() {
     const plain = await decryptPayload(_encryptionKey, data.iv, data.encryptedData);
     const parsed = JSON.parse(plain);
     if (!parsed.rooms || !parsed.staff) throw new Error('מידע פגום');
+
+    // Apply directly to state — no reload needed
+    state.rooms = parsed.rooms || [];
+    state.staff = parsed.staff || [];
+    state.schedule = parsed.schedule || [];
+    state.users = parsed.users || [];
+    state.settings = parsed.settings || state.settings;
+    state.displaySettings = parsed.displaySettings || {};
+    state.defaultTemplate = parsed.defaultTemplate || [];
+    state.weekTemplates = parsed.weekTemplates || {};
+    state.requests = parsed.requests || [];
+    state.meetings = parsed.meetings || [];
+    state.meetingGroups = parsed.meetingGroups || [];
+    state.issues = parsed.issues || [];
+    state.waitlist = parsed.waitlist || [];
+    state.folders = parsed.folders || [];
+    state.files = parsed.files || [];
+    state.auditLog = parsed.auditLog || [];
+    state.passwordResets = parsed.passwordResets || [];
+    state.weekISO = parsed.weekISO || state.weekISO;
+    state.activeDay = parsed.activeDay ?? state.activeDay;
+    if (parsed.selectedTags) state.selectedTags = new Set(parsed.selectedTags);
+    if (parsed.loginSecurity) state.loginSecurity = parsed.loginSecurity;
+
     localStorage.setItem('haatzmaut_v6', JSON.stringify(parsed));
-    showToast('נטען — מרענן…', 'info');
-    setTimeout(() => { window.location.href = window.location.origin + '/?v=' + Date.now(); }, 500);
+    showToast('נטען מהענן — מרענן תצוגה…', 'info');
+    
+    // Re-render UI without reloading
+    setTimeout(() => {
+      import('../main.js').then(m => { m.renderActiveTab(); });
+    }, 300);
   } catch (err) {
     showToast('טעינה נכשלה: ' + err.message, 'error');
   }
