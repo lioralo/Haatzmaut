@@ -15,23 +15,8 @@ let _lastSavedHash = null;
 /* --- Serialize state safely (strip circular refs, functions, Sets) --- */
 /* --- Serialize state safely --- */
 function copyArray(arr) {
-  if (!Array.isArray(arr)) return [];
-  return arr.map(item => {
-    if (!item || typeof item !== 'object') return item;
-    if (Array.isArray(item)) return copyArray(item);
-    const out = {};
-    for (const k of Object.keys(item)) {
-      const v = item[k];
-      if (typeof v === 'function') continue;
-      if (v instanceof Set) { out[k] = [...v]; continue; }
-      if (v instanceof Map) { out[k] = Object.fromEntries(v); continue; }
-      if (v instanceof Date) { out[k] = v.toISOString(); continue; }
-      if (Array.isArray(v)) { out[k] = copyArray(v); continue; }
-      if (v && typeof v === 'object') { out[k] = Object.assign({}, v); continue; }
-      out[k] = v;
-    }
-    return out;
-  });
+  if (!Array.isArray(arr) || !arr.length) return [];
+  return JSON.parse(JSON.stringify(arr));
 }
 
 function serializedStateForSync() {
@@ -97,8 +82,8 @@ async function encryptPayload(key, plaintext) {
   const enc = new TextEncoder();
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
   return {
-    iv: btoa(String.fromCharCode(...iv)),
-    encryptedData: btoa(String.fromCharCode(...new Uint8Array(ciphertext)))
+    iv: toBase64(iv),
+    encryptedData: toBase64(new Uint8Array(ciphertext))
   };
 }
 
@@ -107,6 +92,17 @@ async function decryptPayload(key, ivB64, encryptedB64) {
   const encrypted = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
   const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, encrypted);
   return new TextDecoder().decode(decrypted);
+}
+
+function toBase64(bytes) {
+  const len = bytes.byteLength || bytes.length;
+  let result = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = bytes.slice ? bytes.slice(i, i + chunkSize) : bytes.subarray(i, i + chunkSize);
+    result += String.fromCharCode.apply(null, new Uint8Array(chunk));
+  }
+  return btoa(result);
 }
 
 /* --- API --- */
