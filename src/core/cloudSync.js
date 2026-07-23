@@ -162,10 +162,14 @@ export async function cloudAuth(username, passwordHash) {
 
 export async function saveToCloud() {
   if (!state.currentUser) return;
-  const user = state.users?.find(u => u.username === state.currentUser.username);
-  if (!user?.passwordHash && !_encryptionKey) {
-    showToast('אין מפתח הצפנה — התחבר מחדש.', 'warn');
-    return false;
+  
+  // Auto-authenticate if no token yet
+  if (!getToken()) {
+    const authed = await authenticateCloudSession();
+    if (!authed) {
+      showToast('אימות ענן נכשל — בדוק חיבור.', 'error');
+      return false;
+    }
   }
 
   try {

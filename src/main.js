@@ -577,6 +577,7 @@ function initLogin() {
 
     state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
     renderActiveTab();
+    authenticateCloudSession().catch(() => {});
   });
 }
 
