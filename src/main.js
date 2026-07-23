@@ -400,6 +400,7 @@ async function initialize() {
   if (loggedIn) {
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
+    byId("appSection").style.display = "";
     applyAccessControl();
     renderSessionBar();
     registerActivity();
@@ -456,6 +457,7 @@ function initNavigation() {
     recordAudit("auth.logout", "התנתקות ידנית.", "info", false);
     logoutCurrentUser();
     byId("appSection").classList.add("hidden");
+    byId("appSection").style.display = "none";
     byId("loginSection").classList.remove("hidden");
     renderSessionBar();
   });
@@ -557,6 +559,7 @@ function initLogin() {
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
+    byId("appSection").style.display = "";
     byId("loginError").classList.add("hidden");
     recordAudit("auth.login.success", `התחברות: ${u}.`, "info", false);
     applyAccessControl();

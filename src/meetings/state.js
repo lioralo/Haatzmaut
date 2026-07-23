@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { state, persistState, recordAudit } from '../core/store.js';
-import { DAY_DEFS } from '../core/constants.js';
+import { DAY_DEFS, TEAMS } from '../core/constants.js';
 import {
   makeId, localISO, showToast,
   parseCsvRows, ensureUploadAllowed, confirmImportPreview,
@@ -15,8 +15,8 @@ import {
    ============================================================ */
 
 const DEFAULT_GROUPS = [
-  { id: "g1", name: "צוות מבוגרים", color: "#0072BC", weeklyDay: 0, defaultTime: "09:00" },
-  { id: "g2", name: "צוות ילדים",   color: "#F47B20", weeklyDay: 0, defaultTime: "10:00" }
+  { id: "g1", name: "צוות מבוגרים", color: "#0072BC", weeklyDay: 0, defaultTime: "12:30" },
+  { id: "g2", name: "צוות ילדים",   color: "#F47B20", weeklyDay: 0, defaultTime: "12:30" }
 ];
 
 export function ensureDefaultGroups() {
@@ -27,44 +27,50 @@ export function ensureDefaultGroups() {
 }
 
 export function ensureDefaultSundayMeetings() {
-  const now = localISO(new Date());
-  const existingSunday = state.meetings.find(m =>
-    m.date === now.split("-")[0] + "-" + now.split("-")[1] + "-" + now.split("-")[2] &&
-    m.time === "12:30" && m.groupIds && m.groupIds.length >= 2
+  const now = new Date();
+  const thisYear = now.getFullYear();
+  const augStart = new Date(thisYear, 7, 1); // August 1
+  const augEnd = new Date(thisYear, 8, 0);   // August 31
+
+  const augustSundays = [];
+  const d = new Date(augStart);
+  while (d.getDay() !== 0) { d.setDate(d.getDate() + 1); }
+  while (d <= augEnd) {
+    augustSundays.push(localISO(d));
+    d.setDate(d.getDate() + 7);
+  }
+
+  const teams = state.settings?.teams || TEAMS;
+
+  const hasAugustMeeting = state.meetings.some(m =>
+    augustSundays.includes(m.date) && m.time === "12:30"
   );
-  if (existingSunday) return;
 
-  const defaultTeams = [
-    { name: "צוות מבוגרים", color: "#0072BC" },
-    { name: "צוות ילדים", color: "#F47B20" }
-  ];
+  if (hasAugustMeeting) return;
 
-  defaultTeams.forEach((t, i) => {
-    let group = state.meetingGroups.find(g => g.name === t.name);
-    if (!group) {
-      group = normalizeGroup({
-        id: makeId("group"),
-        name: t.name,
-        color: t.color,
-        weeklyDay: 0,
-        defaultTime: "12:30"
-      });
-      state.meetingGroups.push(group);
-    }
-    const meeting = normalizeMeeting({
-      speaker: "",
-      title: `ישיבת ${t.name}`,
-      groupIds: [group.id],
-      date: now,
-      time: "12:30",
-      duration: 60,
-      recurringRule: "weekly",
-      agenda: `ישיבה שבועית של ${t.name}`
+  state.meetings = [];
+
+  let created = 0;
+  augustSundays.forEach(sundayISO => {
+    teams.forEach(team => {
+      state.meetings.push(normalizeMeeting({
+        speaker: "",
+        title: `ישיבת ${team}`,
+        groupIds: [],
+        date: sundayISO,
+        time: "12:30",
+        duration: 90,
+        recurringRule: null,
+        agenda: `ישיבת צוות ${team} — אוגוסט`
+      }));
+      created++;
     });
-    state.meetings.push(meeting);
   });
 
-  persistState();
+  if (created) {
+    persistState();
+    recordAudit("meeting.defaults", `נוצרו ${created} ישיבות אוגוסט.`, "info", false);
+  }
 }
 
 /* ============================================================

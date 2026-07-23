@@ -18,7 +18,10 @@ import {
   ensureUploadAllowed,
   confirmImportPreview,
   parseCsvRows,
-  safeRender
+  safeRender,
+  shiftWeek,
+  sundayISO,
+  todayDayIdx
 } from '../core/utils.js';
 
 import {
@@ -68,6 +71,60 @@ import {
    ============================================================ */
 
 export function initCalendarEvents() {
+
+  /* Day tab navigation (keyboard: reset to today) */
+  document.querySelector("#dashboardTab")?.addEventListener("keydown", e => {
+    if (e.key === "t" && e.ctrlKey) {
+      e.preventDefault();
+      state.weekISO = sundayISO();
+      state.activeDay = todayDayIdx();
+      ensureSyncedScheduleWindow();
+      renderDayTabs();
+      renderWeekHeader();
+      renderOccupancy();
+    }
+  });
+
+  /* Week navigation buttons */
+  const weekPrev = byId("weekPrev");
+  const weekNext = byId("weekNext");
+  const weekToday = byId("weekToday");
+
+  if (weekPrev) weekPrev.addEventListener("click", () => {
+    state.weekISO = shiftWeek(state.weekISO, -1);
+    state.activeDay = 0;
+    ensureSyncedScheduleWindow();
+    persistState();
+    renderDayTabs();
+    renderWeekHeader();
+    renderOccupancy();
+    renderStats();
+    renderTagFilters();
+  });
+
+  if (weekNext) weekNext.addEventListener("click", () => {
+    state.weekISO = shiftWeek(state.weekISO, 1);
+    state.activeDay = 0;
+    ensureSyncedScheduleWindow();
+    persistState();
+    renderDayTabs();
+    renderWeekHeader();
+    renderOccupancy();
+    renderStats();
+    renderTagFilters();
+  });
+
+  if (weekToday) weekToday.addEventListener("click", () => {
+    state.weekISO = sundayISO();
+    state.activeDay = todayDayIdx();
+    ensureSyncedScheduleWindow();
+    persistState();
+    renderDayTabs();
+    renderWeekHeader();
+    renderOccupancy();
+    renderStats();
+    renderTagFilters();
+  });
 
   /* Booking modal submit */
   const bookingForm = byId("bookingForm");

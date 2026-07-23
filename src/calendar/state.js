@@ -541,6 +541,7 @@ export function expandRecurringEntries(weeksAhead = 8) {
           id: makeId("entry"),
           weekISO: iso,
           day: baseDay,
+          oneTime: false,
           parentRecurringId: parent.id,
           recurringRule: null,
           recurringEndDate: "",

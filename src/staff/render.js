@@ -288,7 +288,7 @@ export function renderStaffDirectory() {
       <table class="occ-table" style="font-size:.84rem;width:100%">
         <thead><tr>
           <th>שם מלא</th><th>טלפון</th><th>דוא"ל</th><th>תפקיד</th><th>צוות</th><th>סטטוס</th>
-          ${isAdmin() ? '<th style="width:100px">פעולות</th>' : ''}
+          ${isAdmin() ? '<th style="width:auto;white-space:nowrap">פעולות</th>' : ''}
         </tr></thead>
         <tbody>${staff.length ? staff.map(s => `
           <tr data-staff-id="${s.id}">
@@ -298,9 +298,9 @@ export function renderStaffDirectory() {
             <td>${esc(s.role)}</td>
             <td>${esc(s.team)}</td>
             <td>${s.active !== false ? 'פעיל' : 'מושבת'}</td>
-            ${isAdmin() ? `<td>
+            ${isAdmin() ? `<td style="white-space:nowrap">
               <button class="btn-sm" data-edit-staff="${s.id}">עריכה</button>
-              <button class="btn-sm secondary" data-del-staff="${s.id}">מחיקה</button>
+              <button class="btn-sm danger" data-del-staff="${s.id}">מחיקה</button>
             </td>` : ''}
           </tr>
         `).join("") : '<tr><td colspan="7" class="empty-state">לא נמצאו אנשי צוות</td></tr>'}</tbody>
