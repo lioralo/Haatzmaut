@@ -51,7 +51,7 @@ async function deriveKeyFromPassword(password) {
 }
 
 /* --- Build default state --- */
-function buildDefaultState() {
+async function buildDefaultState() {
   const rooms = [
     { id: "r1",  name: "חדר 1",  tags: ["טיפול ילדים", "ציוד אבחוני"] },
     { id: "r2",  name: "חדר 2",  tags: ["טיפול קבוצתי"] },
@@ -104,6 +104,24 @@ function buildDefaultState() {
     oneTime: false, sessionStatus: "", isTemplate: true, createdAt: now.toLocaleString("he-IL")
   }));
 
+  // Create admin user with a deterministic passwordHash that bootstrapAdmin would accept
+  const adminSalt = 'seed-admin-salt-v1';
+  const adminPasswordHash = await hashPassword('admin123', adminSalt);
+
+  const users = [{
+    id: 'user-admin-seed',
+    username: 'admin',
+    passwordHash: adminPasswordHash,
+    salt: adminSalt,
+    role: 'admin',
+    staffId: '',
+    fullName: 'מנהל מערכת',
+    email: '',
+    phone: '',
+    active: true,
+    createdAt: now.toLocaleString('he-IL')
+  }];
+
   const defaultTemplate = entries.map(e => ({
     day: e.day, roomId: e.roomId, start: e.start, duration: e.duration,
     staff: e.staff, team: e.team, note: e.note
@@ -123,7 +141,7 @@ function buildDefaultState() {
     weekISO,
     activeDay: Math.min(now.getDay(), 4),
     staff,
-    users: [],
+    users,
     passwordResets: [],
     folders: [],
     files: [],
@@ -156,7 +174,7 @@ async function seed() {
     .run('admin', userPasswordHash, 'admin');
 
   // Encrypt and store default state using same fixed-salt derivation as client
-  const plain = buildDefaultState();
+  const plain = await buildDefaultState();
   const { iv, encryptedData } = await encryptWithPassword(rawPwd, plain);
   const dataHash = crypto.createHash('sha256').update(plain).digest('hex');
 
