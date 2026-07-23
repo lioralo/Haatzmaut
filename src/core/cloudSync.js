@@ -14,6 +14,7 @@ let _lastSavedHash = null;
    ---------------------------------------------------------- */
 
 let _encryptionKey = null;
+const KEY_STORAGE = 'clinic_cloud_key_bits';
 
 export async function setEncryptionPassword(password) {
   const enc = new TextEncoder();
@@ -25,6 +26,23 @@ export async function setEncryptionPassword(password) {
     { name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' },
     keyMaterial, 256
   );
+  // Persist derived bits to sessionStorage so key survives page reload
+  sessionStorage.setItem(KEY_STORAGE, btoa(String.fromCharCode(...new Uint8Array(derivedBits))));
+  await buildKeyFromBits(derivedBits);
+}
+
+export async function restoreEncryptionKey() {
+  const stored = sessionStorage.getItem(KEY_STORAGE);
+  if (!stored) return false;
+  try {
+    const bits = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+    await buildKeyFromBits(bits);
+    return true;
+  } catch { return false; }
+}
+
+async function buildKeyFromBits(derivedBits) {
+  const enc = new TextEncoder();
   const cloudKey = await crypto.subtle.importKey(
     'raw', derivedBits, 'HKDF', false, ['deriveKey']
   );
@@ -36,6 +54,7 @@ export async function setEncryptionPassword(password) {
 
 function clearEncryptionKey() {
   _encryptionKey = null;
+  sessionStorage.removeItem(KEY_STORAGE);
 }
 
 async function getEncryptionKey() {

@@ -42,9 +42,9 @@ async function deriveKeyFromPassword(password) {
   return new Promise((resolve, reject) => {
     crypto.pbkdf2(password, salt, 210000, 32, 'sha256', (err, derivedBits) => {
       if (err) return reject(err);
-      crypto.hkdf('sha256', derivedBits, Buffer.alloc(0), Buffer.from('aes-gcm-key'), 32, (err2, key) => {
+      crypto.hkdf('sha256', Buffer.from(derivedBits), Buffer.from('aes-gcm-sync'), Buffer.from('aes-gcm-key'), 32, (err2, key) => {
         if (err2) return reject(err2);
-        resolve(key);
+        resolve(Buffer.from(key));
       });
     });
   });

@@ -17,7 +17,7 @@ import {
 import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 import {
   scheduleAutoSave, saveToCloudNow, loadFromCloud, loadFromCloudAndApply,
-  authenticateCloudSession, setEncryptionPassword
+  authenticateCloudSession, setEncryptionPassword, restoreEncryptionKey
 } from './core/cloudSync.js';
 
 import {
@@ -412,6 +412,8 @@ async function initialize() {
     applyAccessControl();
     renderSessionBar();
     registerActivity();
+    // Restore encryption key from previous login (survives page reload)
+    restoreEncryptionKey().catch(() => {});
   }
 
   if (state.currentUser) {
