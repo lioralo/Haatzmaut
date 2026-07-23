@@ -93,31 +93,33 @@ async function decryptPayload(key, ivB64, encryptedB64) {
    ---------------------------------------------------------- */
 
 function serializedStateForSync() {
-  return JSON.stringify({
+  const seen = new WeakSet();
+  const safe = JSON.parse(JSON.stringify({
     _schemaVersion: 2,
-    auditLog: state.auditLog,
-    loginSecurity: state.loginSecurity,
-    activeTab: state.activeTab,
-    schedule: state.schedule,
-    rooms: state.rooms,
-    defaultTemplate: state.defaultTemplate,
-    weekTemplates: state.weekTemplates,
-    requests: state.requests,
+    auditLog: state.auditLog || [],
+    loginSecurity: state.loginSecurity || { failures: [], lockUntil: 0 },
+    activeTab: state.activeTab || 'dashboardTab',
+    schedule: state.schedule || [],
+    rooms: state.rooms || [],
+    defaultTemplate: state.defaultTemplate || [],
+    weekTemplates: state.weekTemplates || {},
+    requests: state.requests || [],
     selectedTags: [...(state.selectedTags || [])],
-    weekISO: state.weekISO,
-    activeDay: state.activeDay,
-    staff: state.staff,
-    users: state.users,
-    passwordResets: state.passwordResets,
-    folders: state.folders,
-    files: state.files,
-    meetingGroups: state.meetingGroups,
-    meetings: state.meetings,
-    issues: state.issues,
-    waitlist: state.waitlist,
-    settings: state.settings,
-    displaySettings: state.displaySettings
-  });
+    weekISO: state.weekISO || '',
+    activeDay: state.activeDay || 0,
+    staff: state.staff || [],
+    users: state.users || [],
+    passwordResets: state.passwordResets || [],
+    folders: state.folders || [],
+    files: state.files || [],
+    meetingGroups: state.meetingGroups || [],
+    meetings: state.meetings || [],
+    issues: state.issues || [],
+    waitlist: state.waitlist || [],
+    settings: state.settings || {},
+    displaySettings: state.displaySettings || {}
+  }));
+  return JSON.stringify(safe);
 }
 
 /* ----------------------------------------------------------
