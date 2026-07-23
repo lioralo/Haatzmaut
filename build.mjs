@@ -35,6 +35,9 @@ if (isProd) {
   copyFileSync("styles.css", "dist/styles.css");
   copyFileSync("display.css", "dist/display.css");
   copyFileSync("accessibility.html", "dist/accessibility.html");
+
+  writeFileSync("dist/sw.js", `const CACHE_NAME="haatzmaut-${cacheBuster}";const ASSETS=["/","/index.html","/styles.css","/display.html","/display.css","/display.js","/app.min.js"];self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});self.addEventListener("fetch",e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})`);
+
   for (const f of readdirSync("templates")) {
     copyFileSync(`templates/${f}`, `dist/templates/${f}`);
   }

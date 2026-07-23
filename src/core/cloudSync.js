@@ -175,7 +175,7 @@ export async function loadFromCloudAndApply() {
     if (!parsed.rooms || !parsed.staff) throw new Error('מידע פגום');
     localStorage.setItem('haatzmaut_v6', JSON.stringify(parsed));
     showToast('נטען — מרענן…', 'info');
-    setTimeout(() => window.location.reload(), 800);
+    setTimeout(() => { window.location.href = window.location.origin + '/?v=' + Date.now(); }, 500);
   } catch (err) {
     showToast('טעינה נכשלה: ' + err.message, 'error');
   }
