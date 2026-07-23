@@ -92,9 +92,28 @@ async function decryptPayload(key, ivB64, encryptedB64) {
    Serialize current state (same shape as localStorage backup)
    ---------------------------------------------------------- */
 
+function safeSerialize(val) {
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(val, (key, value) => {
+      if (typeof value === 'function') return undefined;
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return undefined;
+        seen.add(value);
+        if (value instanceof Set) return [...value];
+        if (value instanceof Map) return [...value.entries()];
+        if (value instanceof Date) return value.toISOString();
+      }
+      return value;
+    });
+  } catch (e) {
+    console.error('[cloud-sync] serialize failed:', e.message);
+    return '{}';
+  }
+}
+
 function serializedStateForSync() {
-  const seen = new WeakSet();
-  const safe = JSON.parse(JSON.stringify({
+  return safeSerialize({
     _schemaVersion: 2,
     auditLog: state.auditLog || [],
     loginSecurity: state.loginSecurity || { failures: [], lockUntil: 0 },
@@ -118,8 +137,7 @@ function serializedStateForSync() {
     waitlist: state.waitlist || [],
     settings: state.settings || {},
     displaySettings: state.displaySettings || {}
-  }));
-  return JSON.stringify(safe);
+  });
 }
 
 /* ----------------------------------------------------------
@@ -175,20 +193,28 @@ export async function saveToCloud() {
   }
 
   try {
+    console.log('[cloud-sync] getting encryption key...');
     const key = await getEncryptionKey();
+    console.log('[cloud-sync] serializing state...');
     const plain = serializedStateForSync();
+    console.log('[cloud-sync] state size:', plain.length, 'bytes');
 
     const dataHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
     const hashHex = Array.from(new Uint8Array(dataHash)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     if (hashHex === _lastSavedHash) return false;
 
+    console.log('[cloud-sync] encrypting...');
     const { iv, encryptedData } = await encryptPayload(key, plain);
+    console.log('[cloud-sync] encrypted size:', encryptedData.length);
+
+    console.log('[cloud-sync] sending to server...');
     await apiCall('POST', '/sync/save', { encryptedData, iv, dataHash: hashHex });
     _lastSavedHash = hashHex;
+    console.log('[cloud-sync] save complete');
     return true;
   } catch (err) {
-    console.error('[cloud-sync] save failed:', err);
+    console.error('[cloud-sync] save failed:', err.message, err.stack);
     showToast(`שמירה בענן נכשלה: ${err.message}`, 'error');
     return false;
   }
