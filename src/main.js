@@ -15,6 +15,10 @@ import {
   renderSessionBar, logoutCurrentUser, clearSessionTimer
 } from './core/session.js';
 import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
+import {
+  scheduleAutoSave, saveToCloudNow, loadFromCloud, loadFromCloudAndApply,
+  authenticateCloudSession
+} from './core/cloudSync.js';
 
 import {
   ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
@@ -580,6 +584,7 @@ function initLogin() {
 
     state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
     renderActiveTab();
+    authenticateCloudSession().catch(() => {});
   });
 }
 
@@ -1036,11 +1041,45 @@ window.addEventListener("beforeunload", persistStateImmediate);
 
 initNavigation();
 initLogin();
+
+import('./core/store.js').then(m => {
+  m.onPersist(() => { import('./core/cloudSync.js').then(cs => cs.scheduleAutoSave()); });
+});
+
 await initialize();
 startAutoBackup();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
+
+/* Wire cloud sync buttons */
+byId("cloudSaveBtn")?.addEventListener("click", async () => {
+  const btn = byId("cloudSaveBtn");
+  btn.disabled = true;
+  btn.textContent = "שומר…";
+  const ok = await saveToCloudNow();
+  const status = byId("cloudSyncStatus");
+  if (status) status.textContent = ok
+    ? `נשמר בהצלחה ${new Date().toLocaleString("he-IL")}`
+    : "שמירה נכשלה — בדוק חיבור רשת";
+  btn.disabled = false;
+  btn.textContent = "שמור לענן";
+});
+
+byId("cloudLoadBtn")?.addEventListener("click", async () => {
+  const status = byId("cloudSyncStatus");
+  if (status) status.textContent = "בודק ענן…";
+  const info = await loadFromCloud();
+  if (!info) return;
+
+  const cloudDate = info.updatedAt ? new Date(info.updatedAt).toLocaleString("he-IL") : "לא ידוע";
+  const ok = confirm(`נמצא מידע בענן מתאריך ${cloudDate} (${Math.round(info.sizeBytes / 1024)}KB).\n\nלטעון ולהחליף את המידע המקומי?`);
+  if (!ok) {
+    if (status) status.textContent = "טעינה בוטלה.";
+    return;
+  }
+  await loadFromCloudAndApply();
+});
 
 export { showTab, renderActiveTab, addNotification, renderBookingList, renderIssuesSummary, updateNotificationBell };

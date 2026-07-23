@@ -135,17 +135,30 @@ function serializedState() {
 
 let _persistTimer = null;
 let _persistFailed = false;
+const _persistHooks = [];
+
+export function onPersist(fn) {
+  _persistHooks.push(fn);
+}
+
+function _notifyPersistHooks() {
+  for (const fn of _persistHooks) {
+    try { fn(); } catch {}
+  }
+}
 
 export function persistState() {
   clearTimeout(_persistTimer);
   _persistTimer = setTimeout(() => {
     _writeStorage();
+    _notifyPersistHooks();
   }, PERSIST_DEBOUNCE_MS);
 }
 
 export function persistStateImmediate() {
   clearTimeout(_persistTimer);
   _writeStorage();
+  _notifyPersistHooks();
 }
 
 function _writeStorage() {
