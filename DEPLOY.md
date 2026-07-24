@@ -1,0 +1,105 @@
+# Haatzmaut — CLI Deployment Guide
+
+## Prerequisites
+
+- SSH key at `~/Documents/private-clinic-key.pem`
+- EC2 at `13.61.60.244`
+- Local repo at `~/Haatzmaut`
+- GitHub remote: `https://github.com/lioralo/Haatzmaut`
+
+## Quick Deploy (build + push + sync)
+
+```bash
+cd ~/Haatzmaut
+npm run build && \
+rsync -avz --delete \
+  -e "ssh -i ~/Documents/private-clinic-key.pem -o StrictHostKeyChecking=no" \
+  dist/ ubuntu@13.61.60.244:/opt/haatzmaut/dist/
+```
+
+## Full Deploy (rebuild sync server + deploy)
+
+```bash
+cd ~/Haatzmaut
+
+# Build frontend
+npm run build
+
+# Upload frontend
+rsync -avz --delete \
+  -e "ssh -i ~/Documents/private-clinic-key.pem -o StrictHostKeyChecking=no" \
+  dist/ ubuntu@13.61.60.244:/opt/haatzmaut/dist/
+
+# Upload server code
+rsync -avz \
+  -e "ssh -i ~/Documents/private-clinic-key.pem -o StrictHostKeyChecking=no" \
+  server/ ubuntu@13.61.60.244:/opt/haatzmaut/server/
+
+# Rebuild and restart sync container
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "cd /opt/Private_Clinic && \
+   sudo docker compose -f docker-compose.prod.yml build haatzmaut_sync && \
+   sudo docker compose -f docker-compose.prod.yml up -d haatzmaut_sync"
+
+# Verify
+curl -sk -o /dev/null -w "haatzmaut: HTTP %{http_code}\n" https://haatzmaut.lior-clinic.org/
+curl -sk -o /dev/null -w "clinic:    HTTP %{http_code}\n" https://clinic.lior-clinic.org/login
+curl -sk https://haatzmaut.lior-clinic.org/api/healthz
+```
+
+## Restart Caddy (after Caddyfile changes)
+
+```bash
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "sudo docker stop private_clinic_caddy && sudo docker rm private_clinic_caddy && \
+   sudo docker stop private_clinic_app && sudo docker rm private_clinic_app && \
+   cd /opt/Private_Clinic && \
+   sudo docker compose -f docker-compose.prod.yml up -d"
+```
+
+## Seed Cloud Database (wipes + re-uploads encrypted state)
+
+```bash
+# Upload seed script
+rsync -avz \
+  -e "ssh -i ~/Documents/private-clinic-key.pem -o StrictHostKeyChecking=no" \
+  server/seed_full.mjs ubuntu@13.61.60.244:/opt/haatzmaut/server/seed_full.mjs
+
+# Run seed
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "sudo docker cp /opt/haatzmaut/server/seed_full.mjs haatzmaut_sync:/app/seed_full.mjs && \
+   sudo docker exec haatzmaut_sync node /app/seed_full.mjs"
+```
+
+## Push to GitHub
+
+```bash
+cd ~/Haatzmaut
+git add -A
+git commit -m "your commit message"
+git push origin main
+```
+
+## View Logs
+
+```bash
+# Sync server
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "sudo docker logs haatzmaut_sync --tail 20"
+
+# Caddy
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "sudo docker logs private_clinic_caddy --tail 20"
+
+# App
+ssh -i ~/Documents/private-clinic-key.pem ubuntu@13.61.60.244 \
+  "sudo docker logs private_clinic_app --tail 20"
+```
+
+## URLs
+
+| Site | URL |
+|------|-----|
+| Haatzmaut | https://haatzmaut.lior-clinic.org |
+| Clinic | https://clinic.lior-clinic.org |
+| Cloud API health | https://haatzmaut.lior-clinic.org/api/healthz |
