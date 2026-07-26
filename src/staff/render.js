@@ -304,6 +304,37 @@ export function renderStaffDirectory() {
 
   container.innerHTML = `
     <div class="section-head"><h2>${t("staff.title")}</h2></div>
+    ${/* Staff stats bar matching prototype */ ''}
+    <div class="staff-stats-bar">
+      <div class="staff-stat-item" style="background:rgba(46,125,50,.06);border-color:rgba(46,125,50,.15)">
+        <span class="material-symbols-outlined staff-stat-icon" style="color:var(--success)">check_circle</span>
+        <div>
+          <div class="staff-stat-val">${staff.filter(s => s.active !== false).length}</div>
+          <div class="staff-stat-label">בתפקיד</div>
+        </div>
+      </div>
+      <div class="staff-stat-item" style="background:rgba(75,98,100,.06);border-color:rgba(75,98,100,.15)">
+        <span class="material-symbols-outlined staff-stat-icon" style="color:var(--secondary)">pause_circle</span>
+        <div>
+          <div class="staff-stat-val">0</div>
+          <div class="staff-stat-label">בהפסקה</div>
+        </div>
+      </div>
+      <div class="staff-stat-item" style="background:rgba(111,121,122,.06);border-color:rgba(111,121,122,.15)">
+        <span class="material-symbols-outlined staff-stat-icon" style="color:var(--outline)">event_busy</span>
+        <div>
+          <div class="staff-stat-val">${staff.filter(s => s.active === false).length}</div>
+          <div class="staff-stat-label">חופשה</div>
+        </div>
+      </div>
+      <div class="staff-stat-item" style="background:rgba(186,26,26,.06);border-color:rgba(186,26,26,.15)">
+        <span class="material-symbols-outlined staff-stat-icon" style="color:var(--urgent)">notification_important</span>
+        <div>
+          <div class="staff-stat-val">${(state.requests || []).filter(r => r.status === 'pending').length}</div>
+          <div class="staff-stat-label">בקשות ממתינות</div>
+        </div>
+      </div>
+    </div>
     ${selfUser ? `
     <details class="filter-collapsible" id="profileEditSection">
       <summary>${t("profile.myProfile")} (${esc(selfUser.username)})</summary>
@@ -319,27 +350,56 @@ export function renderStaffDirectory() {
     </details>
     ` : ""}
     <input id="staffSearchInput" class="search-input" placeholder="${t("staff.search")}" value="${esc(search || "")}" style="width:100%;margin-bottom:.75rem" />
-    <div class="table-scroll" style="border-radius:8px">
-      <table class="occ-table" style="font-size:.84rem;width:100%">
-        <thead><tr>
-          <th>${t("table.column.fullName")}</th><th>${t("table.column.phone")}</th><th>${t("table.column.email")}</th><th>${t("table.column.role")}</th><th>${t("table.column.team")}</th><th>${t("table.column.status")}</th>
-          ${isAdmin() ? `<th style="width:auto;white-space:nowrap">${t("table.column.actions")}</th>` : ''}
-        </tr></thead>
-        <tbody>${staff.length ? staff.map(s => `
-          <tr data-staff-id="${s.id}">
-            <td><strong>${esc(s.fullName)}</strong></td>
-            <td dir="ltr" style="text-align:center">${esc(s.phone)}</td>
-            <td>${esc(s.email)}</td>
-            <td>${esc(s.role)}</td>
-            <td>${esc(s.team)}</td>
-            <td>${s.active !== false ? t("table.column.active") : t("table.column.inactive")}</td>
-            ${isAdmin() ? `<td style="white-space:nowrap">
-              <button class="btn-sm" data-edit-staff="${s.id}">עריכה</button>
-              <button class="btn-sm danger" data-del-staff="${s.id}">מחיקה</button>
-            </td>` : ''}
-          </tr>
-        `).join("") : '<tr><td colspan="7" class="empty-state">לא נמצאו אנשי צוות</td></tr>'}</tbody>
-      </table>
+    ${/* Stats bar */''}
+    <div class="stats-row">
+      <div class="stat-card">
+        <span>בתפקיד</span>
+        <strong>${staff.filter(s => s.active !== false).length}</strong>
+      </div>
+      <div class="stat-card">
+        <span>סה"כ צוות</span>
+        <strong>${staff.length}</strong>
+      </div>
+      <div class="stat-card">
+        <span>צוותים</span>
+        <strong>${new Set(staff.map(s => s.team).filter(Boolean)).size}</strong>
+      </div>
+      <div class="stat-card" style="border-color:var(--urgent);background:rgba(198,40,40,.05)">
+        <span style="color:var(--urgent)">לא פעילים</span>
+        <strong style="color:var(--urgent)">${staff.filter(s => s.active === false).length}</strong>
+      </div>
+    </div>
+    ${/* Staff grid — glass cards */ ''}
+    <div class="staff-glass-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem;margin-top:.5rem">
+      ${staff.length ? staff.map(s => {
+        const initials = (s.fullName || "").split(" ").map(w => w[0] || "").join("").slice(0, 2) || "?";
+        const isActive = s.active !== false;
+        const statusColor = isActive ? "var(--success)" : "var(--outline)";
+        const statusLabel = isActive ? "פעיל" : "לא פעיל";
+        const avatarBg = s.color || `hsl(${(s.fullName || "").length * 47 % 360}, 25%, 85%)`;
+        return `<div class="glass-staff-card" style="background:rgba(255,255,255,0.92);backdrop-filter:blur(10px);border:1px solid var(--line);border-radius:16px;padding:1.2rem;display:flex;flex-direction:column;gap:.6rem;transition:box-shadow 150ms">
+          <div style="display:flex;align-items:flex-start;gap:1rem">
+            <div style="position:relative;flex-shrink:0">
+              <div style="width:56px;height:56px;border-radius:16px;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.1rem;color:var(--primary);border:2px solid var(--line)">${esc(initials)}</div>
+              <div style="position:absolute;bottom:-2px;inset-inline-end:-2px;width:16px;height:16px;border-radius:50%;background:${statusColor};border:3px solid #fff" title="${statusLabel}"></div>
+            </div>
+            <div style="flex:1;min-width:0">
+              <h3 style="font-family:'Manrope',sans-serif;font-weight:700;font-size:1.05rem;color:var(--primary);margin:0">${esc(s.fullName)}</h3>
+              <div style="font-size:.82rem;color:var(--muted);margin-top:2px">${esc(s.role || "—")}</div>
+              <div style="display:flex;gap:.3rem;margin-top:4px;flex-wrap:wrap">
+                ${s.team ? `<span style="font-size:.7rem;padding:2px 8px;border-radius:999px;background:var(--secondary-soft);color:var(--secondary);font-weight:600">${esc(s.team)}</span>` : ""}
+                <span style="font-size:.7rem;padding:2px 8px;border-radius:999px;background:${isActive ? 'var(--primary-soft)' : 'var(--danger-soft)'};color:${isActive ? 'var(--primary)' : 'var(--danger)'};font-weight:600">${statusLabel}</span>
+              </div>
+            </div>
+          </div>
+          ${s.phone ? `<div style="font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:.35rem"><span class="material-symbols-outlined" style="font-size:16px">call</span><span dir="ltr">${esc(s.phone)}</span></div>` : ""}
+          ${s.email ? `<div style="font-size:.82rem;color:var(--primary);display:flex;align-items:center;gap:.35rem"><span class="material-symbols-outlined" style="font-size:16px">mail</span>${esc(s.email)}</div>` : ""}
+          ${isAdmin() ? `<div style="margin-top:.4rem;display:flex;gap:.4rem;padding-top:.6rem;border-top:1px solid var(--line)">
+            <button class="btn-sm" data-edit-staff="${s.id}" style="flex:1;border:1px solid var(--primary);background:transparent;color:var(--primary)">עריכה</button>
+            <button class="btn-sm danger" data-del-staff="${s.id}" style="flex-shrink:0">מחיקה</button>
+          </div>` : ""}
+        </div>`;
+      }).join("") : '<div class="empty-state" style="grid-column:1/-1">לא נמצאו אנשי צוות</div>'}
     </div>
     <div class="section-head" style="margin-top:1.5rem"><h2>${t("staff.users")}</h2></div>
     <div class="users-card-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem;margin-top:.5rem">

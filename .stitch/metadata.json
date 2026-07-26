@@ -1,0 +1,36 @@
+{
+  "name": "haatzmaut-clinic-management",
+  "projectId": "clinical-clarity-v1",
+  "title": "ClinicCare Pro - Clinic Management",
+  "visibility": "PRIVATE",
+  "createTime": "2026-07-26",
+  "deviceType": "DESKTOP",
+  "designTheme": {
+    "colorMode": "LIGHT",
+    "font": "MANROPE",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#0d5c63"
+  },
+  "screens": {
+    "dashboard": {
+      "id": "dashboard-design",
+      "sourceScreen": "extracted/clinic_dashboard_desktop",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 1020
+    },
+    "staff": {
+      "id": "staff-design",
+      "sourceScreen": "extracted/staff_management_desktop",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 1080
+    }
+  },
+  "metadata": {
+    "userRole": "OWNER",
+    "source": "Extracted from stitch_clinic_management_ui_redesign.zip"
+  }
+}

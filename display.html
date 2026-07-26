@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#2d2d3a" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; frame-ancestors 'none';" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>לוח תצוגה מרפאה</title>
-  <link rel="stylesheet" href="display.css?v=20260701" />
+  <title>לוח תצוגה — ClinicCare Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="display.css?v=20260726" />
 </head>
 <body>
   <a href="#main-content" class="skip-link">דלג לתוכן הראשי</a>
@@ -21,14 +25,14 @@
       <p id="nowDate" class="now-date">--</p>
     </div>
     <div class="title-panel">
-      <h1>לוח תצוגה למרפאה</h1>
+      <h1>ClinicCare Pro — לוח תצוגה</h1>
       <p>מציג יום נוכחי בלבד, שעה אחורה ועד 3 שעות קדימה</p>
     </div>
     <div class="status-panel">
       <p class="label">החלפת חדרים</p>
       <p id="roomsRange" class="range-text">--</p>
       <p id="rotateCountdown" class="countdown-text">החלפה בעוד -- שניות</p>
-      <a class="back-btn" href="index.html?v=20260701">⬅ חזרה למערכת</a>
+      <a class="back-btn" href="index.html?v=20260726">⬅ חזרה למערכת</a>
     </div>
   </header>
 

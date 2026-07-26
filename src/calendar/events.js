@@ -72,6 +72,12 @@ import {
 
 export function initCalendarEvents() {
 
+  /* Dashboard add button & FAB */
+  const dashAddBtn = byId("dashboardAddBtn");
+  const fabBtn = byId("fabAdd");
+  if (dashAddBtn) dashAddBtn.addEventListener("click", () => { import('./render.js').then(m => m.openBookingModal({})); });
+  if (fabBtn) fabBtn.addEventListener("click", () => { import('./render.js').then(m => m.openBookingModal({})); });
+
   /* Day tab navigation (keyboard: reset to today) */
   document.querySelector("#dashboardTab")?.addEventListener("keydown", e => {
     if (e.key === "t" && e.ctrlKey) {

@@ -4,12 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#2d2d3a" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self' https://haatzmaut.lior-clinic.org; form-action 'self'; frame-ancestors 'none';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://haatzmaut.lior-clinic.org; form-action 'self'; frame-ancestors 'none';" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>מערכת ניהול מרפאה</title>
-  <link rel="stylesheet" href="styles.css?v=20260723" />
+  <title>ClinicCare Pro — מערכת ניהול מרפאה</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=20260726" />
 </head>
 <body>
   <a href="#main-content" class="skip-link">דלג לתוכן הראשי</a>
@@ -84,11 +88,11 @@
     </form>
   </dialog>
 
-  <!-- Header -->
+      <!-- Header -->
   <header class="site-header">
     <div class="brand-block">
-      <p class="eyebrow">מערכת ניהול מרפאה פנימית</p>
-      <h1>מרפאה</h1>
+      <p class="eyebrow">ניהול מרפאה</p>
+      <h1>ClinicCare Pro</h1>
     </div>
     <div id="sessionBar" class="session-bar hidden">
       <div class="session-text">
@@ -134,42 +138,47 @@
         <button id="sidebarToggle" class="sidebar-toggle" title="צמצם/הרחב תפריט">◀</button>
         <nav class="sidebar-nav">
           <button data-tab="dashboardTab" class="sidebar-item active">
-            <span class="sidebar-icon">▦</span>
+            <span class="sidebar-icon material-symbols-outlined">calendar_month</span>
             <span class="sidebar-label" data-i18n="sidebar.schedule">לוח הזמנות</span>
           </button>
           <button data-tab="requestsTab" class="sidebar-item">
-            <span class="sidebar-icon">☰</span>
+            <span class="sidebar-icon material-symbols-outlined">pending_actions</span>
             <span class="sidebar-label" data-i18n="sidebar.requests">בקשות</span>
             <span id="requestsBadge" class="sidebar-badge hidden">0</span>
           </button>
           <button data-tab="staffTab" class="sidebar-item admin-only hidden">
-            <span class="sidebar-icon">◈</span>
+            <span class="sidebar-icon material-symbols-outlined">groups</span>
             <span class="sidebar-label" data-i18n="sidebar.staff">צוות ומשתמשים</span>
           </button>
           <button data-tab="meetingsTab" class="sidebar-item">
-            <span class="sidebar-icon">◉</span>
+            <span class="sidebar-icon material-symbols-outlined">event_available</span>
             <span class="sidebar-label" data-i18n="sidebar.meetings">ישיבות צוות</span>
           </button>
           <button data-tab="resourcesTab" class="sidebar-item">
-            <span class="sidebar-icon">⊞</span>
+            <span class="sidebar-icon material-symbols-outlined">inventory_2</span>
             <span class="sidebar-label" data-i18n="sidebar.resources">מרכז משאבים</span>
           </button>
           <button data-tab="issuesTab" class="sidebar-item">
-            <span class="sidebar-icon">⚡</span>
+            <span class="sidebar-icon material-symbols-outlined">build</span>
             <span class="sidebar-label" data-i18n="sidebar.issues">תקלות</span>
             <span id="issuesBadge" class="sidebar-badge hidden">0</span>
           </button>
           <div class="sidebar-divider"></div>
+          <a href="stats-dashboard.html" target="_blank" rel="noopener" class="sidebar-item">
+            <span class="sidebar-icon material-symbols-outlined">monitoring</span>
+            <span class="sidebar-label">סטטיסטיקות</span>
+          </a>
+          <div class="sidebar-divider"></div>
           <a href="display.html?v=20260720" target="_blank" rel="noopener" class="sidebar-item">
-            <span class="sidebar-icon">▣</span>
+            <span class="sidebar-icon material-symbols-outlined">nest_display</span>
             <span class="sidebar-label" data-i18n="sidebar.display">מסך תצוגה</span>
           </a>
           <button id="langSwitchBtn" class="sidebar-item" style="font-size:.82rem;text-align:start;width:100%">
-            <span class="sidebar-icon">🌐</span>
+            <span class="sidebar-icon material-symbols-outlined">language</span>
             <span class="sidebar-label">English</span>
           </button>
           <button data-tab="adminTab" class="sidebar-item admin-only hidden">
-            <span class="sidebar-icon">⛭</span>
+            <span class="sidebar-icon material-symbols-outlined">settings</span>
             <span class="sidebar-label" data-i18n="sidebar.admin">ניהול מערכת</span>
           </button>
         </nav>
@@ -180,20 +189,19 @@
 
         <!-- ======== DASHBOARD TAB (calendar) ======== -->
         <section id="dashboardTab" class="card tab-content">
-          <!-- Week header + nav -->
-          <div class="section-head">
+          <!-- Dashboard header matching prototype -->
+          <div class="dashboard-header">
             <div>
-              <h2 data-i18n="calendar.title">לוח הזמנות</h2>
-              <p id="weekLabel" class="muted"></p>
+              <h1 class="dash-title" data-i18n="calendar.title">לוח הזמנות</h1>
+              <p id="weekLabel" class="dash-subtitle"></p>
             </div>
-            <div class="week-nav">
-              <button id="weekPrev" type="button" class="secondary icon-btn" data-i18n-title="week.prev">&#8249;</button>
-              <button id="weekToday" type="button" data-i18n="week.today">שבוע נוכחי</button>
-              <button id="weekNext" type="button" class="secondary icon-btn" data-i18n-title="week.next">&#8250;</button>
-            </div>
+            <button id="dashboardAddBtn" class="dash-add-btn">
+              <span class="material-symbols-outlined">add</span>
+              <span>הוספת הזמנה</span>
+            </button>
           </div>
 
-          <!-- Mode toolbar for calendar -->
+          <!-- Mode toolbar -->
           <div class="mode-toolbar">
             <div class="mode-tabs">
               <button data-calendar-mode="schedule" class="mode-tab active" data-i18n="calendar.mode.schedule">תרשים יומי</button>
@@ -201,7 +209,16 @@
               <button data-calendar-mode="stats" class="mode-tab" data-i18n="calendar.mode.stats">סטטיסטיקה</button>
             </div>
             <div class="mode-actions">
-              <input dir="auto" id="bookingSearch" class="search-input" data-i18n-placeholder="calendar.search" placeholder="חיפוש לפי שם מטפל או חדר..." />
+              <div class="week-nav">
+                <button id="weekPrev" type="button" class="week-nav-arrow">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+                <button id="weekToday" type="button" class="week-nav-today">היום</button>
+                <button id="weekNext" type="button" class="week-nav-arrow">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+              </div>
+              <input dir="auto" id="bookingSearch" class="search-input" data-i18n-placeholder="calendar.search" placeholder="חיפוש..." />
             </div>
           </div>
 
@@ -610,7 +627,74 @@
         </section>
 
       </main>
+
+      <!-- FAB - Floating Action Button -->
+      <button id="fabAdd" class="fab-btn" aria-label="הוספת הזמנה">
+        <span class="material-symbols-outlined">add</span>
+      </button>
     </div><!-- /app-layout -->
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav" id="mobileNav">
+      <button class="mobile-nav-item active" data-tab="dashboardTab" aria-label="לוח הזמנות">
+        <span class="material-symbols-outlined mobile-nav-icon">calendar_month</span>
+        <span class="mobile-nav-label">לוח</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="requestsTab" aria-label="בקשות">
+        <span class="material-symbols-outlined mobile-nav-icon">pending_actions</span>
+        <span class="mobile-nav-label">בקשות</span>
+        <span id="mobileRequestsBadge" class="mobile-nav-badge hidden">0</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="staffTab" aria-label="צוות">
+        <span class="material-symbols-outlined mobile-nav-icon">groups</span>
+        <span class="mobile-nav-label">צוות</span>
+      </button>
+      <button class="mobile-nav-item" id="mobileMoreBtn" aria-label="עוד" aria-expanded="false">
+        <span class="material-symbols-outlined mobile-nav-icon">more_horiz</span>
+        <span class="mobile-nav-label">עוד</span>
+      </button>
+    </nav>
+
+    <!-- Mobile More Drawer -->
+    <div class="mobile-more-drawer" id="mobileMoreDrawer">
+      <div class="mobile-more-overlay" id="mobileMoreOverlay"></div>
+      <div class="mobile-more-content">
+        <div class="mobile-more-header">
+          <h3>תפריט נוסף</h3>
+          <button class="mobile-more-close" id="mobileMoreClose">✕</button>
+        </div>
+        <button class="mobile-more-item" data-tab="meetingsTab">
+          <span class="material-symbols-outlined">event_available</span>
+          <span>ישיבות צוות</span>
+        </button>
+        <button class="mobile-more-item" data-tab="resourcesTab">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span>מרכז משאבים</span>
+        </button>
+        <button class="mobile-more-item" data-tab="issuesTab">
+          <span class="material-symbols-outlined">build</span>
+          <span>תקלות</span>
+          <span id="mobileIssuesBadge" class="mobile-nav-badge hidden">0</span>
+        </button>
+        <a href="stats-dashboard.html" target="_blank" rel="noopener" class="mobile-more-item">
+          <span class="material-symbols-outlined">monitoring</span>
+          <span>סטטיסטיקות</span>
+        </a>
+        <a href="display.html" target="_blank" rel="noopener" class="mobile-more-item">
+          <span class="material-symbols-outlined">nest_display</span>
+          <span>מסך תצוגה</span>
+        </a>
+        <button class="mobile-more-item" data-tab="adminTab" id="mobileAdminItem">
+          <span class="material-symbols-outlined">settings</span>
+          <span>ניהול מערכת</span>
+        </button>
+        <div class="mobile-more-divider"></div>
+        <button id="mobileLangSwitch" class="mobile-more-item">
+          <span class="material-symbols-outlined">language</span>
+          <span id="mobileLangLabel">English</span>
+        </button>
+      </div>
+    </div>
   </section><!-- /appSection -->
 
   <script type="module" src="src/main.js"></script>

@@ -374,11 +374,16 @@ export function renderStats() {
   const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length;
   const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
   const pendingRequests = state.requests.filter(r => r.status === "pending").length;
+  const doneToday = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay && e.sessionStatus === 'done').length;
+  const completionRate = today > 0 ? Math.round(doneToday / today * 100) : 0;
   box.innerHTML = `
-    <div class="stat-card"><span>${t("dashboard.rooms") || "חדרים"}</span><strong>${state.rooms.length}</strong></div>
-    <div class="stat-card"><span>${t("dashboard.todayAppts")}</span><strong>${today}</strong></div>
-    <div class="stat-card"><span>${t("dashboard.weekAppts")}</span><strong>${weekly}</strong></div>
-    <div class="stat-card"><span>${t("dashboard.pendingReqs")}</span><strong>${pendingRequests}</strong></div>
+    <div class="stats-grid">
+      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--primary)">event</span><div><strong class="ds-card-val">${weekly}</strong><span class="ds-card-label">פגישות השבוע</span></div></div>
+      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--success)">check_circle</span><div><strong class="ds-card-val" style="color:var(--success)">${completionRate}%</strong><span class="ds-card-label">אחוז השלמה</span><div class="ds-card-bar"><div class="ds-card-bar-fill" style="width:${completionRate}%"></div></div></div></div>
+      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--secondary)">schedule</span><div><strong class="ds-card-val">${today}</strong><span class="ds-card-label">פגישות היום</span><span>${doneToday} הושלמו</span></div></div>
+      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--tertiary)">meeting_room</span><div><strong class="ds-card-val">${state.rooms.length}</strong><span class="ds-card-label">חדרים</span><span>${state.rooms.filter(r => r.active !== false).length} פעילים</span></div></div>
+    </div>
+    ${pendingRequests > 0 ? `<div class="ds-pending-alert"><span class="material-symbols-outlined">priority_high</span>${pendingRequests} בקשות ממתינות לאישור</div>` : ''}
   `;
 }
 
@@ -457,21 +462,23 @@ export function renderRequests() {
     list.innerHTML = `<p class="empty-state">אין בקשות ממתינות.</p>`;
     return;
   }
-  const statusLabels = { pending: "ממתין", approved: "אושר", denied: "נדחה" };
   list.innerHTML = state.requests.map(req => {
     const dl  = dayLabel(req.day);
     const t   = req.startTime || req.start || "—";
     const rn  = getRoomName(req.roomId || req.room) || req.room || "—";
+    const initials = (req.staff || "?").split(" ").map(w => w[0] || "").join("").slice(0, 2);
     const btns = isAdmin() && req.status === "pending"
-      ? `<div class="notice-actions">
-           <button class="btn-sm" data-req-id="${req.id}" data-action="approve">אישור</button>
-           <button class="btn-sm secondary" data-req-id="${req.id}" data-action="deny">דחייה</button>
-         </div>`
-      : `<div class="muted small">${req.status === "pending" ? "ממתין לאישור מנהל" : `סטטוס: ${statusLabels[req.status] || req.status}`}</div>`;
-    return `<div class="notice">
-      <div><strong>${esc(req.staff)}</strong> ביקש/ה ${esc(rn)} · יום ${dl} · ${t} (${req.duration} דק׳)</div>
-      <div class="muted small">${esc(req.team)} | ${esc(req.reason)}</div>
-      <div class="notice-sub">סטטוס: ${statusLabels[req.status] || req.status}${req.decidedAt ? ` · ${esc(req.decidedAt)}` : ""}</div>
+      ? `<div class="req-actions"><button class="btn-sm" data-req-id="${req.id}" data-action="approve" style="color:var(--success);font-weight:700;background:transparent;border:none;box-shadow:none">אישור</button><button class="btn-sm" data-req-id="${req.id}" data-action="deny" style="color:var(--urgent);font-weight:700;background:transparent;border:none;box-shadow:none">דחייה</button></div>`
+      : `<div class="muted small">${req.status === "pending" ? "ממתין לאישור מנהל" : `סטטוס: ${req.status === "approved" ? "אושר" : req.status === "denied" ? "נדחה" : req.status}`}</div>`;
+    return `<div class="req-item">
+      <div class="req-content">
+        <div class="req-avatar">${esc(initials)}</div>
+        <div class="req-info">
+          <div class="req-name">${esc(req.staff)}</div>
+          <div class="req-detail">${esc(rn)} · ${dl} · ${t} · ${req.duration || "—"}דק'</div>
+          <div class="req-meta">${esc(req.team || "")}${req.reason ? " · " + esc(req.reason) : ""}</div>
+        </div>
+      </div>
       ${btns}
     </div>`;
   }).join("");
