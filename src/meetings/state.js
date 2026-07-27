@@ -42,9 +42,10 @@ export function ensureDefaultSundayMeetings() {
 
   const teams = ["מבוגרים", "ילדים"];
 
-  const isFreshInstall = state.meetings.length === 0;
+  const isFreshInstall = !state._meetingsSeeded && state.meetings.length === 0;
   if (!isFreshInstall) return;
 
+  state._meetingsSeeded = true;
   let created = 0;
   augustSundays.forEach(sundayISO => {
     teams.forEach(team => {

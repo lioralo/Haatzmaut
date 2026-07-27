@@ -379,7 +379,7 @@ export function renderStats() {
   const activeDate = localISO(activeDayDate());
   const meetingToday = (state.meetings || []).filter(m => m.date === activeDate).length;
   const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length + meetingToday;
-  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length + meetingToday;
+  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
   const pendingRequests = state.requests.filter(r => r.status === "pending").length;
   box.innerHTML = `
     <div class="stats-grid">

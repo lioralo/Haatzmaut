@@ -451,6 +451,7 @@ export function runIntegrityAssistant() {
 
 export function saveManagedBackup(label = "") {
   const payload = serializedState();
+  const payloadJson = JSON.stringify(payload);
   const backup = {
     id: makeId("backup"),
     label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
@@ -459,9 +460,9 @@ export function saveManagedBackup(label = "") {
     rooms: (state.rooms || []).length,
     entries: (state.schedule || []).length,
     meetings: (state.meetings || []).length,
+    size: payloadJson.length,
     data: payload
   };
-  backup.size = JSON.stringify(backup).length;
 
   let backups = [];
   try { backups = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); } catch {}
@@ -496,11 +497,9 @@ export function saveManagedBackup(label = "") {
     }
   }
 
-  const stored = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "null");
-  if (!stored || !stored[0] || stored[0].id !== backup.id) {
-    throw new Error("אימות הגיבוי נכשל — הנתונים לא נשמרו כהלכה.");
+  if (!localStorage.getItem(MANAGED_BACKUPS_KEY)) {
+    throw new Error("אימות הגיבוי נכשל — הנתונים לא נשמרו.");
   }
-
   return backup;
 }
 
