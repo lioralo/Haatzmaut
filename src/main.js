@@ -77,6 +77,15 @@ function addNotification(text, critical = false) {
    ---------------------------------------------------------- */
 
 function applyTabMode(tabId) {
+  // Ensure modes exist with defaults
+  state.modes = state.modes || {};
+  if (!state.modes.calendar) state.modes.calendar = "schedule";
+  if (!state.modes.requests) state.modes.requests = "view";
+  if (!state.modes.staff) state.modes.staff = "view";
+  if (!state.modes.meetings) state.modes.meetings = "view";
+  if (!state.modes.resources) state.modes.resources = "browse";
+  if (!state.modes.issues) state.modes.issues = "board";
+
   const toolbar = document.querySelector(`#${tabId} .mode-toolbar`);
   if (!toolbar) return;
 
