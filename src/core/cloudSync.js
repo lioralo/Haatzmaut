@@ -2,7 +2,7 @@
    CLOUD SYNC — client-side encrypt/decrypt + API transport
    ============================================================ */
 
-import { state } from './store.js';
+import { state, persistStateImmediate, recordAudit } from './store.js';
 import { showToast } from './utils.js';
 
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
@@ -115,19 +115,31 @@ async function apiCall(method, path, body = null) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`${API_BASE}${path}`, opts);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-  return data;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, { ...opts, signal: controller.signal });
+    clearTimeout(timer);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('הבקשה נכשלה — זמן תגובה ארוך מדי');
+    throw e;
+  }
 }
 
 /* --- Public API --- */
 export async function saveToCloud() {
-  if (!state.currentUser) return false;
+  if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return false; }
   try {
     const user = state.users?.find(u => u.username === state.currentUser.username);
-    if (!user?.passwordHash) { showToast('התחבר מחדש.', 'warn'); return false; }
-    if (!_encryptionKey) { showToast('התחבר מחדש.', 'warn'); return false; }
+    if (!user?.passwordHash) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
+    if (!_encryptionKey) {
+      const restored = await restoreEncryptionKey();
+      if (!restored) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
+    }
 
     const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
     setToken(auth.token);
@@ -135,21 +147,28 @@ export async function saveToCloud() {
     const plain = serializedStateForSync();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
     const hashHex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-    if (hashHex === _lastSavedHash) return false;
+    if (hashHex === _lastSavedHash) {
+      recordAudit('cloud.save.skipped', 'הנתונים לא השתנו — דילוג.', 'info', false);
+      return false;
+    }
 
     const { iv, encryptedData } = await encryptPayload(_encryptionKey, plain);
     await apiCall('POST', '/sync/save', { encryptedData, iv, dataHash: hashHex });
     _lastSavedHash = hashHex;
+    const entryCount = (state.schedule || []).length;
+    recordAudit('cloud.save.success', `נשמר לענן: ${entryCount} הזמנות, ${(state.staff||[]).length} אנשי צוות.`, 'critical', true);
+    persistStateImmediate();
     showToast('נשמר לענן בהצלחה.', 'info');
     return true;
   } catch (err) {
-    showToast('שמירה נכשלה: ' + err.message, 'error');
+    recordAudit('cloud.save.failed', err.message || 'שמירה נכשלה.', 'critical', false);
+    showToast('שמירה נכשלה: ' + (err.message || 'שגיאה'), 'error');
     return false;
   }
 }
 
 export async function loadFromCloud() {
-  if (!state.currentUser) return null;
+  if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return null; }
   try {
     const user = state.users?.find(u => u.username === state.currentUser.username);
     if (user?.passwordHash) {
@@ -160,13 +179,16 @@ export async function loadFromCloud() {
     if (!info.exists) { showToast('לא נמצא מידע בענן.', 'info'); return null; }
     return info;
   } catch (err) {
-    showToast('בדיקה נכשלה: ' + err.message, 'error');
+    showToast('בדיקת ענן נכשלה: ' + (err.message || 'שגיאת רשת'), 'error');
     return null;
   }
 }
 
 export async function loadFromCloudAndApply() {
-  if (!_encryptionKey) { showToast('התחבר מחדש.', 'warn'); return; }
+  if (!_encryptionKey) {
+    const restored = await restoreEncryptionKey();
+    if (!restored) { showToast('התחבר מחדש כדי לטעון.', 'warn'); return; }
+  }
   try {
     const data = await apiCall('GET', '/sync/load');
     if (!data.encryptedData) { showToast('לא נמצא מידע בענן.', 'info'); return; }
@@ -174,7 +196,7 @@ export async function loadFromCloudAndApply() {
     const parsed = JSON.parse(plain);
     if (!parsed.rooms || !parsed.staff) throw new Error('מידע פגום');
 
-    // Apply directly to state — no reload needed
+    // Apply directly to state
     state.rooms = parsed.rooms || [];
     state.staff = parsed.staff || [];
     state.schedule = parsed.schedule || [];
@@ -192,14 +214,15 @@ export async function loadFromCloudAndApply() {
     state.files = parsed.files || [];
     state.auditLog = parsed.auditLog || [];
     state.passwordResets = parsed.passwordResets || [];
-    // Reset to current week, not the exported one
     state.weekISO = '';
     state.activeDay = (new Date()).getDay();
     if (state.activeDay > 4) state.activeDay = 0;
     if (parsed.selectedTags) state.selectedTags = new Set(parsed.selectedTags);
     if (parsed.loginSecurity) state.loginSecurity = parsed.loginSecurity;
 
-    localStorage.setItem('haatzmaut_v6', JSON.stringify(parsed));
+    persistStateImmediate();
+    const entryCount = (parsed.schedule || []).length;
+    recordAudit('cloud.load.success', `נטען מהענן: ${entryCount} הזמנות, ${(parsed.staff||[]).length} אנשי צוות.`, 'critical', true);
     showToast('נטען מהענן — מרענן תצוגה…', 'info');
     
     // Re-sync schedule window and expand recurring entries
@@ -212,6 +235,7 @@ export async function loadFromCloudAndApply() {
       main.renderActiveTab();
     }, 300);
   } catch (err) {
-    showToast('טעינה נכשלה: ' + err.message, 'error');
+    recordAudit('cloud.load.failed', err.message || 'טעינה נכשלה.', 'critical', false);
+    showToast('טעינה נכשלה: ' + (err.message || 'שגיאה'), 'error');
   }
 }

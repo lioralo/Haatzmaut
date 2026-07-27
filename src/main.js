@@ -1153,33 +1153,40 @@ renderActiveTab = function() {
 byId("cloudSaveBtn")?.addEventListener("click", async () => {
   const btn = byId("cloudSaveBtn");
   const status = byId("cloudSyncStatus");
+  if (!btn) return;
   btn.disabled = true;
   btn.textContent = "שומר…";
   if (status) status.textContent = "";
   try {
     const ok = await saveToCloud();
     if (status) status.textContent = ok
-      ? `נשמר בהצלחה ${new Date().toLocaleString("he-IL")}`
-      : "הנתונים לא השתנו";
+      ? `נשמר בהצלחה — ${new Date().toLocaleString("he-IL")}`
+      : "הנתונים לא השתנו / שמירה נכשלה";
   } catch (e) {
-    if (status) status.textContent = "שמירה נכשלה — " + e.message;
+    if (status) status.textContent = "שמירה נכשלה — " + (e.message || "שגיאת רשת");
   }
   btn.disabled = false;
   btn.textContent = "שמור לענן";
 });
 
 byId("cloudLoadBtn")?.addEventListener("click", async () => {
+  const btn = byId("cloudLoadBtn");
   const status = byId("cloudSyncStatus");
+  if (!btn) return;
   if (status) status.textContent = "בודק ענן…";
   try {
     const info = await loadFromCloud();
-    if (!info) { if (status) status.textContent = ""; return; }
+    if (!info) { 
+      if (status) status.textContent = "לא נמצא מידע בענן.";
+      return; 
+    }
     const cloudDate = info.updatedAt ? new Date(info.updatedAt).toLocaleString("he-IL") : "לא ידוע";
     const ok = confirm(`נמצא מידע בענן מתאריך ${cloudDate} (${Math.round(info.sizeBytes / 1024)}KB).\n\nלטעון ולהחליף את המידע המקומי?`);
     if (!ok) { if (status) status.textContent = "טעינה בוטלה."; return; }
     await loadFromCloudAndApply();
+    if (status) status.textContent = `נטען מהענן — ${new Date().toLocaleString("he-IL")}`;
   } catch (e) {
-    if (status) status.textContent = "טעינה נכשלה — " + e.message;
+    if (status) status.textContent = "טעינה נכשלה — " + (e.message || "שגיאת רשת");
   }
 });
 
