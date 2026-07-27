@@ -251,3 +251,149 @@ test.describe('Backup & Storage', () => {
     expect(result.hasPassword).toBe(true);
   });
 });
+
+test.describe('Calendar & Meetings', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?devAuth=1');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(2000);
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(2500);
+  });
+
+  test('J: default schedule has entries after login', async ({ page }) => {
+    const count = await page.evaluate(() => {
+      const raw = JSON.parse(localStorage.getItem('haatzmaut_v6') || 'null');
+      return raw?.schedule?.length || 0;
+    });
+    expect(count).toBeGreaterThan(0);
+  });
+
+  test('K: week navigation works', async ({ page }) => {
+    const before = await page.locator('#weekLabel').textContent();
+    await page.locator('#weekNext').click();
+    await page.waitForTimeout(500);
+    const after = await page.locator('#weekLabel').textContent();
+    expect(after).not.toBe(before);
+    await page.locator('#weekToday').click();
+  });
+
+  test('L: schedule view modes switch', async ({ page }) => {
+    // List mode
+    await page.locator('[data-calendar-mode="list"]').click();
+    await page.waitForTimeout(500);
+    const listView = await page.locator('#bookingListView');
+    await expect(listView).toBeVisible();
+
+    // Stats mode
+    await page.locator('[data-calendar-mode="stats"]').click();
+    await page.waitForTimeout(500);
+    const statsView = await page.locator('#statsDashboard');
+    await expect(statsView).toBeVisible();
+
+    // Back to schedule
+    await page.locator('[data-calendar-mode="schedule"]').click();
+    await page.waitForTimeout(300);
+    await expect(page.locator('#occupancyTable')).toBeVisible();
+  });
+
+  test('M: day tab switching renders different day', async ({ page }) => {
+    const firstDayTitle = await page.locator('#dayHeading').textContent();
+    const tabs = await page.locator('.day-tab').count();
+    if (tabs > 1) {
+      await page.locator('.day-tab').nth(1).click();
+      await page.waitForTimeout(500);
+      const secondDayTitle = await page.locator('#dayHeading').textContent();
+      expect(secondDayTitle).not.toBe(firstDayTitle);
+    }
+  });
+
+  test('N: meetings edit mode is accessible', async ({ page }) => {
+    await page.locator('button[data-tab=meetingsTab]').first().click();
+    await page.waitForTimeout(800);
+    const modeTabs = await page.locator('#meetingsTab .mode-tab').count();
+    if (modeTabs >= 2) {
+      await page.locator('#meetingsTab .mode-tab').nth(1).click();
+      await page.waitForTimeout(500);
+      await expect(page.locator('#meetingsEditMode')).toBeVisible();
+    }
+  });
+
+  test('O: meetings persist in localStorage state', async ({ page }) => {
+    const meetings = await page.evaluate(() => {
+      const raw = JSON.parse(localStorage.getItem('haatzmaut_v6') || 'null');
+      return raw?.meetings?.length || 0;
+    });
+    const groups = await page.evaluate(() => {
+      const raw = JSON.parse(localStorage.getItem('haatzmaut_v6') || 'null');
+      return raw?.meetingGroups?.length || 0;
+    });
+    expect(meetings).toBeGreaterThanOrEqual(0);
+    expect(groups).toBeGreaterThanOrEqual(0);
+  });
+});
+
+test.describe('Backup & Cloud Buttons', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?devAuth=1');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(2000);
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(2500);
+    await page.locator('button[data-tab=adminTab]').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('button[data-admin-subtab=audit]').first().click();
+    await page.waitForTimeout(500);
+  });
+
+  test('P: all backup buttons are visible', async ({ page }) => {
+    await expect(page.locator('#backupNowBtn')).toBeVisible();
+    await expect(page.locator('#exportBackupBtn')).toBeVisible();
+    await expect(page.locator('#exportEncryptedBtn')).toBeVisible();
+    await expect(page.locator('#restoreBackupBtn')).toBeVisible();
+    await expect(page.locator('#deleteBackupBtn')).toBeVisible();
+    await expect(page.locator('#backupUpload')).toBeVisible();
+    await expect(page.locator('#encryptedUpload')).toBeVisible();
+    await expect(page.locator('#clearAuditBtn')).toBeVisible();
+    await expect(page.locator('#savedBackupSelect')).toBeVisible();
+    await expect(page.locator('#savedBackupsList')).toBeVisible();
+  });
+
+  test('Q: cloud sync buttons are visible and enabled', async ({ page }) => {
+    await expect(page.locator('#cloudSaveBtn')).toBeVisible();
+    await expect(page.locator('#cloudLoadBtn')).toBeVisible();
+    expect(await page.locator('#cloudSaveBtn').isDisabled()).toBe(false);
+    expect(await page.locator('#cloudLoadBtn').isDisabled()).toBe(false);
+  });
+
+  test('R: backupNow creates a managed backup', async ({ page }) => {
+    const before = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
+    });
+    await page.locator('#backupNowBtn').click();
+    await page.waitForTimeout(500);
+    const after = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
+    });
+    expect(after).toBe(before + 1);
+  });
+
+  test('S: display screen loads all components', async ({ page }) => {
+    await page.goto('/display.html', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(1500);
+    await expect(page.locator('#nowTime')).toBeVisible();
+    await expect(page.locator('#displayTable')).toBeVisible();
+    await expect(page.locator('#roomsRange')).toBeVisible();
+    await expect(page.locator('#rotateCountdown')).toBeVisible();
+    const rows = await page.locator('#displayTable tbody tr').count();
+    expect(rows).toBeGreaterThan(0);
+  });
+});

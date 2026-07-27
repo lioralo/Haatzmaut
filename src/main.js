@@ -120,7 +120,7 @@ function applyTabMode(tabId) {
     byId("scheduleView")?.classList.toggle("hidden", targetMode !== "schedule");
     byId("listView")?.classList.toggle("hidden", targetMode !== "list");
     byId("printView")?.classList.toggle("hidden", targetMode !== "print");
-    byId("statsView")?.classList.toggle("hidden", targetMode !== "stats");
+    byId("statsDashboard")?.classList.toggle("hidden", targetMode !== "stats");
     if (targetMode === "list") renderBookingList();
     if (targetMode === "print") window.print();
     if (targetMode === "stats") renderStatsDashboard();
@@ -166,7 +166,7 @@ function initModeToolbars() {
         byId("scheduleView")?.classList.toggle("hidden", mode !== "schedule");
         byId("listView")?.classList.toggle("hidden", mode !== "list");
         byId("printView")?.classList.toggle("hidden", mode !== "print");
-        byId("statsView")?.classList.toggle("hidden", mode !== "stats");
+        byId("statsDashboard")?.classList.toggle("hidden", mode !== "stats");
         if (mode === "list") renderBookingList();
         if (mode === "print") window.print();
         if (mode === "stats") renderStatsDashboard();
@@ -397,6 +397,10 @@ async function initialize() {
   if (!state.activeDay && state.activeDay !== 0) state.activeDay = todayDayIdx();
   if (!state.rooms || !state.rooms.length) state.rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
   if (!state.staff || !state.staff.length) state.staff = DEFAULT_STAFF.map(s => ({ ...s }));
+  if (!state.defaultTemplate || !state.defaultTemplate.length) {
+    const { buildDefaultSchedule, templateFromEntries } = await import('./calendar/state.js');
+    state.defaultTemplate = templateFromEntries(buildDefaultSchedule(state.weekISO, state.rooms), state.rooms);
+  }
 
   state.modes = state.modes || { staff: "view", meetings: "view", resources: "browse", issues: "board", requests: "view", calendar: "schedule" };
 
