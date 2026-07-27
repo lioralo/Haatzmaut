@@ -225,7 +225,7 @@ button.danger{background:var(--danger)}
 
 /* FAB */
 .fab-btn{
-  position:fixed;bottom:24px;inset-inline-end:24px;z-index:80;
+  position:fixed;bottom:24px;inset-inline-start:24px;z-index:80;
   width:56px;height:56px;border-radius:50%;
   background:var(--primary);color:#fff;
   box-shadow:0 6px 20px rgba(0,67,73,.25);
