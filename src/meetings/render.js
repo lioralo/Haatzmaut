@@ -6,6 +6,7 @@ import {
   esc, sanitizeUrl, safeFileDisplayName, localISO,
   byId
 } from '../core/index.js';
+import { TEAMS } from '../core/constants.js';
 import {
   state, isAdmin
 } from '../core/index.js';
@@ -239,8 +240,10 @@ export function renderMeetingForm(meeting = null) {
   byId("meetingAgenda").value = meeting?.agenda || "";
   byId("meetingLink").value = meeting?.link || "";
 
-  const teamCb = byId("meetingAudience");
-  if (teamCb) teamCb.value = "all";
+  const teamSel = byId("meetingTeam");
+  if (teamSel) {
+    teamSel.innerHTML = '<option value="">ללא</option>' + TEAMS.map(t => `<option value="${t}"${meeting?.team === t ? ' selected' : ''}>${t}</option>`).join("");
+  }
 
   const submitBtn = form.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.textContent = isEdit ? "&#x05E2;&#x05D3;&#x05DB;&#x05D5;&#x05DF;" : "&#x05E9;&#x05DE;&#x05D9;&#x05E8;&#x05D4;";

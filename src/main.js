@@ -708,7 +708,7 @@ function initAdminSubTabs() {
       if (content) {
         content.classList.remove("hidden");
         if (subtab === "display") renderAdminDisplayControls();
-        if (subtab === "audit") renderAuditLog();
+        if (subtab === "audit") { renderAuditLog(); renderManagedBackups(); }
       }
     });
   });

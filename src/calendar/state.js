@@ -397,6 +397,13 @@ export function activeDayEntries() {
   return all;
 }
 
+export function getDayEntryCount(dayIdx) {
+  const dateObj = addDays(isoDate(state.weekISO), dayIdx);
+  const dateStr = localISO(dateObj);
+  return state.schedule.filter(e => e.weekISO === state.weekISO && e.day === dayIdx).length
+    + (state.meetings || []).filter(m => m.date === dateStr).length;
+}
+
 export function filteredRooms() {
   if (!state.selectedTags.size) return state.rooms;
   return state.rooms.filter(r => [...state.selectedTags].every(t => r.tags.includes(t)));

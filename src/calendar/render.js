@@ -46,6 +46,7 @@ import {
   getRoomName,
   getEntryById,
   ensureSyncedScheduleWindow,
+  getDayEntryCount,
   activeDayDate,
   activeDayEntries,
   filteredRooms,
@@ -325,8 +326,7 @@ export function renderDayTabs() {
   container.innerHTML = DAY_DEFS.map(d => {
     const date   = addDays(ws, d.key);
     const active = d.key === state.activeDay;
-    const count  = state.schedule.filter(e => e.weekISO === isoWk && e.day === d.key).length
-      + (state.meetings || []).filter(m => m.date === localISO(date)).length;
+    const count  = getDayEntryCount(d.key);
     const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][d.key] || d.label;
     return `<button type="button" class="day-tab${active ? " active" : ""}" data-day="${d.key}">
       <span class="dt-short">${d.short}</span>

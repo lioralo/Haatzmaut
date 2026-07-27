@@ -124,6 +124,7 @@ function bindMeetingForm() {
       date: byId("meetingDate").value,
       time: byId("meetingTime").value,
       duration: Number(byId("meetingDuration")?.value || 60),
+      team: byId("meetingTeam")?.value || "",
       agenda: stripHtml(byId("meetingAgenda").value.trim()),
       link: safeLink,
       files: [...byId("meetingFiles").files].map(f => safeFileDisplayName(f.name)),
