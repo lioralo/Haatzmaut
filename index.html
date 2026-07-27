@@ -104,11 +104,11 @@
 
   <!-- Login -->
   <section id="loginSection" class="card auth-card">
-    <h2 data-i18n="login.title">כניסה מאובטחת</h2>
+    <div class="login-brand">
+      <h1>ClinicCare Pro</h1>
+      <p>ניהול מרפאה</p>
+    </div>
     <p class="muted" data-i18n="login.subtitle">הזינו את פרטי ההתחברות כדי להיכנס למערכת.</p>
-    <button id="langSwitchBtnLogin" class="secondary" style="font-size:.82rem;padding:.25rem .55rem;margin-bottom:.5rem">English</button>
-    <a class="display-entry-link" href="display.html?v=20260727" data-i18n="display.liveView">תצוגת קליניקה חיה (למסך המתנה)</a>
-    <a class="display-entry-link" href="accessibility.html" data-i18n="accessibility.statement">הצהרת נגישות</a>
     <form id="loginForm" class="auth-form">
       <label><span data-i18n="login.username">שם משתמש</span> <input dir="auto" id="username" autocomplete="username" required aria-required="true" aria-describedby="loginError" /></label>
       <label><span data-i18n="login.password">סיסמה</span> <input dir="auto" id="password" type="password" autocomplete="current-password" required aria-required="true" /></label>
@@ -119,8 +119,13 @@
       <span>admin / admin123</span>
       <span>staff / staff123</span>
     </div>
+    <div class="login-links">
+      <a class="display-entry-link" href="display.html?v=20260727" data-i18n="display.liveView">תצוגת קליניקה חיה</a>
+      <a class="display-entry-link" href="accessibility.html" data-i18n="accessibility.statement">הצהרת נגישות</a>
+      <button id="langSwitchBtnLogin" class="secondary btn-sm">English</button>
+    </div>
     <div style="margin-top:.6rem">
-      <button type="button" id="requestResetBtn" class="secondary">שכחתי סיסמה / בקשת איפוס</button>
+      <button type="button" id="requestResetBtn" class="secondary btn-sm">שכחתי סיסמה / בקשת איפוס</button>
     </div>
     <div id="resetRequestForm" class="hidden" style="margin-top:.7rem">
       <label>שם משתמש לאיפוס <input dir="auto" id="resetUsername" autocomplete="off" /></label>
