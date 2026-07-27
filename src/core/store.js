@@ -169,7 +169,6 @@ function _writeStorage() {
     if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
         try { const ab = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]"); if (Array.isArray(ab) && ab.length > 1) { localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(ab.slice(-1))); } } catch {}
-        try { const mb = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); if (Array.isArray(mb) && mb.length > 2) { localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(mb.slice(0, 2))); } } catch {}
         localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
         _persistFailed = false;
         showToast("פונה מקום אחסון — גיבויים ישנים נמחקו.", "info");

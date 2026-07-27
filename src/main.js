@@ -406,6 +406,7 @@ async function initialize() {
   }
 
   state.modes = state.modes || { staff: "view", meetings: "view", resources: "browse", issues: "board", requests: "view", calendar: "schedule" };
+  state._meetingsSeeded = state._meetingsSeeded || (state.meetings && state.meetings.length > 0);
 
   state.sidebarCollapsed = localStorage.getItem("sidebar_collapsed") === "true";
   if (state.sidebarCollapsed) {
@@ -1018,10 +1019,10 @@ function renderManagedBackups() {
       <div class="admin-row">
         <div class="admin-row-info">
           <strong>${esc(b.label)}</strong>
-          <span class="muted small">${esc(b.createdAt)} · ${Math.round(b.size / 1024)}KB · ${b.rooms} חדרים · ${b.entries} הזמנות · ${b.meetings} ישיבות</span>
+          <span class="muted small">${esc(b.createdAt)} · ${b.size ? Math.round(b.size / 1024) + 'KB' : ''} · ${b.rooms || 0} חדרים · ${b.entries || 0} הזמנות · ${b.meetings || 0} ישיבות</span>
         </div>
         <div class="admin-row-acts">
-          <span class="user-role-badge role-admin">${Math.round(b.size / 1024)}KB</span>
+          <span class="user-role-badge role-admin">${b.size ? Math.round(b.size / 1024) + 'KB' : ''}</span>
         </div>
       </div>
     `).join("") : '<p class="empty-state">אין גיבויים שמורים.</p>';

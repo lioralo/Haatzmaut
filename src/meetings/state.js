@@ -170,6 +170,7 @@ export function createMeeting(formData) {
     recurringRule: formData.recurringRule
   });
   state.meetings.unshift(meeting);
+  state._meetingsSeeded = true;
   persistState();
   recordAudit("meeting.create", `${meeting.title || meeting.speaker}`, "info", false);
   return meeting;
