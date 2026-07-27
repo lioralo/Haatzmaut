@@ -23,15 +23,27 @@ function formatSize(bytes) {
 }
 
 function fileIcon(type) {
-  if (!type) return "";
-  if (type.includes("pdf")) return "📄";
-  if (type.includes("image")) return "🖼️";
-  if (type.includes("word") || type.includes("document")) return "📝";
-  if (type.includes("sheet") || type.includes("excel") || type.includes("csv")) return "📊";
-  if (type.includes("presentation") || type.includes("powerpoint")) return "📽️";
-  if (type.includes("zip") || type.includes("rar") || type.includes("gzip")) return "📦";
-  if (type.includes("text")) return "📃";
-  return "📎";
+  if (!type) return "description";
+  if (type.includes("pdf")) return "picture_as_pdf";
+  if (type.includes("image")) return "image";
+  if (type.includes("word") || type.includes("document")) return "article";
+  if (type.includes("sheet") || type.includes("excel") || type.includes("csv")) return "table";
+  if (type.includes("presentation") || type.includes("powerpoint")) return "slideshow";
+  if (type.includes("zip") || type.includes("rar") || type.includes("gzip")) return "folder_zip";
+  if (type.includes("text")) return "text_snippet";
+  return "insert_drive_file";
+}
+
+function fileIconColor(type) {
+  if (!type) return "var(--muted)";
+  if (type.includes("pdf")) return "#e53935";
+  if (type.includes("image")) return "#43a047";
+  if (type.includes("word") || type.includes("document")) return "#1e88e5";
+  if (type.includes("sheet") || type.includes("excel") || type.includes("csv")) return "#43a047";
+  if (type.includes("presentation") || type.includes("powerpoint")) return "#fb8c00";
+  if (type.includes("zip") || type.includes("rar")) return "#8d6e63";
+  if (type.includes("text")) return "#607d8b";
+  return "var(--muted)";
 }
 
 export function renderResourceBrowser(currentFolderId = null) {
@@ -50,7 +62,7 @@ export function renderResourceBrowser(currentFolderId = null) {
   container.innerHTML = `
     <div class="resource-layout">
       <div class="folder-tree">
-        <div class="folder-tree-item${!_currentFolderId ? " active" : ""}" data-action="navigate-folder" data-folder-id="">&#x1F4C2; כל הקבצים</div>
+        <div class="folder-tree-item${!_currentFolderId ? " active" : ""}" data-action="navigate-folder" data-folder-id="" style="display:flex;align-items:center;gap:.35rem"><span class="material-symbols-outlined" style="font-size:1rem">folder_open</span>כל הקבצים</div>
         ${treeHtml}
       </div>
       <div>
@@ -60,28 +72,31 @@ export function renderResourceBrowser(currentFolderId = null) {
           ${isAdmin() ? `<label class="file-upload-label btn-sm secondary" style="margin:0;cursor:pointer">העלאת קובץ <input type="file" id="resourceFileUpload" multiple style="display:none" /></label>` : ""}
           <input id="resourceSearch" class="search-input" placeholder="חיפוש קבצים..." style="width:160px;margin-right:auto" />
         </div>
-        ${folders.length ? `<div class="rb-folders" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">${folders.map(f => `
-          <div class="staff-card" data-action="navigate-folder" data-folder-id="${f.id}" style="cursor:pointer;min-width:120px;padding:.5rem">
-            <strong>&#x1F4C1; ${esc(f.name)}</strong>
-            <small style="color:var(--muted);font-size:.72rem">${getFilesInFolder(f.id).length} קבצים</small>
-            ${isAdmin() ? `<div style="margin-top:.3rem;display:flex;gap:.15rem"><button class="btn-sm" data-action="rename-folder" data-folder-id="${f.id}" style="font-size:.7rem;padding:.15rem .4rem">⤶</button><button class="btn-sm secondary" data-action="delete-folder" data-folder-id="${f.id}" style="font-size:.7rem;padding:.15rem .4rem">&#x1F5D1;</button></div>` : ""}
-          </div>`).join("")}</div>` : ""}
-        <table class="occ-table" style="font-size:.84rem;width:100%">
-          <thead><tr><th>שם</th><th>סוג</th><th>גודל</th><th>תאריך</th><th style="width:140px">פעולות</th></tr></thead>
-          <tbody>${files.map(f => `
-            <tr>
-              <td><span data-action="open-file" data-file-id="${f.id}" style="cursor:pointer;color:var(--primary);text-decoration:underline">&#x1F4C4; ${esc(f.name)}</span></td>
-              <td>${esc(f.type || "—")}</td>
-              <td>${Math.round((f.size || 0)/1024)}KB</td>
-              <td>${esc(f.createdAt || "—")}</td>
-              <td style="display:flex;gap:.25rem;flex-wrap:wrap">
-                <button class="btn-sm" data-action="open-file" data-file-id="${f.id}">פתח</button>
-                <button class="btn-sm" data-action="download-file" data-file-id="${f.id}" data-file-name="${esc(f.name)}">&darr;</button>
-                ${isAdmin() ? `<button class="btn-sm secondary" data-action="move-file" data-file-id="${f.id}">העבר</button>` : ""}
-                ${isAdmin() ? `<button class="btn-sm secondary" data-action="delete-file" data-file-id="${f.id}">&#x1F5D1;</button>` : ""}
-              </td>
-            </tr>`).join("") || '<tr><td colspan="5" class="empty-state">אין קבצים בתיקיה זו</td></tr>'}</tbody>
-        </table>
+          ${folders.length ? `<div class="rb-folders" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem">${folders.map(f => `
+           <div class="staff-card" data-action="navigate-folder" data-folder-id="${f.id}" style="cursor:pointer;min-width:120px;padding:.5rem">
+             <div style="display:flex;align-items:center;gap:.35rem">
+               <span class="material-symbols-outlined" style="font-size:1.2rem;color:var(--primary)">folder</span>
+               <strong>${esc(f.name)}</strong>
+             </div>
+             <small style="color:var(--muted);font-size:.72rem">${getFilesInFolder(f.id).length} קבצים</small>
+             ${isAdmin() ? `<div style="margin-top:.3rem;display:flex;gap:.15rem"><button class="btn-sm" data-action="rename-folder" data-folder-id="${f.id}" style="font-size:.7rem;padding:.15rem .4rem">⤶</button><button class="btn-sm secondary" data-action="delete-folder" data-folder-id="${f.id}" style="font-size:.7rem;padding:.15rem .4rem">&#x1F5D1;</button></div>` : ""}
+           </div>`).join("")}</div>` : ""}
+         <table class="occ-table" style="font-size:.84rem;width:100%">
+           <thead><tr><th>שם</th><th>סוג</th><th>גודל</th><th>תאריך</th><th style="width:140px">פעולות</th></tr></thead>
+           <tbody>${files.map(f => `
+             <tr>
+               <td><span data-action="open-file" data-file-id="${f.id}" style="cursor:pointer;color:var(--primary);text-decoration:underline;display:flex;align-items:center;gap:.4rem"><span class="material-symbols-outlined" style="font-size:1.15rem;color:${fileIconColor(f.type)}">${fileIcon(f.type)}</span>${esc(f.name)}</span></td>
+               <td>${esc(f.type || "—")}</td>
+               <td>${Math.round((f.size || 0)/1024)}KB</td>
+               <td>${esc(f.createdAt || "—")}</td>
+               <td style="display:flex;gap:.25rem;flex-wrap:wrap">
+                 <button class="btn-sm" data-action="open-file" data-file-id="${f.id}">פתח</button>
+                 <button class="btn-sm" data-action="download-file" data-file-id="${f.id}" data-file-name="${esc(f.name)}">&darr;</button>
+                 ${isAdmin() ? `<button class="btn-sm secondary" data-action="move-file" data-file-id="${f.id}">העבר</button>` : ""}
+                 ${isAdmin() ? `<button class="btn-sm secondary" data-action="delete-file" data-file-id="${f.id}">&#x1F5D1;</button>` : ""}
+               </td>
+             </tr>`).join("") || '<tr><td colspan="5" class="empty-state">אין קבצים בתיקיה זו</td></tr>'}</tbody>
+         </table>
       </div>
     </div>
   `;
@@ -91,8 +106,8 @@ function buildFolderTreeHtml(parentId, currentFolder, depth) {
   const children = getChildFolders(parentId);
   if (!children.length) return "";
   return children.map(f => `
-    <div class="folder-tree-item${f.id === currentFolder ? " active" : ""}" data-action="navigate-folder" data-folder-id="${f.id}" style="padding-right:${depth * 12 + 4}px;cursor:pointer">
-      &#x1F4C1; ${esc(f.name)}
+    <div class="folder-tree-item${f.id === currentFolder ? " active" : ""}" data-action="navigate-folder" data-folder-id="${f.id}" style="padding-right:${depth * 12 + 4}px;cursor:pointer;display:flex;align-items:center;gap:.35rem">
+      <span class="material-symbols-outlined" style="font-size:1rem;color:var(--primary)">folder</span>${esc(f.name)}
     </div>
     ${buildFolderTreeHtml(f.id, currentFolder, depth + 1)}
   `).join("");
@@ -150,7 +165,7 @@ export function renderFolderTree() {
         <div class="ft-node" style="padding-right:${depth * 16}px">
           <div class="ft-folder ${_currentFolderId === f.id ? "ft-active" : ""}"
                data-folder-id="${f.id}" data-action="navigate-folder">
-            <span class="ft-icon">📁</span>
+            <span class="material-symbols-outlined ft-icon" style="font-size:1rem;color:var(--primary)">folder</span>
             <span class="ft-name">${esc(f.name)}</span>
             <span class="ft-count">${childFiles.length}</span>
           </div>
@@ -165,7 +180,7 @@ export function renderFolderTree() {
     <div class="folder-tree">
       <div class="ft-folder ft-root ${! _currentFolderId ? "ft-active" : ""}"
            data-folder-id="" data-action="navigate-folder">
-        <span class="ft-icon">🏠</span>
+        <span class="material-symbols-outlined ft-icon" style="font-size:1rem;color:var(--primary)">home</span>
         <span class="ft-name">שורש</span>
         <span class="ft-count">${rootFiles.length}</span>
       </div>

@@ -202,9 +202,14 @@ export async function loadFromCloudAndApply() {
     localStorage.setItem('haatzmaut_v6', JSON.stringify(parsed));
     showToast('נטען מהענן — מרענן תצוגה…', 'info');
     
-    // Re-render UI without reloading
-    setTimeout(() => {
-      import('../main.js').then(m => { m.renderActiveTab(); });
+    // Re-sync schedule window and expand recurring entries
+    setTimeout(async () => {
+      const main = await import('../main.js');
+      const calState = await import('../calendar/state.js');
+      calState.ensureSyncedScheduleWindow();
+      calState.expandRecurringEntries(8);
+      calState.cleanExpiredWaitlist();
+      main.renderActiveTab();
     }, 300);
   } catch (err) {
     showToast('טעינה נכשלה: ' + err.message, 'error');
