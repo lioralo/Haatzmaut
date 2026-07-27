@@ -413,7 +413,28 @@ export function weekRange() {
 
 export const getRoomById = id => state.rooms.find(r => r.id === id);
 export const getRoomName = id => getRoomById(id)?.name || id;
-export const getEntryById = id => state.schedule.find(e => e.id === id) || (state.meetings || []).find(m => m.id === id);
+export const getEntryById = id => {
+  const scheduleEntry = state.schedule.find(e => e.id === id);
+  if (scheduleEntry) return scheduleEntry;
+  const meeting = (state.meetings || []).find(m => m.id === id);
+  if (!meeting) return null;
+  const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
+  return {
+    id: meeting.id,
+    weekISO: state.weekISO,
+    day: state.activeDay,
+    roomId: meetingRoom?.id || (state.rooms[0]?.id || ""),
+    start: meeting.time || "12:30",
+    duration: meeting.duration || 60,
+    staff: meeting.speaker || "",
+    team: "אדמיניסטרציה",
+    note: meeting.title || "",
+    oneTime: false,
+    source: "meeting",
+    _isMeeting: true,
+    _meetingData: meeting
+  };
+};
 
 /* ============================================================
    BUILD DEFAULT

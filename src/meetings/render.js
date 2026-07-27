@@ -29,6 +29,16 @@ export function setMeetingGroupFilter(val) {
   meetingGroupFilter = val;
 }
 
+let _selectedMeetings = new Set();
+
+export function getSelectedMeetings() {
+  return [..._selectedMeetings];
+}
+
+export function clearSelectedMeetings() {
+  _selectedMeetings = new Set();
+}
+
 export function setMeetingSubTab(val) {
   meetingSubTab = val;
 }
@@ -290,6 +300,7 @@ export function renderMeetingTimeline() {
     const isJoint = (m.groupIds || []).length > 1;
     return `
     <div class="mt-card" data-meeting-id="${m.id}">
+      ${admin ? `<input type="checkbox" class="meeting-select-cb" data-select-meeting="${m.id}" style="margin-left:0.5rem" />` : ''}
       <div class="mt-time">${esc(m.time)}${dateStr ? `<span class="mt-date-chip">${dateStr}</span>` : ""}</div>
       <div class="mt-body">
         <div class="mt-title">${esc(m.title || m.speaker)}</div>
@@ -342,6 +353,11 @@ export function renderMeetingTimeline() {
 
     if (meetingSubTab === "upcoming") {
       if (filteredUpcoming.length) {
+        html += `<div class="meeting-bulk-bar" style="display:flex;gap:.5rem;align-items:center;margin-bottom:.5rem;${admin ? '' : 'display:none'}">
+          <button type="button" class="btn-sm secondary" data-action="select-all-meetings">בחר הכל</button>
+          <button type="button" class="btn-sm secondary" data-action="deselect-all-meetings">בטל בחירה</button>
+          <button type="button" class="btn-sm danger" data-action="del-selected-meetings" style="margin-right:auto">מחק נבחרים</button>
+        </div>`;
         html += `<h3>ישיבות קרובות</h3><div class="meeting-timeline">${filteredUpcoming.map(renderCard).join("")}</div>`;
       } else {
         html += `<p class="empty-state">אין ישיבות קרובות.</p>`;

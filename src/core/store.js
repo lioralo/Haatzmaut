@@ -133,6 +133,21 @@ function serializedState() {
   };
 }
 
+function lightState() {
+  return {
+    _schemaVersion: STORAGE_VERSION,
+    schedule: state.schedule,
+    rooms: state.rooms,
+    defaultTemplate: state.defaultTemplate,
+    staff: state.staff,
+    users: state.users,
+    meetingGroups: state.meetingGroups,
+    meetings: state.meetings,
+    settings: state.settings,
+    displaySettings: state.displaySettings
+  };
+}
+
 let _persistTimer = null;
 let _persistFailed = false;
 const _persistHooks = [];
@@ -317,7 +332,7 @@ export function autoBackup() {
   try {
     const payload = {
       timestamp: new Date().toISOString(),
-      data: serializedState()
+      data: lightState()
     };
     let backups = [];
     try {
@@ -329,8 +344,11 @@ export function autoBackup() {
       backups = backups.slice(backups.length - AUTOBACKUP_MAX);
     }
     localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(backups));
-    showToast("גיבוי אוטומטי נשמר.", "info");
-  } catch {}
+  } catch (e) {
+    if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
+      showToast("גיבוי אוטומטי נכשל — האחסון המקומי מלא.", "warn");
+    }
+  }
 }
 
 export function startAutoBackup() {
@@ -424,7 +442,7 @@ export function runIntegrityAssistant() {
    ============================================================ */
 
 export function saveManagedBackup(label = "") {
-  const payload = serializedState();
+  const payload = lightState();
   const backup = {
     id: makeId("backup"),
     label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
@@ -446,14 +464,16 @@ export function saveManagedBackup(label = "") {
   try {
     localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
   } catch (e) {
-    // If quota exceeded, remove oldest backups and retry
-    if (backups.length > 1) {
-      backups = backups.slice(0, 1);
+    if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
+        try { const ab = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]"); if (Array.isArray(ab) && ab.length > 0) { localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(ab.slice(0, 1))); } } catch {}
+        if (backups.length > 1) backups = backups.slice(0, 1);
         localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
         showToast("פונה מקום — גיבויים ישנים נמחקו.", "info");
         return backup;
-      } catch {}
+      } catch {
+        throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");
+      }
     }
     throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");
   }

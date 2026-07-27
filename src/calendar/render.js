@@ -44,6 +44,7 @@ import {
   getRoomById,
   getRoomName,
   getEntryById,
+  ensureSyncedScheduleWindow,
   activeDayDate,
   activeDayEntries,
   filteredRooms,
@@ -337,7 +338,8 @@ export function renderDayTabs() {
     btn.addEventListener("click", () => {
       const prev = state.activeDay;
       state.activeDay = Number(btn.dataset.day);
-      if (prev !== state.activeDay) persistState();
+      if (prev !== state.activeDay) { persistState(); }
+      ensureSyncedScheduleWindow();
       renderDayTabs();
       renderWeekHeader();
       renderOccupancy();

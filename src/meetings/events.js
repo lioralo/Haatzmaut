@@ -13,6 +13,7 @@ import {
   ensureDefaultGroups,
   createGroup, updateGroup, deleteGroup,
   createMeeting, updateMeeting, deleteMeeting,
+  deleteMeetingsByGroup, deleteSelectedMeetings,
   importMeetingsFromFile, exportMeetingsCSV
 } from './state.js';
 import {
@@ -271,6 +272,18 @@ function bindDelegatedClicks() {
       case "del-meeting":
         deleteMeetingHandler(meetingId);
         break;
+
+      case "select-all-meetings":
+        document.querySelectorAll('[data-select-meeting]').forEach(cb => cb.checked = true);
+        break;
+
+      case "deselect-all-meetings":
+        document.querySelectorAll('[data-select-meeting]').forEach(cb => cb.checked = false);
+        break;
+
+      case "del-selected-meetings":
+        bulkDeleteHandler();
+        break;
     }
   });
 
@@ -279,24 +292,8 @@ function bindDelegatedClicks() {
       renderGroupForm();
     }
   });
-
-  document.getElementById("meetingList")?.addEventListener("click", e => {
-    const btn = e.target.closest("[data-go-to-date]");
-    if (btn) {
-      const date = btn.dataset.goToDate;
-      state.weekISO = date;
-      state.activeDay = new Date(date + "T00:00:00").getDay();
-      import('../calendar/state.js').then(m => m.ensureSyncedScheduleWindow());
-      import('../main.js').then(m => { m.showTab("dashboardTab"); m.renderActiveTab(); });
-      return;
-    }
-    const card = e.target.closest(".mt-card[data-meeting-id]");
-    if (card && !e.target.closest("button")) {
-      const meeting = state.meetings.find(m => m.id === card.dataset.meetingId);
-      if (meeting) showMeetingInfoDialog(meeting);
-    }
-  });
 }
+
 
 function editGroupHandler(groupId) {
   const group = state.meetingGroups.find(g => g.id === groupId);
@@ -304,13 +301,38 @@ function editGroupHandler(groupId) {
   renderGroupForm(group);
 }
 
+function bulkDeleteHandler() {
+  const selected = [];
+  document.querySelectorAll('[data-select-meeting]:checked').forEach(cb => {
+    selected.push(cb.dataset.selectMeeting);
+  });
+  if (!selected.length) {
+    showToast("לא נבחרו ישיבות למחיקה.", "warn");
+    return;
+  }
+  if (!confirm(`למחוק ${selected.length} ישיבות נבחרות?`)) return;
+  const count = deleteSelectedMeetings(selected);
+  renderAllMeetings();
+  showToast(`נמחקו ${count} ישיבות.`, "info");
+}
+
 function deleteGroupHandler(groupId) {
   const group = state.meetingGroups.find(g => g.id === groupId);
-  if (!group || !confirm(`למחוק את הקבוצה "${group.name}"? ישיבות בקבוצה יישארו ללא שיוך.`)) return;
+  if (!group) return;
+  const meetingCount = (state.meetings || []).filter(m => (m.groupIds || []).includes(groupId)).length;
+  let shouldDeleteMeetings = false;
+  if (meetingCount > 0) {
+    shouldDeleteMeetings = confirm(`למחוק את הקבוצה "${group.name}"?\n\n${meetingCount} ישיבות משויכות. למחוק גם את כל הישיבות בקבוצה?\n\nאישור = מחיקת קבוצה + ישיבות\nביטול = ביטול`);
+  } else {
+    if (!confirm(`למחוק את הקבוצה "${group.name}"?`)) return;
+  }
+  if (shouldDeleteMeetings) {
+    deleteMeetingsByGroup(groupId);
+  }
   deleteGroup(groupId);
   hideGroupForm();
   renderAllMeetings();
-  showToast(`הקבוצה "${group.name}" נמחקה.`, "info");
+  showToast(shouldDeleteMeetings ? `הקבוצה ו-${meetingCount} ישיבות נמחקו.` : `הקבוצה "${group.name}" נמחקה.`, "info");
 }
 
 function editMeetingHandler(meetingId) {

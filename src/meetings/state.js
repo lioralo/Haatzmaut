@@ -2,7 +2,7 @@
    MEETINGS STATE — data normalization, CRUD, import/export
    ============================================================ */
 
-import { state, persistState, recordAudit } from '../core/store.js';
+import { state, persistState, persistStateImmediate, recordAudit } from '../core/store.js';
 import { DAY_DEFS, TEAMS } from '../core/constants.js';
 import {
   makeId, localISO, showToast,
@@ -145,7 +145,7 @@ export function deleteGroup(id) {
     ...m,
     groupIds: (m.groupIds || []).filter(gid => gid !== id)
   }));
-  persistState();
+  persistStateImmediate();
   recordAudit("meeting.group.delete", `${group.name}`, "warn", false);
   return true;
 }
@@ -188,9 +188,27 @@ export function deleteMeeting(id) {
   const idx = state.meetings.findIndex(m => m.id === id);
   if (idx < 0) return false;
   const deleted = state.meetings.splice(idx, 1)[0];
-  persistState();
+  persistStateImmediate();
   recordAudit("meeting.delete", `${deleted.title || deleted.speaker}`, "warn", false);
   return true;
+}
+
+export function deleteMeetingsByGroup(groupId) {
+  const toDelete = state.meetings.filter(m => (m.groupIds || []).includes(groupId));
+  const count = toDelete.length;
+  state.meetings = state.meetings.filter(m => !(m.groupIds || []).includes(groupId));
+  persistStateImmediate();
+  recordAudit("meeting.bulkDelete", `נמחקו ${count} ישיבות מקבוצה.`, "warn", false);
+  return count;
+}
+
+export function deleteSelectedMeetings(ids) {
+  const idSet = new Set(ids);
+  const toDelete = state.meetings.filter(m => idSet.has(m.id));
+  state.meetings = state.meetings.filter(m => !idSet.has(m.id));
+  persistStateImmediate();
+  recordAudit("meeting.bulkDelete", `נמחקו ${toDelete.length} ישיבות.`, "warn", false);
+  return toDelete.length;
 }
 
 /* ============================================================
