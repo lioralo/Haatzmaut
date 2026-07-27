@@ -302,15 +302,12 @@ async function bootstrapAdmin() {
 function renderActiveTab() {
   const tab = state.activeTab || "dashboardTab";
   showTab(tab);
-  applyTabMode(tab); // Apply mode BEFORE rendering so correct view panes are visible
 
   switch (tab) {
   case "dashboardTab":
-    // Ensure calendar mode defaults to schedule if not set
-    if (!state.modes?.calendar) {
-      state.modes = state.modes || {};
-      state.modes.calendar = "schedule";
-    }
+    // Always show schedule view when rendering dashboard
+    byId("scheduleView")?.classList.remove("hidden");
+    byId("listView")?.classList.add("hidden");
     renderWeekHeader();
     renderDayTabs();
     renderStats();
@@ -342,6 +339,7 @@ function renderActiveTab() {
     break;
   }
 
+  applyTabMode(tab);
   updateNotificationBell();
   updateAllI18nBindings();
 }
