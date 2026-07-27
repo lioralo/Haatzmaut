@@ -589,3 +589,73 @@ test.describe('Regression: Backup, Counters, Meetings', () => {
     expect(result.scheduleCount).toBeGreaterThan(0);
   });
 });
+
+test.describe('End-to-End Verification', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?devAuth=1');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(2000);
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(3000);
+  });
+
+  test('AD: backup creates and appears in list and select', async ({ page }) => {
+    await page.locator('button[data-tab=adminTab]').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('button[data-admin-subtab=audit]').first().click();
+    await page.waitForTimeout(500);
+
+    await page.locator('#backupNowBtn').click();
+    await page.waitForTimeout(1000);
+
+    const selectOptions = await page.locator('#savedBackupSelect option').count();
+    const listRows = await page.locator('#savedBackupsList .admin-row').count();
+    const storageCount = await page.evaluate(() => {
+      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
+    });
+
+    expect(selectOptions).toBeGreaterThan(1); // includes placeholder
+    expect(listRows).toBeGreaterThan(0);
+    expect(storageCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('AE: day tab counter matches schedule entries for that day', async ({ page }) => {
+    const counts = await page.evaluate(async () => {
+      const { state } = await import('/src/core/store.js');
+      const { getDayEntryCount } = await import('/src/calendar/state.js');
+      return [0,1,2,3,4].map(d => ({
+        day: d,
+        counter: getDayEntryCount(d),
+        scheduleOnly: state.schedule.filter(e => e.weekISO === state.weekISO && e.day === d).length
+      }));
+    });
+    counts.forEach(c => {
+      expect(c.counter).toBeGreaterThanOrEqual(c.scheduleOnly);
+    });
+  });
+
+  test('AF: meeting team field exists with TEAMS options', async ({ page }) => {
+    await page.locator('button[data-tab=meetingsTab]').first().click();
+    await page.waitForTimeout(500);
+    const modeTabs = await page.locator('#meetingsTab .mode-tab').count();
+    if (modeTabs >= 2) {
+      await page.locator('#meetingsTab .mode-tab').nth(1).click();
+      await page.waitForTimeout(500);
+    }
+    await expect(page.locator('#meetingTeam')).toBeVisible();
+    const options = await page.$$eval('#meetingTeam option', els => els.map(e => e.value));
+    expect(options.length).toBeGreaterThan(1);
+  });
+
+  test('AG: _meetingsSeeded flag set after login', async ({ page }) => {
+    const seeded = await page.evaluate(async () => {
+      const { state } = await import('/src/core/store.js');
+      return !!state._meetingsSeeded;
+    });
+    expect(seeded).toBe(true);
+  });
+});

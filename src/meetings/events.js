@@ -27,8 +27,14 @@ import {
    INIT
    ============================================================ */
 
-export function initMeetingsEvents() {
+export async function initMeetingsEvents() {
   ensureDefaultGroups();
+
+  const teamSel = byId("meetingTeam");
+  if (teamSel) {
+    const { TEAMS } = await import('../core/constants.js');
+    teamSel.innerHTML = '<option value="">ללא</option>' + TEAMS.map(t => `<option value="${t}">${t}</option>`).join("");
+  }
 
   bindGroupForm();
   bindMeetingForm();

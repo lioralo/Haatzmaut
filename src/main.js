@@ -440,7 +440,7 @@ async function initialize() {
 
   initCalendarEvents();
   initStaffEvents();
-  initMeetingsEvents();
+  await initMeetingsEvents();
   initIssuesEvents();
   initResourcesEvents();
   initModeToolbars();
