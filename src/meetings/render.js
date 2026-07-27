@@ -42,13 +42,19 @@ export function renderMeetingGroups() {
   const tab = byId("meetingsTab");
   if (!tab) return;
 
+  // Render into view mode, not edit mode
+  const viewMode = byId("meetingsViewMode");
   let container = byId("meetingGroupsContainer");
   if (!container) {
-    const form = byId("meetingForm");
     container = document.createElement("div");
     container.id = "meetingGroupsContainer";
-    if (form?.parentNode) {
-      form.parentNode.insertBefore(container, form);
+    if (viewMode) {
+      const meetingList = byId("meetingList");
+      if (meetingList) {
+        viewMode.insertBefore(container, meetingList);
+      } else {
+        viewMode.appendChild(container);
+      }
     }
   }
 

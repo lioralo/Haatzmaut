@@ -335,8 +335,9 @@ export function renderDayTabs() {
 
   container.querySelectorAll(".day-tab").forEach(btn => {
     btn.addEventListener("click", () => {
+      const prev = state.activeDay;
       state.activeDay = Number(btn.dataset.day);
-      persistState();
+      if (prev !== state.activeDay) persistState();
       renderDayTabs();
       renderWeekHeader();
       renderOccupancy();

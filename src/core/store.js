@@ -441,8 +441,16 @@ export function saveManagedBackup(label = "") {
   try {
     localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
   } catch (e) {
-    showToast("שגיאה בשמירת גיבוי — ייתכן שהאחסון מלא.", "error");
-    throw e;
+    // If quota exceeded, remove oldest backups and retry
+    if (backups.length > 1) {
+      backups = backups.slice(0, 1);
+      try {
+        localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+        showToast("פונה מקום — גיבויים ישנים נמחקו.", "info");
+        return backup;
+      } catch {}
+    }
+    throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");
   }
   return backup;
 }
