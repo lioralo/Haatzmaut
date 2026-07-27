@@ -209,6 +209,12 @@ export function recordAudit(action, detail = "", severity = "info", shouldPersis
   if (shouldPersist) persistState();
 }
 
+const AUTOBACKUP_KEY = "haatzmaut_autobackup";
+const AUTOBACKUP_INTERVAL_MS = 60 * 60 * 1000;
+const AUTOBACKUP_MAX = 3;
+const MANAGED_BACKUPS_KEY = "haatzmaut_managed_backups";
+const MAX_MANAGED = 10;
+
 /* ============================================================
    BACKUP / RESTORE
    ============================================================ */
@@ -298,10 +304,6 @@ export async function importEncryptedBackup(file) {
     showToast("גיבוי מוצפן שוחזר בהצלחה.", "info");
   } catch (err) { showToast("שגיאה בפענוח - ייתכן שהסיסמה שגויה.", "error"); }
 }
-
-const AUTOBACKUP_KEY = "haatzmaut_autobackup";
-const AUTOBACKUP_INTERVAL_MS = 60 * 60 * 1000;
-const AUTOBACKUP_MAX = 3;
 
 let _autoBackupTimer = null;
 
@@ -414,9 +416,6 @@ export function runIntegrityAssistant() {
 /* ============================================================
    MANAGED BACKUPS (localStorage)
    ============================================================ */
-
-const MANAGED_BACKUPS_KEY = "haatzmaut_managed_backups";
-const MAX_MANAGED = 10;
 
 export function saveManagedBackup(label = "") {
   const payload = serializedState();

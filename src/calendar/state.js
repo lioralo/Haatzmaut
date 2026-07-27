@@ -33,6 +33,7 @@ import {
   roomColorClass,
   teamColorClass,
   showToast,
+  parseHebrewDate,
   csvEscapeField,
   buildCsv,
   parseCsvRows,
@@ -591,7 +592,7 @@ export function cleanExpiredWaitlist() {
   state.waitlist = state.waitlist || [];
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
   state.waitlist = state.waitlist.filter(w => {
-    const created = new Date(w.createdAt.split("/").reverse().join("-")).getTime();
+    const created = parseHebrewDate(w.createdAt);
     return created > cutoff;
   });
 }
@@ -639,8 +640,8 @@ export function getResolutionTimeAvg() {
   const resolved = (state.issues || []).filter(i => i.status === "resolved" || i.status === "closed");
   if (!resolved.length) return 0;
   const total = resolved.reduce((sum, i) => {
-    const created = new Date(i.createdAt.split("/").reverse().join("-")).getTime();
-    const updated = new Date(i.updatedAt.split("/").reverse().join("-")).getTime();
+    const created = parseHebrewDate(i.createdAt);
+    const updated = parseHebrewDate(i.updatedAt);
     return sum + Math.max(0, updated - created);
   }, 0);
   return Math.round(total / resolved.length / 86400000);

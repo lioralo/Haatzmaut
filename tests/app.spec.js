@@ -46,7 +46,7 @@ test.describe('Haatzmaut Clinic System', () => {
     await page.locator('#loginForm button[type="submit"]').click();
     await page.waitForTimeout(3000);
     await expect(page.locator('#appSection')).toBeVisible();
-    await expect(page.locator('button[data-tab="adminTab"]')).toBeVisible();
+    await expect(page.locator('button[data-tab="adminTab"]').first()).toBeVisible();
   });
 
   test('occupancy table renders with ARIA grid role', async ({ page }) => {

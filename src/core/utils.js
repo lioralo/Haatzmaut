@@ -382,6 +382,16 @@ export function toE164(raw) {
   return "+972" + r.localized.slice(1);
 }
 
+export function parseHebrewDate(dateStr) {
+  if (!dateStr) return NaN;
+  const match = String(dateStr).match(/(\d{1,2})\.(\d{1,2})\.(\d{4})[,\s]+\s*(\d{1,2}):(\d{2}):(\d{2})/);
+  if (match) {
+    const [, day, month, year, hour, min, sec] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(min), Number(sec)).getTime();
+  }
+  return new Date(dateStr).getTime();
+}
+
 export function showToast(text, type = "info") {
   const toast = byId("toast");
   if (!toast) return;

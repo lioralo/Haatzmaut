@@ -56,6 +56,7 @@ import {
 
 import {
   closeBookingModal,
+  openBookingModal,
   renderOccupancy,
   renderDayTabs,
   renderWeekHeader,
@@ -75,8 +76,8 @@ export function initCalendarEvents() {
   /* Dashboard add button & FAB */
   const dashAddBtn = byId("dashboardAddBtn");
   const fabBtn = byId("fabAdd");
-  if (dashAddBtn) dashAddBtn.addEventListener("click", () => { import('./render.js').then(m => m.openBookingModal({})); });
-  if (fabBtn) fabBtn.addEventListener("click", () => { import('./render.js').then(m => m.openBookingModal({})); });
+  if (dashAddBtn) dashAddBtn.addEventListener("click", () => { openBookingModal({}); });
+  if (fabBtn) fabBtn.addEventListener("click", () => { openBookingModal({}); });
 
   /* Day tab navigation (keyboard: reset to today) */
   document.querySelector("#dashboardTab")?.addEventListener("keydown", e => {

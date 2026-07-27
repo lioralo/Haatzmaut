@@ -42,17 +42,8 @@ export function ensureDefaultSundayMeetings() {
 
   const teams = ["מבוגרים", "ילדים"];
 
-  const hasAugustMeeting = state.meetings.some(m =>
-    augustSundays.includes(m.date) && m.time === "12:30"
-  );
-
-  if (!hasAugustMeeting) {
-    state.meetings = [];
-  } else {
-    state.meetings = state.meetings.filter(m =>
-      augustSundays.includes(m.date) && m.time === "12:30"
-    );
-  }
+  const isFreshInstall = state.meetings.length === 0;
+  if (!isFreshInstall) return;
 
   let created = 0;
   augustSundays.forEach(sundayISO => {
