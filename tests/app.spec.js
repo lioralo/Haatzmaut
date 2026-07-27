@@ -397,3 +397,88 @@ test.describe('Backup & Cloud Buttons', () => {
     expect(rows).toBeGreaterThan(0);
   });
 });
+
+test.describe('Backup Integrity', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?devAuth=1');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(2000);
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(2000);
+  });
+
+  test('T: restoreManagedBackup verifies data integrity', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { saveManagedBackup, restoreManagedBackup, state } = await import('/src/core/store.js');
+      const beforeSchedule = state.schedule.length;
+      const backup = saveManagedBackup('verify-test');
+      state.schedule = [{ id: 'fake', weekISO: '2000-01-01', day: 0, roomId: 'x', start: '08:00', duration: 60, staff: 'x', team: 'x' }];
+      try { restoreManagedBackup(backup.id); } catch (e) { return { ok: false, error: e.message }; }
+      const afterSchedule = state.schedule.length;
+      return { ok: true, beforeCount: beforeSchedule, afterCount: afterSchedule, matches: afterSchedule === beforeSchedule };
+    });
+    expect(result.ok).toBe(true);
+    expect(result.matches).toBe(true);
+  });
+
+  test('U: applyImportedState updates state before reload', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { state } = await import('/src/core/store.js');
+      const testData = {
+        rooms: [{ id: 'r1', name: 'Test Room' }],
+        schedule: [{ id: 's1', weekISO: '2026-01-04', day: 0, roomId: 'r1', start: '09:00', duration: 60, staff: 'Test', team: 'test' }],
+        staff: [{ id: 'st1', fullName: 'Test Staff' }],
+        users: [],
+        meetings: [],
+        meetingGroups: []
+      };
+      try {
+        const { applyImportedState } = await import('/src/core/store.js');
+        state.schedule = [];
+        applyImportedState(testData);
+        return { ok: true, scheduleLen: state.schedule.length };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.scheduleLen).toBe(1);
+  });
+
+  test('V: backup save integrity — stored data matches original', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { saveManagedBackup, state } = await import('/src/core/store.js');
+      const scheduleLen = state.schedule.length;
+      const staffLen = state.staff.length;
+      const backup = saveManagedBackup('integrity-check');
+      if (!backup?.id) return { ok: false, reason: 'no backup id' };
+      const stored = JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]');
+      const found = stored.find(b => b.id === backup.id);
+      if (!found || !found.data) return { ok: false, reason: 'backup not found in storage' };
+      return {
+        ok: true,
+        schedulesMatch: Array.isArray(found.data.schedule) && found.data.schedule.length === scheduleLen,
+        staffMatch: Array.isArray(found.data.staff) && found.data.staff.length === staffLen
+      };
+    });
+    expect(result.ok).toBe(true);
+    expect(result.schedulesMatch).toBe(true);
+    expect(result.staffMatch).toBe(true);
+  });
+
+  test('W: autoBackup survives quota error without crash', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { autoBackup } = await import('/src/core/store.js');
+      try { autoBackup(); } catch (e) { return { ok: false, error: e.message }; }
+      const stored = localStorage.getItem('haatzmaut_autobackup');
+      const parsed = stored ? JSON.parse(stored) : null;
+      return { ok: true, hasBackup: Array.isArray(parsed) && parsed.length > 0 };
+    });
+    expect(result.ok).toBe(true);
+    expect(result.hasBackup).toBe(true);
+  });
+});

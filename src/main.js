@@ -1048,7 +1048,6 @@ initNavigation();
 initLogin();
 await initialize();
 initMobileNav();
-startAutoBackup();
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});

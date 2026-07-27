@@ -133,26 +133,6 @@ function serializedState() {
   };
 }
 
-function lightState() {
-  return {
-    _schemaVersion: STORAGE_VERSION,
-    schedule: state.schedule,
-    rooms: state.rooms,
-    defaultTemplate: state.defaultTemplate,
-    weekTemplates: state.weekTemplates,
-    requests: state.requests,
-    weekISO: state.weekISO,
-    activeDay: state.activeDay,
-    staff: state.staff,
-    users: state.users,
-    meetingGroups: state.meetingGroups,
-    meetings: state.meetings,
-    issues: state.issues,
-    settings: state.settings,
-    displaySettings: state.displaySettings
-  };
-}
-
 let _persistTimer = null;
 let _persistFailed = false;
 const _persistHooks = [];
@@ -337,7 +317,7 @@ export function autoBackup() {
   try {
     const payload = {
       timestamp: new Date().toISOString(),
-      data: lightState()
+      data: serializedState()
     };
     let backups = [];
     try {
@@ -352,6 +332,8 @@ export function autoBackup() {
   } catch (e) {
     if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       showToast("גיבוי אוטומטי נכשל — האחסון המקומי מלא.", "warn");
+    } else {
+      console.error("autoBackup error:", e);
     }
   }
 }
@@ -368,7 +350,28 @@ export function applyImportedState(rawState) {
   if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule)) {
     throw new Error("גיבוי חסר שדות חובה (rooms/schedule).");
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(candidate));
+  state.rooms = candidate.rooms || [];
+  state.staff = candidate.staff || [];
+  state.schedule = candidate.schedule || [];
+  state.users = candidate.users || [];
+  state.defaultTemplate = candidate.defaultTemplate || [];
+  state.weekTemplates = candidate.weekTemplates || {};
+  state.requests = candidate.requests || [];
+  state.meetings = candidate.meetings || [];
+  state.meetingGroups = candidate.meetingGroups || [];
+  state.issues = candidate.issues || [];
+  state.settings = candidate.settings || state.settings;
+  state.displaySettings = candidate.displaySettings || {};
+  state.weekISO = candidate.weekISO || '';
+  state.activeDay = candidate.activeDay ?? 0;
+  state.auditLog = candidate.auditLog || [];
+  state.loginSecurity = candidate.loginSecurity || { failures: [], lockUntil: 0 };
+  state.passwordResets = candidate.passwordResets || [];
+  state.waitlist = candidate.waitlist || [];
+  state.folders = candidate.folders || [];
+  state.files = candidate.files || [];
+  state.selectedTags = candidate.selectedTags ? new Set(candidate.selectedTags) : new Set();
+  state.activeTab = candidate.activeTab || 'dashboardTab';
   persistStateImmediate();
   recordAudit("state.import", "בוצע ייבוא גיבוי — טוען מחדש.", "warn", false);
   window.location.reload();
@@ -447,7 +450,7 @@ export function runIntegrityAssistant() {
    ============================================================ */
 
 export function saveManagedBackup(label = "") {
-  const payload = lightState();
+  const payload = serializedState();
   const backup = {
     id: makeId("backup"),
     label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
@@ -466,22 +469,38 @@ export function saveManagedBackup(label = "") {
   backups.unshift(backup);
   if (backups.length > MAX_MANAGED) backups = backups.slice(0, MAX_MANAGED);
 
-  try {
+  const tryWrite = () => {
     localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+  };
+
+  try {
+    tryWrite();
   } catch (e) {
     if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
         try { localStorage.removeItem(AUTOBACKUP_KEY); } catch {}
         backups = backups.slice(0, 1);
-        localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+        tryWrite();
         showToast("פונה מקום — גיבויים אוטומטיים נמחקו.", "info");
-        return backup;
       } catch {
-        throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");
+        try {
+          backups = [];
+          tryWrite();
+          showToast("נמחקו כל הגיבויים הקיימים לפינוי מקום.", "warn");
+        } catch {
+          throw new Error("האחסון המקומי מלא. יש לנקות נתונים (פגישות ישנות, יומן בקרה) ולנסות שוב.");
+        }
       }
+    } else {
+      throw e;
     }
-    throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");
   }
+
+  const stored = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "null");
+  if (!stored || !stored[0] || stored[0].id !== backup.id) {
+    throw new Error("אימות הגיבוי נכשל — הנתונים לא נשמרו כהלכה.");
+  }
+
   return backup;
 }
 
@@ -494,9 +513,36 @@ export function restoreManagedBackup(backupId) {
   const backups = getManagedBackups();
   const backup = backups.find(b => b.id === backupId);
   if (!backup || !backup.data) throw new Error("גיבוי לא נמצא.");
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(backup.data));
+  if (!Array.isArray(backup.data.rooms) || !Array.isArray(backup.data.schedule)) {
+    throw new Error("גיבוי פגום — חסרים שדות חובה.");
+  }
+  const data = backup.data;
+  state.rooms = data.rooms || [];
+  state.staff = data.staff || [];
+  state.schedule = data.schedule || [];
+  state.users = data.users || [];
+  state.defaultTemplate = data.defaultTemplate || [];
+  state.weekTemplates = data.weekTemplates || {};
+  state.requests = data.requests || [];
+  state.meetings = data.meetings || [];
+  state.meetingGroups = data.meetingGroups || [];
+  state.issues = data.issues || [];
+  state.settings = data.settings || state.settings;
+  state.displaySettings = data.displaySettings || {};
+  state.weekISO = data.weekISO || '';
+  state.activeDay = data.activeDay ?? 0;
+  state.auditLog = data.auditLog || [];
+  state.loginSecurity = data.loginSecurity || { failures: [], lockUntil: 0 };
+  state.passwordResets = data.passwordResets || [];
+  state.waitlist = data.waitlist || [];
+  state.folders = data.folders || [];
+  state.files = data.files || [];
+  state.selectedTags = data.selectedTags ? new Set(data.selectedTags) : new Set();
+  state.activeTab = data.activeTab || 'dashboardTab';
   persistStateImmediate();
-  recordAudit("state.restore", `שוחזר גיבוי: ${backup.label}`, "critical", false);
+  const restoredCount = (data.schedule || []).length;
+  recordAudit("state.restore", `שוחזר גיבוי: ${backup.label} (${restoredCount} הזמנות).`, "critical", false);
+  return { label: backup.label, entries: restoredCount };
 }
 
 export function deleteManagedBackup(backupId) {
