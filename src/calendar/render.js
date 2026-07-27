@@ -24,6 +24,7 @@ import {
   fmtDate,
   fmtShort,
   isoDate,
+  localISO,
   addDays,
   dayLabel,
   teamColorClass,
@@ -324,7 +325,8 @@ export function renderDayTabs() {
   container.innerHTML = DAY_DEFS.map(d => {
     const date   = addDays(ws, d.key);
     const active = d.key === state.activeDay;
-    const count  = state.schedule.filter(e => e.weekISO === isoWk && e.day === d.key).length;
+    const count  = state.schedule.filter(e => e.weekISO === isoWk && e.day === d.key).length
+      + (state.meetings || []).filter(m => m.date === localISO(date)).length;
     const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][d.key] || d.label;
     return `<button type="button" class="day-tab${active ? " active" : ""}" data-day="${d.key}">
       <span class="dt-short">${d.short}</span>
@@ -374,44 +376,19 @@ export function renderWeekHeader() {
 export function renderStats() {
   const box = byId("dashboardStats");
   if (!box) return;
-  const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length;
-  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
+  const activeDate = localISO(activeDayDate());
+  const meetingToday = (state.meetings || []).filter(m => m.date === activeDate).length;
+  const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length + meetingToday;
+  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length + meetingToday;
   const pendingRequests = state.requests.filter(r => r.status === "pending").length;
-  const doneToday = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay && e.sessionStatus === 'done').length;
-  const completionRate = today > 0 ? Math.round(doneToday / today * 100) : 0;
   box.innerHTML = `
     <div class="stats-grid">
       <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--primary)">event</span><div><strong class="ds-card-val">${weekly}</strong><span class="ds-card-label">פגישות השבוע</span></div></div>
-      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--success)">check_circle</span><div><strong class="ds-card-val" style="color:var(--success)">${completionRate}%</strong><span class="ds-card-label">אחוז השלמה</span><div class="ds-card-bar"><div class="ds-card-bar-fill" style="width:${completionRate}%"></div></div></div></div>
-      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--secondary)">schedule</span><div><strong class="ds-card-val">${today}</strong><span class="ds-card-label">פגישות היום</span><span>${doneToday} הושלמו</span></div></div>
+      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--secondary)">schedule</span><div><strong class="ds-card-val">${today}</strong><span class="ds-card-label">פגישות היום</span></div></div>
       <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--tertiary)">meeting_room</span><div><strong class="ds-card-val">${state.rooms.length}</strong><span class="ds-card-label">חדרים</span><span>${state.rooms.filter(r => r.active !== false).length} פעילים</span></div></div>
     </div>
     ${pendingRequests > 0 ? `<div class="ds-pending-alert"><span class="material-symbols-outlined">priority_high</span>${pendingRequests} בקשות ממתינות לאישור</div>` : ''}
   `;
-}
-
-/* ============================================================
-   TAG FILTERS
-   ============================================================ */
-
-export function renderTagFilters() {
-  const container = byId("tagFilters");
-  if (!container) return;
-  const tags = [...new Set(state.rooms.flatMap(r => r.tags))].sort((a, b) => a.localeCompare(b, "he"));
-  container.innerHTML = tags.map(tag => `
-    <label class="chip${state.selectedTags.has(tag) ? " chip-active" : ""}">
-      <input type="checkbox" value="${esc(tag)}"${state.selectedTags.has(tag) ? " checked" : ""} />
-      <span>${esc(tag)}</span>
-    </label>
-  `).join("");
-  container.querySelectorAll("input").forEach(cb => {
-    cb.addEventListener("change", () => {
-      cb.checked ? state.selectedTags.add(cb.value) : state.selectedTags.delete(cb.value);
-      persistState();
-      renderTagFilters();
-      renderOccupancy();
-    });
-  });
 }
 
 /* ============================================================
@@ -532,7 +509,6 @@ export function renderRequests() {
       renderDayTabs();
       renderWeekHeader();
       renderStats();
-      renderTagFilters();
       renderRequests();
     });
   });

@@ -150,6 +150,7 @@ function logoutCurrentUser(message = "") {
   state.currentUser = null;
   clearSessionTimer();
   sessionStorage.removeItem("clinic_user");
+  localStorage.removeItem("clinic_session");
   if (message) showToast(message, "warn");
 }
 
@@ -180,7 +181,11 @@ function renderSessionBar() {
    ---------------------------------------------------------- */
 
 function restoreSession() {
-  const stored = sessionStorage.getItem("clinic_user");
+  let stored = sessionStorage.getItem("clinic_user");
+  if (!stored) {
+    stored = localStorage.getItem("clinic_session");
+    if (stored) sessionStorage.setItem("clinic_user", stored);
+  }
   if (!stored) return false;
   try {
     const parsed = JSON.parse(stored);

@@ -535,3 +535,31 @@ export function renderStaffAccordion() {
   repopulateSelects();
   import('./events.js').then(m => m.initStaffEvents());
 }
+
+export function renderStaffList() {
+  const container = byId("staffListView");
+  if (!container) return;
+  const staff = [...(state.staff || [])].sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "he"));
+  const users = state.users || [];
+  const getUserForStaff = (staffId) => users.find(u => u.staffId === staffId);
+
+  let html = `<div class="table-scroll"><table class="occ-table"><thead><tr>
+    <th>שם</th><th>תפקיד</th><th>צוות</th><th>טלפון</th><th>דוא"ל</th><th>משתמש</th>
+  </tr></thead><tbody>`;
+
+  html += staff.map(s => {
+    const user = getUserForStaff(s.id);
+    const activeBadge = s.active !== false ? "" : '<span style="color:var(--danger);font-size:.75rem">לא פעיל</span>';
+    return `<tr>
+      <td><strong>${esc(s.fullName)}</strong> ${activeBadge}</td>
+      <td>${esc(s.role || "—")}</td>
+      <td>${esc(s.team || "—")}</td>
+      <td dir="ltr">${esc(s.phone || "—")}</td>
+      <td dir="ltr">${esc(s.email || "—")}</td>
+      <td>${user ? `<span class="user-role-badge ${user.role === 'admin' ? 'role-admin' : 'role-staff'}">${esc(user.username)}</span>` : '<span class="muted">—</span>'}</td>
+    </tr>`;
+  }).join("");
+
+  html += "</tbody></table></div>";
+  container.innerHTML = html;
+}

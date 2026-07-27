@@ -253,12 +253,6 @@
           <!-- Active day heading -->
           <p id="dayHeading" class="day-heading"></p>
 
-          <!-- Tag filters -->
-          <details class="filter-collapsible" open>
-            <summary>סינון לפי תגית</summary>
-            <div id="tagFilters" class="chips"></div>
-          </details>
-
           <!-- Waitlist -->
           <div id="waitlistPanel"></div>
 
@@ -323,6 +317,7 @@
           <div class="mode-toolbar">
             <div class="mode-tabs">
               <button data-mode="view" class="mode-tab active">צפייה</button>
+              <button data-mode="list" class="mode-tab">רשימה</button>
               <button data-mode="edit" class="mode-tab">עריכה</button>
               <button data-mode="export" class="mode-tab">ייצוא</button>
             </div>
@@ -390,6 +385,10 @@
             <div class="section-head"><h2>ייצוא צוות</h2></div>
             <button id="exportStaffCSVBtn" class="secondary">הורד CSV</button>
           </div>
+          <div id="staffListMode" class="hidden">
+            <div class="section-head"><h2>רשימת צוות</h2></div>
+            <div id="staffListView"></div>
+          </div>
         </section>
 
         <!-- ======== MEETINGS TAB ======== -->
@@ -427,7 +426,6 @@
                   <label class="full">אנשי צוות
                     <div id="meetingStaffChecks" style="display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.25rem"></div>
                   </label>
-                  <label>קבוצות <select id="meetingGroupIds" multiple></select></label>
                   <label>תאריך <input dir="auto" id="meetingDate" type="date" /></label>
                   <label>שעה <input dir="auto" id="meetingTime" type="time" /></label>
                   <label>משך (דקות) <input dir="auto" id="meetingDuration" type="number" min="30" value="60" /></label>

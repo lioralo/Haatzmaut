@@ -61,7 +61,6 @@ import {
   renderDayTabs,
   renderWeekHeader,
   renderStats,
-  renderTagFilters,
   renderRequests,
   renderRoomStatusStrip,
   addNotification
@@ -106,7 +105,6 @@ export function initCalendarEvents() {
     renderWeekHeader();
     renderOccupancy();
     renderStats();
-    renderTagFilters();
   });
 
   if (weekNext) weekNext.addEventListener("click", () => {
@@ -118,7 +116,6 @@ export function initCalendarEvents() {
     renderWeekHeader();
     renderOccupancy();
     renderStats();
-    renderTagFilters();
   });
 
   if (weekToday) weekToday.addEventListener("click", () => {
@@ -130,7 +127,6 @@ export function initCalendarEvents() {
     renderWeekHeader();
     renderOccupancy();
     renderStats();
-    renderTagFilters();
   });
 
   /* Booking modal submit */
@@ -306,7 +302,6 @@ export function initCalendarEvents() {
         safeRender(renderDayTabs, "dayTabs");
         safeRender(renderWeekHeader, "weekHeader");
         safeRender(renderStats, "stats");
-        safeRender(renderTagFilters, "tagFilters");
         safeRender(renderOccupancy, "occupancy");
         safeRender(renderRequests, "requests");
         addNotification(`לוח הזמנים עודכן: נטענו ${template.length} רשומות תקינות מתוך ${rows.length}.`);
@@ -368,7 +363,6 @@ export function initCalendarEvents() {
           safeRender(renderDayTabs, "dayTabs");
           safeRender(renderWeekHeader, "weekHeader");
           safeRender(renderStats, "stats");
-          safeRender(renderTagFilters, "tagFilters");
           safeRender(renderOccupancy, "occupancy");
           safeRender(renderRequests, "requests");
           addNotification(`יובאו ${incoming.length} חדרים מתוך ${rows.length} רשומות.`);

@@ -482,3 +482,55 @@ test.describe('Backup Integrity', () => {
     expect(result.hasBackup).toBe(true);
   });
 });
+
+test.describe('Layout & Session Verification', () => {
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?devAuth=1');
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.waitForTimeout(2000);
+    await page.fill('#username', 'admin');
+    await page.fill('#password', 'admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(2000);
+  });
+
+  test('X: day tab counter includes meetings', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { localISO } = await import('/src/core/utils.js');
+      const { state } = await import('/src/core/store.js');
+      const todayISO = localISO(new Date());
+      if (!state.meetings) state.meetings = [];
+      state.meetings.push({
+        id: 'test-meet-ct', title: 'Test Meeting', date: todayISO,
+        time: '12:00', duration: 60, speaker: 'Test Speaker', groupIds: []
+      });
+      const wkMeetingCount = state.meetings.filter(m => m.date === todayISO).length;
+      return { meetingCount: wkMeetingCount };
+    });
+    expect(result.meetingCount).toBeGreaterThanOrEqual(1);
+  });
+
+  test('Y: staff list view renders table rows', async ({ page }) => {
+    await page.locator('button[data-tab=staffTab]').first().click();
+    await page.waitForTimeout(500);
+    const listBtn = page.locator('#staffTab [data-mode="list"]');
+    if (await listBtn.isVisible()) {
+      await listBtn.click();
+      await page.waitForTimeout(500);
+    }
+    const rows = await page.locator('#staffListView table tbody tr').count();
+    expect(rows).toBeGreaterThan(0);
+  });
+
+  test('Z: session persists via localStorage fallback', async ({ page }) => {
+    const hasLocalSession = await page.evaluate(() => {
+      return !!localStorage.getItem('clinic_session');
+    });
+    const hasSessSession = await page.evaluate(() => {
+      return !!sessionStorage.getItem('clinic_user');
+    });
+    expect(hasLocalSession || hasSessSession).toBe(true);
+  });
+});

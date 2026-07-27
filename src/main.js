@@ -28,13 +28,13 @@ import {
 } from './calendar/state.js';
 import {
   renderOccupancy, renderDayTabs, renderWeekHeader, renderStats,
-  renderTagFilters, renderRequests, renderWaitlistPanel,
+  renderRequests, renderWaitlistPanel,
   renderStatsDashboard
 } from './calendar/render.js';
 import { initCalendarEvents } from './calendar/events.js';
 
 import { DEFAULT_PERMISSIONS } from './staff/state.js';
-import { renderAdminUsers, renderAdminStaff, renderAdminResetRequests, renderStaffDirectory, renderStaffAccordion } from './staff/render.js';
+import { renderAdminUsers, renderAdminStaff, renderAdminResetRequests, renderStaffDirectory, renderStaffAccordion, renderStaffList } from './staff/render.js';
 import { initStaffEvents } from './staff/events.js';
 
 import { renderMeetingGroups, renderMeetingTimeline } from './meetings/render.js';
@@ -129,9 +129,11 @@ function applyTabMode(tabId) {
     byId("requestsExportMode")?.classList.toggle("hidden", targetMode !== "export");
   } else if (tabId === "staffTab" || tabId === "adminTab") {
     byId("staffViewMode")?.classList.toggle("hidden", targetMode !== "view");
+    byId("staffListMode")?.classList.toggle("hidden", targetMode !== "list");
     byId("staffEditMode")?.classList.toggle("hidden", targetMode !== "edit");
     byId("staffExportMode")?.classList.toggle("hidden", targetMode !== "export");
     if (targetMode === "view") { renderStaffDirectory(); }
+    if (targetMode === "list") { renderStaffList(); }
     if (targetMode === "edit") { renderStaffAccordion(); }
   } else if (tabId === "meetingsTab") {
     byId("meetingsViewMode")?.classList.toggle("hidden", targetMode !== "view");
@@ -177,10 +179,12 @@ function initModeToolbars() {
         state.modes.requests = mode;
       } else if (tabId === "staffTab") {
         byId("staffViewMode")?.classList.toggle("hidden", mode !== "view");
+        byId("staffListMode")?.classList.toggle("hidden", mode !== "list");
         byId("staffEditMode")?.classList.toggle("hidden", mode !== "edit");
         byId("staffExportMode")?.classList.toggle("hidden", mode !== "export");
         state.modes.staff = mode;
         if (mode === "view") { renderStaffDirectory(); }
+        if (mode === "list") { renderStaffList(); }
         if (mode === "edit") { renderStaffAccordion(); }
       } else if (tabId === "meetingsTab") {
         byId("meetingsViewMode")?.classList.toggle("hidden", mode !== "view");
@@ -320,7 +324,6 @@ function renderActiveTab() {
     renderWeekHeader();
     renderDayTabs();
     renderStats();
-    renderTagFilters();
     renderOccupancy();
     renderWaitlistPanel();
     break;
@@ -578,6 +581,7 @@ function initLogin() {
     resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
     sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
+    localStorage.setItem("clinic_session", JSON.stringify({ username: u, role, staffId }));
     setEncryptionPassword(p).catch(() => {});
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
