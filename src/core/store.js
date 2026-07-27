@@ -139,10 +139,15 @@ function lightState() {
     schedule: state.schedule,
     rooms: state.rooms,
     defaultTemplate: state.defaultTemplate,
+    weekTemplates: state.weekTemplates,
+    requests: state.requests,
+    weekISO: state.weekISO,
+    activeDay: state.activeDay,
     staff: state.staff,
     users: state.users,
     meetingGroups: state.meetingGroups,
     meetings: state.meetings,
+    issues: state.issues,
     settings: state.settings,
     displaySettings: state.displaySettings
   };
@@ -466,10 +471,10 @@ export function saveManagedBackup(label = "") {
   } catch (e) {
     if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
-        try { const ab = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]"); if (Array.isArray(ab) && ab.length > 0) { localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(ab.slice(0, 1))); } } catch {}
-        if (backups.length > 1) backups = backups.slice(0, 1);
+        try { localStorage.removeItem(AUTOBACKUP_KEY); } catch {}
+        backups = backups.slice(0, 1);
         localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
-        showToast("פונה מקום — גיבויים ישנים נמחקו.", "info");
+        showToast("פונה מקום — גיבויים אוטומטיים נמחקו.", "info");
         return backup;
       } catch {
         throw new Error("האחסון המקומי מלא — יש למחוק גיבויים ישנים או נתונים.");

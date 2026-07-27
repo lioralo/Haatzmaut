@@ -300,7 +300,7 @@ export function renderMeetingTimeline() {
     const isJoint = (m.groupIds || []).length > 1;
     return `
     <div class="mt-card" data-meeting-id="${m.id}">
-      ${admin ? `<input type="checkbox" class="meeting-select-cb" data-select-meeting="${m.id}" style="margin-left:0.5rem" />` : ''}
+      ${admin ? `<input type="checkbox" class="meeting-select-cb" data-select-meeting="${m.id}" />` : ''}
       <div class="mt-time">${esc(m.time)}${dateStr ? `<span class="mt-date-chip">${dateStr}</span>` : ""}</div>
       <div class="mt-body">
         <div class="mt-title">${esc(m.title || m.speaker)}</div>

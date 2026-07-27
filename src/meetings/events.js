@@ -238,7 +238,7 @@ function bindDelegatedClicks() {
     }
 
     const meetingCard = e.target.closest(".mt-card[data-meeting-id]");
-    if (meetingCard && !e.target.closest("button")) {
+    if (meetingCard && !e.target.closest("button, input")) {
       const mid = meetingCard.dataset.meetingId;
       const meeting = state.meetings.find(m => m.id === mid);
       if (meeting) showMeetingInfoDialog(meeting);
