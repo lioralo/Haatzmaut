@@ -174,7 +174,13 @@ function _writeStorage() {
         _persistFailed = false;
         showToast("פונה מקום אחסון — גיבויים ישנים נמחקו.", "info");
         return;
-      } catch {}
+      } catch {
+        if (!_persistFailed) {
+          showToast("האחסון המקומי מלא. יש לנקות נתונים ישנים (פגישות, יומן בקרה, גיבויים).", "error");
+          _persistFailed = true;
+        }
+        return;
+      }
     }
     if (!_persistFailed) {
       showToast("שגיאה בשמירת נתונים — ייתכן שהאחסון המקומי מלא.", "error");
