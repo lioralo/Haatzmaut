@@ -95,6 +95,7 @@ export function normalizeMeeting(m) {
     link:          String(m.link || m.url || "").trim(),
     files:         Array.isArray(m.files) ? m.files.map(String) : String(m.files || "").split(";").map(v => v.trim()).filter(Boolean),
     recurringRule: ["weekly", "biweekly", "monthly-first", "monthly-nth"].includes(m.recurringRule) ? m.recurringRule : null,
+    parentMeetingId: String(m.parentMeetingId || "").trim() || null,
     staffIds:      Array.isArray(m.staffIds) ? m.staffIds : String(m.staffIds || "").split(",").map(s => s.trim()).filter(Boolean),
     createdAt:     m.createdAt || new Date().toLocaleString("he-IL")
   };
@@ -350,12 +351,13 @@ export function expandRecurringMeetings(weeksAhead = 12) {
       if (currentDate <= now) continue;
       const iso = localISO(currentDate);
       const exists = state.meetings.some(m =>
-        m.recurringRule === "__instance__" && m.date === iso && m.time === parent.time && m.speaker === parent.speaker
+        m.recurringRule === "__instance__" && m.parentMeetingId === parent.id && m.date === iso
       );
       if (!exists) {
         state.meetings.push({
           ...parent,
           id: makeId("meet"),
+          parentMeetingId: parent.id,
           date: iso,
           recurringRule: "__instance__",
           createdAt: new Date().toLocaleString("he-IL")
@@ -368,9 +370,15 @@ export function expandRecurringMeetings(weeksAhead = 12) {
 
 export function cleanupOldMeetingInstances() {
   const yesterday = localISO(new Date(Date.now() - 86400000));
-  state.meetings = state.meetings.filter(m =>
-    m.recurringRule !== "__instance__" || m.date >= yesterday
-  );
+  const seen = new Set();
+  state.meetings = state.meetings.filter(m => {
+    if (m.recurringRule !== "__instance__") return true;
+    if (m.date < yesterday) return false;
+    const key = `${m.parentMeetingId || m.speaker || ""}|${m.date}|${m.time}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function autoMaintainMeetingWindow() {

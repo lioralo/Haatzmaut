@@ -400,8 +400,16 @@ export function activeDayEntries() {
 export function getDayEntryCount(dayIdx) {
   const dateObj = addDays(isoDate(state.weekISO), dayIdx);
   const dateStr = localISO(dateObj);
-  return state.schedule.filter(e => e.weekISO === state.weekISO && e.day === dayIdx).length
-    + (state.meetings || []).filter(m => m.date === dateStr).length;
+  const visibleRoomIds = new Set(filteredRooms().map(r => r.id));
+  const scheduleCount = state.schedule.filter(e =>
+    e.weekISO === state.weekISO && e.day === dayIdx && visibleRoomIds.has(e.roomId)
+  ).length;
+  const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
+  const meetingRoomId = meetingRoom?.id || (state.rooms[0]?.id || "");
+  const meetingCount = visibleRoomIds.has(meetingRoomId)
+    ? (state.meetings || []).filter(m => m.date === dateStr).length
+    : 0;
+  return scheduleCount + meetingCount;
 }
 
 export function filteredRooms() {

@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { state, persistStateImmediate, recordAudit } from './store.js';
-import { showToast } from './utils.js';
+import { showToast, todayDayIdx, sundayISO } from './utils.js';
 
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'https://haatzmaut.lior-clinic.org/api'
@@ -214,9 +214,8 @@ export async function loadFromCloudAndApply() {
     state.files = parsed.files || [];
     state.auditLog = parsed.auditLog || [];
     state.passwordResets = parsed.passwordResets || [];
-    state.weekISO = '';
-    state.activeDay = (new Date()).getDay();
-    if (state.activeDay > 4) state.activeDay = 0;
+    state.weekISO = sundayISO();
+    state.activeDay = todayDayIdx();
     if (parsed.selectedTags) state.selectedTags = new Set(parsed.selectedTags);
     if (parsed.loginSecurity) state.loginSecurity = parsed.loginSecurity;
 

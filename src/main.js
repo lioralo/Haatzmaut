@@ -376,8 +376,8 @@ async function initialize() {
     state.weekTemplates   = stored.weekTemplates   || {};
     state.requests        = stored.requests        || [];
     state.selectedTags    = new Set(stored.selectedTags || []);
-    state.weekISO         = stored.weekISO         || "";
-    state.activeDay       = stored.activeDay       ?? 0;
+    state.weekISO         = "";
+    state.activeDay       = 0;
     state.staff           = stored.staff           || [];
     state.users           = stored.users           || [];
     state.passwordResets  = stored.passwordResets  || [];
@@ -397,7 +397,7 @@ async function initialize() {
     state.settings        = stored.settings        || state.settings;
   }
   if (!state.weekISO) state.weekISO = sundayISO();
-  if (!state.activeDay && state.activeDay !== 0) state.activeDay = todayDayIdx();
+  state.activeDay = todayDayIdx();
   if (!state.rooms || !state.rooms.length) state.rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
   if (!state.staff || !state.staff.length) state.staff = DEFAULT_STAFF.map(s => ({ ...s }));
   if (!state.defaultTemplate || !state.defaultTemplate.length) {

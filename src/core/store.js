@@ -117,8 +117,6 @@ function serializedState() {
     weekTemplates: state.weekTemplates,
     requests: state.requests,
     selectedTags: [...state.selectedTags],
-    weekISO: state.weekISO,
-    activeDay: state.activeDay,
     staff: state.staff,
     users: state.users,
     passwordResets: state.passwordResets,
@@ -479,24 +477,19 @@ export function saveManagedBackup(label = "") {
     if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
         try { localStorage.removeItem(AUTOBACKUP_KEY); } catch {}
-        backups = backups.slice(0, 1);
+        backups = [backup];
         tryWrite();
         showToast("פונה מקום — גיבויים אוטומטיים נמחקו.", "info");
       } catch {
-        try {
-          backups = [];
-          tryWrite();
-          showToast("נמחקו כל הגיבויים הקיימים לפינוי מקום.", "warn");
-        } catch {
-          throw new Error("האחסון המקומי מלא. יש לנקות נתונים (פגישות ישנות, יומן בקרה) ולנסות שוב.");
-        }
+        throw new Error("האחסון המקומי מלא. יש לייצא גיבוי ידני (JSON) ולפנות מקום.");
       }
     } else {
       throw e;
     }
   }
 
-  if (!localStorage.getItem(MANAGED_BACKUPS_KEY)) {
+  const stored = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "null");
+  if (!stored || !Array.isArray(stored) || !stored.some(b => b.id === backup.id)) {
     throw new Error("אימות הגיבוי נכשל — הנתונים לא נשמרו.");
   }
   return backup;
