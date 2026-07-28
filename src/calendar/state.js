@@ -166,7 +166,8 @@ export function replaceWeekSchedule(weekISO, template) {
 }
 
 export function ensureSyncedScheduleWindow() {
-  const weekList = [0, 1, 2].map(w => shiftWeek(state.weekISO, w));
+  const baseWeekISO = resolveWeekISO();
+  const weekList = [0, 1, 2].map(w => shiftWeek(baseWeekISO, w));
   weekList.forEach(iso => {
     const hasWeek = state.schedule.some(e => e.weekISO === iso);
     if (!hasWeek) replaceWeekSchedule(iso, getWeekTemplate(iso));
@@ -174,10 +175,11 @@ export function ensureSyncedScheduleWindow() {
 }
 
 export function applyTemplateScope(template, scope) {
+  const baseWeekISO = resolveWeekISO();
   const weeks = [];
-  if (scope === "current") weeks.push(state.weekISO);
-  if (scope === "upcoming") weeks.push(shiftWeek(state.weekISO, 1), shiftWeek(state.weekISO, 2));
-  if (scope === "current-upcoming") weeks.push(state.weekISO, shiftWeek(state.weekISO, 1), shiftWeek(state.weekISO, 2));
+  if (scope === "current") weeks.push(baseWeekISO);
+  if (scope === "upcoming") weeks.push(shiftWeek(baseWeekISO, 1), shiftWeek(baseWeekISO, 2));
+  if (scope === "current-upcoming") weeks.push(baseWeekISO, shiftWeek(baseWeekISO, 1), shiftWeek(baseWeekISO, 2));
 
   weeks.forEach(iso => {
     state.weekTemplates[iso] = template;
@@ -191,6 +193,15 @@ export function applyTemplateScope(template, scope) {
     }
   });
   ensureSyncedScheduleWindow();
+}
+
+function resolveWeekISO(value = state.weekISO) {
+  const candidate = String(value || "").trim();
+  const parsed = isoDate(candidate);
+  if (candidate && !Number.isNaN(parsed.getTime())) return candidate;
+  const fallback = sundayISO();
+  if (state.weekISO !== fallback) state.weekISO = fallback;
+  return fallback;
 }
 
 /* ============================================================
@@ -364,21 +375,22 @@ export async function resolveUnmatchedStaffUsers(staffRecords, existingUsers) {
    WEEK / DAY QUERIES
    ============================================================ */
 
-export function activeDayDate() { return addDays(isoDate(state.weekISO), state.activeDay); }
+export function activeDayDate() { return addDays(isoDate(resolveWeekISO()), state.activeDay); }
 
 export function activeDayEntries() {
+  const weekISO = resolveWeekISO();
   const scheduleEntries = state.schedule
-    .filter(e => e.weekISO === state.weekISO && e.day === state.activeDay)
+    .filter(e => e.weekISO === weekISO && e.day === state.activeDay)
     .sort((a, b) => timeToMin(a.start) - timeToMin(b.start));
 
-  const activeDate = localISO(activeDayDate());
+  const activeDate = localISO(addDays(isoDate(weekISO), state.activeDay));
   const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
 
   const meetingEntries = (state.meetings || [])
     .filter(m => m.date === activeDate)
     .map(m => ({
       id: m.id,
-      weekISO: state.weekISO,
+      weekISO: weekISO,
       day: state.activeDay,
       roomId: meetingRoom?.id || (state.rooms[0]?.id || ""),
       start: m.time || "12:30",
@@ -398,11 +410,12 @@ export function activeDayEntries() {
 }
 
 export function getDayEntryCount(dayIdx) {
-  const dateObj = addDays(isoDate(state.weekISO), dayIdx);
+  const weekISO = resolveWeekISO();
+  const dateObj = addDays(isoDate(weekISO), dayIdx);
   const dateStr = localISO(dateObj);
   const visibleRoomIds = new Set(filteredRooms().map(r => r.id));
   const scheduleCount = state.schedule.filter(e =>
-    e.weekISO === state.weekISO && e.day === dayIdx && visibleRoomIds.has(e.roomId)
+    e.weekISO === weekISO && e.day === dayIdx && visibleRoomIds.has(e.roomId)
   ).length;
   const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
   const meetingRoomId = meetingRoom?.id || (state.rooms[0]?.id || "");
@@ -418,7 +431,7 @@ export function filteredRooms() {
 }
 
 export function weekRange() {
-  const s = isoDate(state.weekISO);
+  const s = isoDate(resolveWeekISO());
   return `${fmtDate(s)} – ${fmtDate(addDays(s, 4))}`;
 }
 
@@ -433,10 +446,11 @@ export const getEntryById = id => {
   if (scheduleEntry) return scheduleEntry;
   const meeting = (state.meetings || []).find(m => m.id === id);
   if (!meeting) return null;
+  const weekISO = resolveWeekISO();
   const meetingRoom = state.rooms.find(r => (r.tags || []).some(t => t.includes("ישיבות"))) || state.rooms[0];
   return {
     id: meeting.id,
-    weekISO: state.weekISO,
+    weekISO: weekISO,
     day: state.activeDay,
     roomId: meetingRoom?.id || (state.rooms[0]?.id || ""),
     start: meeting.time || "12:30",

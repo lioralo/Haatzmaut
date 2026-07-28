@@ -4,11 +4,22 @@
    ============================================================ */
 
 import { state, isAdmin, persistState, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, startAutoBackup, exportFullBackup, exportEncryptedBackup, applyImportedState, importEncryptedBackup, saveManagedBackup, getManagedBackups, restoreManagedBackup, deleteManagedBackup } from './core/store.js';
-import { DEV_LOGIN_ENABLED, DEFAULT_ROOMS, DEFAULT_STAFF, DAY_DEFS } from './core/constants.js';
+import {
+  DEV_LOGIN_ENABLED,
+  DEFAULT_ROOMS,
+  DEFAULT_STAFF,
+  DAY_DEFS,
+  APP_BUILD_ID,
+  APP_VERSION_KEY,
+  SESSION_USER_KEY,
+  LEGACY_SESSION_KEY,
+  CLOUD_KEY_BITS_KEY
+} from './core/constants.js';
 import {
   byId, showToast, generatePassword, passwordForUser, makeId,
   localISO, minToTime, timeToMin, sundayISO, todayDayIdx, clampDay, esc,
-  enforceMaxLength, normalizeDisplayMessage, normalizeDisplaySettings, activeDisplayMessages
+  enforceMaxLength, normalizeDisplayMessage, normalizeDisplaySettings, activeDisplayMessages,
+  normalizeUser
 } from './core/utils.js';
 import {
   restoreSession, registerActivity, applyAccessControl,
@@ -22,6 +33,8 @@ import {
 
 import {
   ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
+  normalizeRoom, normalizeStaff, normalizeEntry, normalizeRequest,
+  templateFromEntries, normalizeTemplateEntry,
   expandRecurringEntries, cleanExpiredWaitlist, deleteRecurringSeries,
   updateRecurringInstance, addToWaitlist, removeFromWaitlist,
   getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg
@@ -39,9 +52,9 @@ import { initStaffEvents } from './staff/events.js';
 
 import { renderMeetingGroups, renderMeetingTimeline } from './meetings/render.js';
 import { initMeetingsEvents } from './meetings/events.js';
-import { autoMaintainMeetingWindow } from './meetings/state.js';
+import { autoMaintainMeetingWindow, normalizeMeeting, normalizeGroup } from './meetings/state.js';
 
-import { ISSUE_TYPES, STATUS_LABELS } from './issues/state.js';
+import { ISSUE_TYPES, STATUS_LABELS, normalizeIssue } from './issues/state.js';
 import { renderIssuesBoard } from './issues/render.js';
 import { initIssuesEvents } from './issues/events.js';
 
@@ -281,6 +294,129 @@ function renderIssuesSummary() {
   `;
 }
 
+function hydrateStoredState(stored) {
+  if (!stored) return;
+
+  const weekISO = typeof stored.weekISO === "string" && stored.weekISO ? stored.weekISO : sundayISO();
+
+  const normalizeLoadedUser = user => {
+    const normalized = normalizeUser(user || {});
+    return user && user.password && !user.passwordHash
+      ? { ...normalized, password: String(user.password) }
+      : normalized;
+  };
+
+  state.auditLog = Array.isArray(stored.auditLog) ? stored.auditLog : [];
+  state.loginSecurity = stored.loginSecurity && typeof stored.loginSecurity === "object"
+    ? {
+        failures: Array.isArray(stored.loginSecurity.failures) ? stored.loginSecurity.failures : [],
+        lockUntil: Number(stored.loginSecurity.lockUntil) || 0
+      }
+    : { failures: [], lockUntil: 0 };
+  state.activeTab = typeof stored.activeTab === "string" && stored.activeTab ? stored.activeTab : "dashboardTab";
+  state.rooms = (Array.isArray(stored.rooms) ? stored.rooms : DEFAULT_ROOMS).map(normalizeRoom);
+  if (!state.rooms.length) state.rooms = DEFAULT_ROOMS.map(normalizeRoom);
+  state.staff = (Array.isArray(stored.staff) ? stored.staff : DEFAULT_STAFF).map(normalizeStaff);
+  if (!state.staff.length) state.staff = DEFAULT_STAFF.map(normalizeStaff);
+  state.defaultTemplate = Array.isArray(stored.defaultTemplate)
+    ? templateFromEntries(stored.defaultTemplate, state.rooms)
+    : [];
+  state.weekTemplates = stored.weekTemplates && typeof stored.weekTemplates === "object"
+    ? Object.fromEntries(
+        Object.entries(stored.weekTemplates).map(([iso, template]) => [
+          iso,
+          Array.isArray(template) ? templateFromEntries(template, state.rooms) : []
+        ])
+      )
+    : {};
+  state.schedule = Array.isArray(stored.schedule)
+    ? stored.schedule.map(entry => normalizeEntry(entry, weekISO, state.rooms))
+    : [];
+  state.requests = Array.isArray(stored.requests) ? stored.requests.map(normalizeRequest) : [];
+  state.users = Array.isArray(stored.users) ? stored.users.map(normalizeLoadedUser) : [];
+  state.passwordResets = Array.isArray(stored.passwordResets) ? stored.passwordResets : [];
+  state.folders = Array.isArray(stored.folders) ? stored.folders : [];
+  state.files = Array.isArray(stored.files) ? stored.files : [];
+  state.meetingGroups = Array.isArray(stored.meetingGroups) ? stored.meetingGroups.map(normalizeGroup) : [];
+  state.meetings = Array.isArray(stored.meetings) ? stored.meetings.map(normalizeMeeting) : [];
+  state.issues = Array.isArray(stored.issues) ? stored.issues.map(normalizeIssue) : [];
+  state.waitlist = Array.isArray(stored.waitlist) ? stored.waitlist : [];
+  state.selectedTags = new Set(Array.isArray(stored.selectedTags) ? stored.selectedTags : []);
+  state.settings = stored.settings && typeof stored.settings === "object" ? stored.settings : state.settings;
+  state.displaySettings = normalizeDisplaySettings(stored.displaySettings);
+  if (Array.isArray(stored.displaySettings?.messages)) {
+    state.displaySettings.messages = stored.displaySettings.messages.map(normalizeDisplayMessage);
+  }
+  if (Array.isArray(stored.displaySettings?.messagesLog)) {
+    state.displaySettings.messagesLog = stored.displaySettings.messagesLog.slice();
+  }
+  state.weekISO = weekISO;
+  state.activeDay = clampDay(stored.activeDay ?? todayDayIdx());
+}
+
+function clearAppCookies() {
+  const pairs = document.cookie ? document.cookie.split(';') : [];
+  for (const pair of pairs) {
+    const name = pair.split('=')[0]?.trim();
+    if (!name) continue;
+    if (!/^haatzmaut_|^clinic_/i.test(name)) continue;
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+  }
+}
+
+async function clearBrowserCaches() {
+  if (!('caches' in window)) return;
+  const keys = await caches.keys();
+  await Promise.all(keys
+    .filter(k => k.startsWith('haatzmaut-'))
+    .map(k => caches.delete(k)));
+}
+
+function clearRuntimeSessionArtifacts() {
+  sessionStorage.removeItem(SESSION_USER_KEY);
+  sessionStorage.removeItem(CLOUD_KEY_BITS_KEY);
+  localStorage.removeItem(LEGACY_SESSION_KEY);
+  clearAppCookies();
+}
+
+async function applyDeploymentVersionPolicy() {
+  const previousBuild = localStorage.getItem(APP_VERSION_KEY);
+  if (previousBuild === APP_BUILD_ID) return;
+
+  localStorage.setItem(APP_VERSION_KEY, APP_BUILD_ID);
+  clearRuntimeSessionArtifacts();
+
+  if (previousBuild) {
+    await clearBrowserCaches();
+    showToast('המערכת עודכנה לגרסה חדשה. החיבור רוענן אוטומטית.', 'info');
+  }
+}
+
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  let hasReloaded = false;
+  const triggerRefresh = () => {
+    if (hasReloaded) return;
+    hasReloaded = true;
+    window.location.reload();
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', triggerRefresh);
+  navigator.serviceWorker.addEventListener('message', event => {
+    if (event.data?.type === 'CACHE_UPDATED') triggerRefresh();
+  });
+
+  navigator.serviceWorker.register(`/sw.js?v=${encodeURIComponent(APP_BUILD_ID)}`, { updateViaCache: 'none' })
+    .then(registration => {
+      setInterval(() => registration.update().catch(() => {}), 5 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') registration.update().catch(() => {});
+      });
+    })
+    .catch(() => {});
+}
+
 /* ----------------------------------------------------------
    Bootstrap
    ---------------------------------------------------------- */
@@ -361,43 +497,13 @@ function renderActiveTab() {
    ---------------------------------------------------------- */
 
 async function initialize() {
+  await applyDeploymentVersionPolicy();
   restoreLanguage();
   updateLangSwitchButton();
 
   /* Restore persisted state from localStorage */
   const stored = loadStoredState();
-  if (stored) {
-    state.auditLog        = stored.auditLog        || [];
-    state.loginSecurity   = stored.loginSecurity   || { failures: [], lockUntil: 0 };
-    state.activeTab       = stored.activeTab       || "dashboardTab";
-    state.schedule        = stored.schedule        || [];
-    state.rooms           = stored.rooms           || [];
-    state.defaultTemplate = stored.defaultTemplate || [];
-    state.weekTemplates   = stored.weekTemplates   || {};
-    state.requests        = stored.requests        || [];
-    state.selectedTags    = new Set(stored.selectedTags || []);
-    state.weekISO         = "";
-    state.activeDay       = 0;
-    state.staff           = stored.staff           || [];
-    state.users           = stored.users           || [];
-    state.passwordResets  = stored.passwordResets  || [];
-    state.folders         = stored.folders         || [];
-    state.files           = stored.files           || [];
-    state.meetingGroups   = stored.meetingGroups   || [];
-    state.meetings        = stored.meetings        || [];
-    state.issues          = stored.issues          || [];
-    state.displaySettings = stored.displaySettings || {};
-    if (state.displaySettings.switchSeconds == null) state.displaySettings.switchSeconds = 30;
-    if (state.displaySettings.hoursBefore == null) state.displaySettings.hoursBefore = 1;
-    if (state.displaySettings.hoursAfter == null) state.displaySettings.hoursAfter = 3;
-    if (state.displaySettings.roomsPerPage == null) state.displaySettings.roomsPerPage = 10;
-    if (!state.displaySettings.messages) state.displaySettings.messages = [];
-    if (!state.displaySettings.messagesLog) state.displaySettings.messagesLog = [];
-    state.waitlist        = stored.waitlist        || [];
-    state.settings        = stored.settings        || state.settings;
-  }
-  if (!state.weekISO) state.weekISO = sundayISO();
-  state.activeDay = todayDayIdx();
+  hydrateStoredState(stored);
   if (!state.rooms || !state.rooms.length) state.rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
   if (!state.staff || !state.staff.length) state.staff = DEFAULT_STAFF.map(s => ({ ...s }));
   if (!state.defaultTemplate || !state.defaultTemplate.length) {
@@ -581,8 +687,8 @@ function initLogin() {
 
     resetLoginGuard();
     state.currentUser = { username: u, role, label, staffId };
-    sessionStorage.setItem("clinic_user", JSON.stringify({ username: u, role, staffId }));
-    localStorage.setItem("clinic_session", JSON.stringify({ username: u, role, staffId }));
+    sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify({ username: u, role, staffId }));
+    localStorage.setItem(LEGACY_SESSION_KEY, JSON.stringify({ username: u, role, staffId }));
     setEncryptionPassword(p).catch(() => {});
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
@@ -727,9 +833,9 @@ function initBackupHandlers() {
 
   const backupNowBtn = byId("backupNowBtn");
   if (backupNowBtn) {
-    backupNowBtn.addEventListener("click", () => {
+    backupNowBtn.addEventListener("click", async () => {
       try {
-        const b = saveManagedBackup("");
+        const b = await saveManagedBackup("");
         recordAudit("backup.manual", `${b.label} (${b.entries} הזמנות, ${b.meetings} ישיבות)`, "critical", true);
         showToast(`גיבוי נשמר: ${b.label}`, "info");
       } catch (err) {
@@ -1053,10 +1159,7 @@ initNavigation();
 initLogin();
 await initialize();
 initMobileNav();
-
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
-}
+registerServiceWorker();
 
 /* ----------------------------------------------------------
    Mobile bottom navigation

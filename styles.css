@@ -165,11 +165,11 @@ h3{font-size:1rem}
 /* ============================================================
    WEEK NAV
    ============================================================ */
-.week-nav{display:flex;align-items:center;gap:0;background:var(--surface);border-radius:.625rem;border:1px solid var(--line);overflow:hidden}
-.week-nav-arrow{background:transparent;border:none;color:var(--text);padding:.45rem .65rem;cursor:pointer;border-radius:0;box-shadow:none;display:flex;align-items:center;justify-content:center;min-width:36px}
+.week-nav{display:flex;align-items:stretch;gap:0;background:var(--surface);border-radius:.625rem;border:1px solid var(--line);overflow:hidden}
+.week-nav-arrow{background:transparent;border:none;color:var(--text);padding:.35rem .5rem;cursor:pointer;border-radius:0;box-shadow:none;display:flex;align-items:center;justify-content:center;width:32px;min-width:32px;height:32px;line-height:1}
 .week-nav-arrow:hover{background:var(--primary-soft);color:var(--primary)}
-.week-nav-arrow .material-symbols-outlined{font-size:1.1rem}
-.week-nav-today{background:transparent;border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);font-weight:700;font-size:.85rem;padding:.45rem 1rem;cursor:pointer;border-radius:0;box-shadow:none}
+.week-nav-arrow .material-symbols-outlined{font-size:1rem;line-height:1}
+.week-nav-today{background:transparent;border:none;border-left:1px solid var(--line);border-right:1px solid var(--line);color:var(--text);font-weight:700;font-size:.8rem;padding:.35rem .75rem;cursor:pointer;border-radius:0;box-shadow:none;min-height:32px;line-height:1}
 .week-nav-today:hover{background:var(--primary-soft);color:var(--primary)}
 
 /* ============================================================

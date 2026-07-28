@@ -20,14 +20,57 @@ function openDB() {
   });
 }
 
+async function getQuotaEstimate() {
+  try {
+    if (!navigator.storage?.estimate) return null;
+    const estimate = await navigator.storage.estimate();
+    const quota = Number(estimate.quota || 0);
+    const usage = Number(estimate.usage || 0);
+    if (!quota) return null;
+    return {
+      quota,
+      usage,
+      available: Math.max(0, quota - usage)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function estimatePayloadSize(data, metadata = {}) {
+  if (typeof metadata.size === "number" && metadata.size > 0) return metadata.size;
+  if (typeof data?.size === "number" && data.size > 0) return data.size;
+  if (typeof data === "string") return data.length;
+  return 0;
+}
+
 export async function putFile(id, data, metadata = {}) {
+  const payloadSize = estimatePayloadSize(data, metadata);
+  const quota = await getQuotaEstimate();
+  if (quota && payloadSize && quota.available < (payloadSize + 80_000)) {
+    throw new Error("אין מספיק מקום פנוי לאחסון הקובץ במכשיר זה.");
+  }
+
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     const req = store.put({ id, data, name: metadata.name, type: metadata.type, size: metadata.size });
     req.onsuccess = () => resolve(id);
-    req.onerror = (e) => reject(e.target.error);
+    req.onerror = (e) => {
+      const err = e.target.error;
+      if (err?.name === "QuotaExceededError") {
+        reject(new Error("אחסון הקבצים המקומי מלא. יש למחוק קבצים ישנים ולנסות שוב."));
+        return;
+      }
+      reject(err);
+    };
+    tx.onerror = (e) => {
+      const err = e.target.error;
+      if (err?.name === "QuotaExceededError") {
+        reject(new Error("אחסון הקבצים המקומי מלא. יש למחוק קבצים ישנים ולנסות שוב."));
+      }
+    };
     tx.oncomplete = () => db.close();
   });
 }

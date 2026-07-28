@@ -6,7 +6,8 @@
   "description": "מערכת ניהול מרפאה פנימית",
   "scripts": {
     "dev": "python3 -m http.server 8000",
-    "build": "node build.mjs",
+    "build": "node build.mjs --prod",
+    "build:dev": "node build.mjs",
     "lint": "eslint app.js display.js",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui"

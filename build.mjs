@@ -1,6 +1,7 @@
 import * as esbuild from "esbuild";
 
 const isProd = process.argv.includes("--prod");
+const buildId = isProd ? Date.now().toString(36) : "dev";
 
 await esbuild.build({
   entryPoints: ["src/main.js"],
@@ -11,12 +12,71 @@ await esbuild.build({
   target: "es2022",
   legalComments: "none",
   format: "esm",
-  define: { "__PROD__": isProd ? "true" : "false" }
+  define: {
+    "__PROD__": isProd ? "true" : "false",
+    "__BUILD_ID__": JSON.stringify(buildId)
+  }
 });
+
+function buildServiceWorkerScript(cacheName) {
+  return `
+const CACHE_NAME = ${JSON.stringify(cacheName)};
+const ASSETS = ["/", "/index.html", "/styles.css", "/display.html", "/display.css", "/display.js", "/app.min.js"];
+
+self.addEventListener("install", event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter(key => key.startsWith("haatzmaut-") && key !== CACHE_NAME)
+        .map(key => caches.delete(key))
+    );
+    await self.clients.claim();
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    clients.forEach(client => client.postMessage({ type: "CACHE_UPDATED", cacheName: CACHE_NAME }));
+  })());
+});
+
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+
+  const req = event.request;
+  const url = new URL(req.url);
+  const isSameOrigin = url.origin === self.location.origin;
+  if (!isSameOrigin) return;
+
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req, { cache: "no-store" }).catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+
+  event.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req, { ignoreSearch: false });
+    if (cached) return cached;
+    const response = await fetch(req);
+    if (response && response.status === 200) {
+      cache.put(req, response.clone()).catch(() => {});
+    }
+    return response;
+  })());
+});
+`.trim();
+}
 
 if (isProd) {
   const { copyFileSync, mkdirSync, readdirSync, readFileSync, writeFileSync } = await import("node:fs");
-  const cacheBuster = Date.now().toString(36);
+  const cacheBuster = buildId;
   mkdirSync("dist/templates", { recursive: true });
 
   const indexHtml = readFileSync("index.html", "utf8")
@@ -36,7 +96,7 @@ if (isProd) {
   copyFileSync("display.css", "dist/display.css");
   copyFileSync("accessibility.html", "dist/accessibility.html");
 
-  writeFileSync("dist/sw.js", `const CACHE_NAME="haatzmaut-${cacheBuster}";const ASSETS=["/","/index.html","/styles.css","/display.html","/display.css","/display.js","/app.min.js"];self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(ASSETS)).then(()=>self.skipWaiting()))});self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});self.addEventListener("fetch",e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)))})`);
+  writeFileSync("dist/sw.js", buildServiceWorkerScript(`haatzmaut-${cacheBuster}`));
 
   for (const f of readdirSync("templates")) {
     copyFileSync(`templates/${f}`, `dist/templates/${f}`);

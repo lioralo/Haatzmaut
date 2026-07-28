@@ -7,7 +7,9 @@ import {
   SESSION_TIMEOUT_MS,
   LOGIN_MAX_ATTEMPTS,
   LOGIN_LOCKOUT_MS,
-  LOGIN_WINDOW_MS
+  LOGIN_WINDOW_MS,
+  SESSION_USER_KEY,
+  LEGACY_SESSION_KEY
 } from './constants.js';
 
 import {
@@ -107,7 +109,7 @@ async function handleLogin(username, password) {
     const normalized = String(username).trim().toLowerCase();
     if (normalized === "admin" && password === "admin123") {
       state.currentUser = { username: "admin", role: "admin", label: "admin", staffId: "" };
-      sessionStorage.setItem("clinic_user", JSON.stringify(state.currentUser));
+      sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.currentUser));
       resetLoginGuard();
       recordAudit("auth.login", "מנהל התחבר (dev)", "info", true);
       return { success: true, role: "admin", label: "admin", staffId: "" };
@@ -140,7 +142,7 @@ async function handleLogin(username, password) {
   const staffRecord = user.staffId ? getStaffById(user.staffId) : null;
   const label = staffRecord ? staffRecord.fullName : user.username;
   state.currentUser = { username: user.username, role: user.role, label, staffId: user.staffId || "" };
-  sessionStorage.setItem("clinic_user", JSON.stringify(state.currentUser));
+  sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(state.currentUser));
   resetLoginGuard();
   recordAudit("auth.login", `${user.username} התחבר.`, "info", true);
   return { success: true, role: user.role, label, staffId: user.staffId || "" };
@@ -149,8 +151,8 @@ async function handleLogin(username, password) {
 function logoutCurrentUser(message = "") {
   state.currentUser = null;
   clearSessionTimer();
-  sessionStorage.removeItem("clinic_user");
-  localStorage.removeItem("clinic_session");
+  sessionStorage.removeItem(SESSION_USER_KEY);
+  localStorage.removeItem(LEGACY_SESSION_KEY);
   if (message) showToast(message, "warn");
 }
 
@@ -181,10 +183,10 @@ function renderSessionBar() {
    ---------------------------------------------------------- */
 
 function restoreSession() {
-  let stored = sessionStorage.getItem("clinic_user");
+  let stored = sessionStorage.getItem(SESSION_USER_KEY);
   if (!stored) {
-    stored = localStorage.getItem("clinic_session");
-    if (stored) sessionStorage.setItem("clinic_user", stored);
+    stored = localStorage.getItem(LEGACY_SESSION_KEY);
+    if (stored) sessionStorage.setItem(SESSION_USER_KEY, stored);
   }
   if (!stored) return false;
   try {

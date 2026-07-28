@@ -47,6 +47,24 @@ curl -sk -o /dev/null -w "clinic:    HTTP %{http_code}\n" https://clinic.lior-cl
 curl -sk https://haatzmaut.lior-clinic.org/api/healthz
 ```
 
+## Post-Deploy Freshness Checks (recommended)
+
+Run these right after deploy to verify clients receive the latest build automatically:
+
+```bash
+# 1) Confirm no-store policy on HTML shell
+curl -skI https://haatzmaut.lior-clinic.org/ | grep -i "cache-control"
+
+# 2) Confirm service worker is served and cache-busted by build id
+curl -sk https://haatzmaut.lior-clinic.org/sw.js | head -n 5
+
+# 3) Confirm built index references versioned assets
+curl -sk https://haatzmaut.lior-clinic.org/ | grep -E "app.min.js\\?v=|styles.css\\?v="
+
+# 4) Browser spot-check:
+#    keep one tab open, deploy again, verify it auto-refreshes to newest version
+```
+
 ## Restart Caddy (after Caddyfile changes)
 
 ```bash

@@ -1,4 +1,4 @@
-const CACHE_NAME = "haatzmaut-v1";
+const CACHE_NAME = "haatzmaut-dev-shell-v2";
 const ASSETS = [
   "/", "/index.html", "/styles.css", "/display.html", "/display.css", "/display.js", "/accessibility.html",
   "/src/main.js", "/src/core/constants.js", "/src/core/utils.js", "/src/core/store.js", "/src/core/session.js", "/src/core/index.js",
@@ -8,6 +8,45 @@ const ASSETS = [
   "/src/issues/state.js", "/src/issues/render.js", "/src/issues/events.js",
   "/src/resources/state.js", "/src/resources/render.js", "/src/resources/events.js", "/src/resources/db.js"
 ];
-self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(ASSETS))); });
-self.addEventListener("fetch", e => { e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))); });
-self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))); });
+
+self.addEventListener("install", e => {
+  e.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(c => c.addAll(ASSETS))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener("activate", e => {
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        .filter(k => k.startsWith("haatzmaut-") && k !== CACHE_NAME)
+        .map(k => caches.delete(k))
+    );
+    await self.clients.claim();
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    clients.forEach(client => client.postMessage({ type: "CACHE_UPDATED", cacheName: CACHE_NAME }));
+  })());
+});
+
+self.addEventListener("fetch", e => {
+  if (e.request.method !== "GET") return;
+
+  if (e.request.mode === "navigate") {
+    e.respondWith(fetch(e.request, { cache: "no-store" }).catch(() => caches.match("/index.html")));
+    return;
+  }
+
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(e.request, { ignoreSearch: false });
+    if (cached) return cached;
+    const response = await fetch(e.request);
+    if (response && response.status === 200) {
+      cache.put(e.request, response.clone()).catch(() => {});
+    }
+    return response;
+  })());
+});

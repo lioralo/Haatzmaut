@@ -4,6 +4,14 @@
 
 export const STORAGE_KEY    = "haatzmaut_v6";
 export const STORAGE_VERSION = 2;
+export const APP_VERSION_KEY = "haatzmaut_app_version";
+export const SESSION_USER_KEY = "clinic_user";
+export const LEGACY_SESSION_KEY = "clinic_session";
+export const CLOUD_KEY_BITS_KEY = "clinic_cloud_key_bits";
+export const APP_BUILD_ID = (() => {
+  if (typeof __BUILD_ID__ !== "undefined") return String(__BUILD_ID__);
+  return "dev";
+})();
 export const MAX_UPLOAD_SIZE = 1024 * 1024; // 1MB
 export const LOGIN_WINDOW_MS  = 10 * 60 * 1000;
 export const LOGIN_MAX_ATTEMPTS = 5;
