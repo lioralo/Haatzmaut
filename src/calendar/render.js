@@ -46,7 +46,6 @@ import {
   getRoomName,
   getEntryById,
   ensureSyncedScheduleWindow,
-  getDayEntryCount,
   activeDayDate,
   activeDayEntries,
   filteredRooms,
@@ -322,17 +321,14 @@ export function renderDayTabs() {
   const container = byId("dayTabs");
   if (!container) return;
   const ws = addDays(isoDate(state.weekISO), 0);
-  const isoWk = state.weekISO;
   container.innerHTML = DAY_DEFS.map(d => {
     const date   = addDays(ws, d.key);
     const active = d.key === state.activeDay;
-    const count  = getDayEntryCount(d.key);
     const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][d.key] || d.label;
     return `<button type="button" class="day-tab${active ? " active" : ""}" data-day="${d.key}">
       <span class="dt-short">${d.short}</span>
       <span class="dt-label">${t(dayKey)}</span>
       <span class="dt-date">${fmtShort(date)}</span>
-      ${count ? `<span class="dt-count">${count}</span>` : ""}
     </button>`;
   }).join("");
 
@@ -376,15 +372,9 @@ export function renderWeekHeader() {
 export function renderStats() {
   const box = byId("dashboardStats");
   if (!box) return;
-  const activeDate = localISO(activeDayDate());
-  const meetingToday = (state.meetings || []).filter(m => m.date === activeDate).length;
-  const today  = state.schedule.filter(e => e.weekISO === state.weekISO && e.day === state.activeDay).length + meetingToday;
-  const weekly = state.schedule.filter(e => e.weekISO === state.weekISO).length;
   const pendingRequests = state.requests.filter(r => r.status === "pending").length;
   box.innerHTML = `
     <div class="stats-grid">
-      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--primary)">event</span><div><strong class="ds-card-val">${weekly}</strong><span class="ds-card-label">פגישות השבוע</span></div></div>
-      <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--secondary)">schedule</span><div><strong class="ds-card-val">${today}</strong><span class="ds-card-label">פגישות היום</span></div></div>
       <div class="ds-card"><span class="material-symbols-outlined ds-card-icon" style="color:var(--tertiary)">meeting_room</span><div><strong class="ds-card-val">${state.rooms.length}</strong><span class="ds-card-label">חדרים</span><span>${state.rooms.filter(r => r.active !== false).length} פעילים</span></div></div>
     </div>
     ${pendingRequests > 0 ? `<div class="ds-pending-alert"><span class="material-symbols-outlined">priority_high</span>${pendingRequests} בקשות ממתינות לאישור</div>` : ''}

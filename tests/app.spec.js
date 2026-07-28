@@ -373,6 +373,12 @@ test.describe('Calendar & Meetings', () => {
     await expect(page.locator('#occupancyTable')).toBeVisible();
   });
 
+  test('L2: day/week meeting counters are hidden from dashboard', async ({ page }) => {
+    await expect(page.locator('#dashboardStats')).not.toContainText('פגישות השבוע');
+    await expect(page.locator('#dashboardStats')).not.toContainText('פגישות היום');
+    expect(await page.locator('.day-tab .dt-count').count()).toBe(0);
+  });
+
   test('M: day tab switching renders different day', async ({ page }) => {
     const firstDayTitle = await page.locator('#dayHeading').textContent();
     const tabs = await page.locator('.day-tab').count();
@@ -406,6 +412,52 @@ test.describe('Calendar & Meetings', () => {
     });
     expect(meetings).toBeGreaterThanOrEqual(0);
     expect(groups).toBeGreaterThanOrEqual(0);
+  });
+
+  test('O2: deleting all meeting groups does not recreate them after reload', async ({ page }) => {
+    await page.locator('button[data-tab=meetingsTab]').first().click();
+    await page.waitForTimeout(700);
+    await page.locator('button[data-meeting-sub-tab="groups"]').click();
+    await page.waitForTimeout(500);
+
+    page.on('dialog', dialog => dialog.accept());
+
+    let deleteButtons = page.locator('#meetingList button[data-action="del-group"]');
+    while (await deleteButtons.count()) {
+      await deleteButtons.first().click();
+      await page.waitForTimeout(300);
+      deleteButtons = page.locator('#meetingList button[data-action="del-group"]');
+    }
+
+    await page.reload();
+    await page.waitForTimeout(2200);
+    await page.locator('#username').fill('admin');
+    await page.locator('#password').fill('admin123');
+    await page.locator('#loginForm button[type="submit"]').click();
+    await page.waitForTimeout(2200);
+    await page.locator('button[data-tab=meetingsTab]').first().click();
+    await page.waitForTimeout(600);
+    await page.locator('button[data-meeting-sub-tab="groups"]').click();
+    await page.waitForTimeout(400);
+
+    expect(await page.locator('#meetingList button[data-action="del-group"]').count()).toBe(0);
+    await expect(page.locator('#meetingList')).toContainText('אין קבוצות');
+  });
+
+  test('O3: recurring meeting group choices are filtered by selected team', async ({ page }) => {
+    await page.locator('button[data-tab=meetingsTab]').first().click();
+    await page.waitForTimeout(700);
+    await page.locator('#meetingsTab .mode-tab[data-mode="edit"]').click();
+    await page.waitForTimeout(500);
+
+    const before = await page.locator('#meetingGroupChecks input[name="meetingGroupIds"]').count();
+    await page.locator('#meetingRecurring').selectOption('weekly');
+    await page.locator('#meetingTeam').selectOption('מבוגרים');
+    await page.waitForTimeout(250);
+    const after = await page.locator('#meetingGroupChecks input[name="meetingGroupIds"]').count();
+
+    expect(before).toBeGreaterThanOrEqual(2);
+    expect(after).toBeLessThan(before);
   });
 });
 

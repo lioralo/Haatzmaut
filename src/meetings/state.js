@@ -15,18 +15,39 @@ import {
    ============================================================ */
 
 const DEFAULT_GROUPS = [
-  { id: "g1", name: "צוות מבוגרים", color: "#0072BC", weeklyDay: 0, defaultTime: "12:30" },
-  { id: "g2", name: "צוות ילדים",   color: "#F47B20", weeklyDay: 0, defaultTime: "12:30" }
+  { id: "g1", name: "צוות מבוגרים", color: "#0072BC", weeklyDay: 0, defaultTime: "12:30", team: "מבוגרים" },
+  { id: "g2", name: "צוות ילדים",   color: "#F47B20", weeklyDay: 0, defaultTime: "12:30", team: "ילדים" }
 ];
 
-export function ensureDefaultGroups() {
-  if (!state.meetingGroups.length) {
-    state.meetingGroups = DEFAULT_GROUPS.map(g => ({ ...g }));
+function bootstrapFlags() {
+  if (!state.settings || typeof state.settings !== "object") state.settings = {};
+  if (!state.settings.meetingBootstrap || typeof state.settings.meetingBootstrap !== "object") {
+    state.settings.meetingBootstrap = { groupsSeeded: false, meetingsSeeded: false };
   }
-  ensureDefaultSundayMeetings();
+  return state.settings.meetingBootstrap;
+}
+
+export function ensureDefaultGroups() {
+  const flags = bootstrapFlags();
+  let changed = false;
+
+  if (!flags.groupsSeeded) {
+    if (!state.meetingGroups.length) {
+      state.meetingGroups = DEFAULT_GROUPS.map(g => ({ ...g }));
+      changed = true;
+    }
+    flags.groupsSeeded = true;
+    changed = true;
+  }
+
+  changed = ensureDefaultSundayMeetings() || changed;
+  if (changed) persistStateImmediate();
 }
 
 export function ensureDefaultSundayMeetings() {
+  const flags = bootstrapFlags();
+  if (flags.meetingsSeeded) return false;
+
   const now = new Date();
   const thisYear = now.getFullYear();
   const augStart = new Date(thisYear, 7, 1); // August 1
@@ -42,10 +63,12 @@ export function ensureDefaultSundayMeetings() {
 
   const teams = ["מבוגרים", "ילדים"];
 
-  const isFreshInstall = !state._meetingsSeeded && state.meetings.length === 0;
-  if (!isFreshInstall) return;
+  if (state.meetings.length > 0) {
+    flags.meetingsSeeded = true;
+    return true;
+  }
 
-  state._meetingsSeeded = true;
+  flags.meetingsSeeded = true;
   let created = 0;
   augustSundays.forEach(sundayISO => {
     teams.forEach(team => {
@@ -70,9 +93,10 @@ export function ensureDefaultSundayMeetings() {
   });
 
   if (created) {
-    persistState();
     recordAudit("meeting.defaults", `נוצרו ${created} ישיבות אוגוסט.`, "info", false);
   }
+
+  return created > 0;
 }
 
 /* ============================================================
@@ -106,6 +130,7 @@ export function normalizeGroup(g) {
     id:          g.id || makeId("group"),
     name:        String(g.name || "").trim() || "קבוצה ללא שם",
     color:       String(g.color || "#0072BC").trim(),
+    team:        TEAMS.includes(String(g.team || "").trim()) ? String(g.team || "").trim() : "",
     weeklyDay:   Number.isFinite(Number(g.weeklyDay)) ? Math.min(4, Math.max(0, Number(g.weeklyDay))) : 0,
     defaultTime: String(g.defaultTime || "09:00").trim()
   };
@@ -116,10 +141,13 @@ export function normalizeGroup(g) {
    ============================================================ */
 
 export function createGroup(formData) {
+  const flags = bootstrapFlags();
+  flags.groupsSeeded = true;
   const group = normalizeGroup({
     id: makeId("group"),
     name: formData.name,
     color: formData.color,
+    team: formData.team,
     weeklyDay: Number(formData.weeklyDay),
     defaultTime: formData.defaultTime
   });
@@ -140,6 +168,8 @@ export function updateGroup(id, formData) {
 }
 
 export function deleteGroup(id) {
+  const flags = bootstrapFlags();
+  flags.groupsSeeded = true;
   const idx = state.meetingGroups.findIndex(g => g.id === id);
   if (idx < 0) return false;
   const group = state.meetingGroups[idx];
@@ -158,6 +188,8 @@ export function deleteGroup(id) {
    ============================================================ */
 
 export function createMeeting(formData) {
+  const flags = bootstrapFlags();
+  flags.meetingsSeeded = true;
   const meeting = normalizeMeeting({
     speaker: formData.speaker,
     title: formData.title,
@@ -173,7 +205,6 @@ export function createMeeting(formData) {
     recurringRule: formData.recurringRule
   });
   state.meetings.unshift(meeting);
-  state._meetingsSeeded = true;
   persistState();
   recordAudit("meeting.create", `${meeting.title || meeting.speaker}`, "info", false);
   return meeting;

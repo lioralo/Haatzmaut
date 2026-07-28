@@ -1,5 +1,11 @@
 # Haatzmaut — CLI Deployment Guide
 
+## Current Release Notes
+
+- This release is client-side only; deployment flow, hosts, and container commands are unchanged.
+- The updated meeting-form behavior, dashboard counter removal, and session/login changes are all shipped through the normal `npm run build` + sync path.
+- No additional infra or Caddy changes are required for this update.
+
 ## Prerequisites
 
 - SSH key at `~/Documents/private-clinic-key.pem`

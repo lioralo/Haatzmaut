@@ -10,7 +10,6 @@ const API_BASE = location.hostname === 'localhost' || location.hostname === '127
   : '/api';
 
 let _encryptionKey = null;
-let _lastSavedHash = null;
 
 /* --- Serialize state safely (strip circular refs, functions, Sets) --- */
 /* --- Serialize state safely --- */
@@ -147,14 +146,9 @@ export async function saveToCloud() {
     const plain = serializedStateForSync();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
     const hashHex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-    if (hashHex === _lastSavedHash) {
-      recordAudit('cloud.save.skipped', 'הנתונים לא השתנו — דילוג.', 'info', false);
-      return false;
-    }
 
     const { iv, encryptedData } = await encryptPayload(_encryptionKey, plain);
     await apiCall('POST', '/sync/save', { encryptedData, iv, dataHash: hashHex });
-    _lastSavedHash = hashHex;
     const entryCount = (state.schedule || []).length;
     recordAudit('cloud.save.success', `נשמר לענן: ${entryCount} הזמנות, ${(state.staff||[]).length} אנשי צוות.`, 'critical', true);
     persistStateImmediate();

@@ -83,7 +83,7 @@ export function renderMeetingGroups() {
           <div class="admin-row-info">
             <span class="group-color-dot" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(g.color)};margin:0 0 0 6px;vertical-align:middle;"></span>
             <strong>${esc(g.name)}</strong>
-            <span class="muted small">${dl} · ${esc(g.defaultTime)}</span>
+            <span class="muted small">${g.team ? `${esc(g.team)} · ` : ""}${dl} · ${esc(g.defaultTime)}</span>
           </div>
           ${admin ? `<div class="admin-row-acts">
             <button class="btn-sm" data-action="edit-group" data-group-id="${g.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button>
@@ -130,6 +130,12 @@ export function renderGroupForm(group = null) {
       <input type="hidden" id="groupFormId" value="${esc(group?.id || "")}" />
       <label>&#x05E9;&#x05DD; &#x05D4;&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D4; <input id="groupFormName" value="${esc(group?.name || "")}" required /></label>
       <label>&#x05E6;&#x05D1;&#x05E2; <input id="groupFormColor" type="color" value="${esc(group?.color || "#0072BC")}" /></label>
+      <label>&#x05E6;&#x05D5;&#x05D5;&#x05EA;
+        <select id="groupFormTeam">
+          <option value="">&#x05DC;&#x05DC;&#x05D0;</option>
+          ${TEAMS.map(team => `<option value="${esc(team)}"${group?.team === team ? " selected" : ""}>${esc(team)}</option>`).join("")}
+        </select>
+      </label>
       <label>&#x05D9;&#x05D5;&#x05DD; &#x05E9;&#x05D1;&#x05D5;&#x05E2;&#x05D9;
         <select id="groupFormDay">
           ${dayOpts.map(d => `<option value="${d.key}"${(group?.weeklyDay ?? 0) === d.key ? " selected" : ""}>${d.label}</option>`).join("")}
@@ -155,6 +161,7 @@ export function renderGroupForm(group = null) {
    ============================================================ */
 
 export function renderMeetingForm(meeting = null) {
+  ensureDefaultGroups();
   const form = byId("meetingForm");
   if (!form) return;
 
@@ -170,41 +177,51 @@ export function renderMeetingForm(meeting = null) {
 
   byId("meetingSpeaker").value = meeting?.speaker || "";
 
-  let titleEl = byId("meetingTitle");
-  if (!titleEl) {
-    const speakerLabel = byId("meetingSpeaker").closest("label");
-    titleEl = document.createElement("label");
-    titleEl.innerHTML = '&#x05DB;&#x05D5;&#x05EA;&#x05E8;&#x05EA; <input id="meetingTitle" />';
+  let titleInput = byId("meetingTitle");
+  if (!titleInput) {
+    const speakerLabel = byId("meetingSpeaker")?.closest("label");
+    const titleLabel = document.createElement("label");
+    titleLabel.innerHTML = '&#x05DB;&#x05D5;&#x05EA;&#x05E8;&#x05EA; <input id="meetingTitle" />';
+    titleInput = titleLabel.querySelector("input");
     if (speakerLabel?.parentNode) {
-      speakerLabel.parentNode.insertBefore(titleEl, speakerLabel);
+      speakerLabel.parentNode.insertBefore(titleLabel, speakerLabel);
     }
   }
-  titleEl.querySelector("input").value = meeting?.title || "";
+  if (titleInput) titleInput.value = meeting?.title || "";
 
   let groupChecks = byId("meetingGroupChecks");
   if (!groupChecks) {
-    const audienceLabel = byId("meetingAudience");
-    if (audienceLabel) {
-      audienceLabel.closest("label").style.display = "none";
-    }
-    const speakerLabel = byId("meetingSpeaker").closest("label");
+    const meetingTeamLabel = byId("meetingTeam")?.closest("label");
     groupChecks = document.createElement("fieldset");
     groupChecks.className = "full";
     groupChecks.id = "meetingGroupChecks";
-    groupChecks.innerHTML = `<legend>&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D5;&#x05EA;</legend>`;
-    if (speakerLabel?.parentNode) {
-      speakerLabel.parentNode.insertBefore(groupChecks, speakerLabel.nextSibling);
+    groupChecks.innerHTML = `<legend>קבוצות</legend>`;
+    if (meetingTeamLabel?.parentNode) {
+      meetingTeamLabel.parentNode.insertBefore(groupChecks, meetingTeamLabel.nextSibling);
     }
   }
 
   const selectedIds = meeting?.groupIds || [];
-  groupChecks.innerHTML = `<legend>&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D5;&#x05EA;</legend>${state.meetingGroups.map(g => `
-    <label class="chip${selectedIds.includes(g.id) ? " chip-active" : ""}" style="display:inline-flex;align-items:center;gap:4px;margin:2px;">
-      <input type="checkbox" name="meetingGroupIds" value="${esc(g.id)}"${selectedIds.includes(g.id) ? " checked" : ""} />
-      <span class="group-color-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(g.color)};"></span>
-      <span>${esc(g.name)}</span>
-    </label>
-  `).join("")}`;
+
+  const teamSel = byId("meetingTeam");
+  const recurringSel = byId("meetingRecurring");
+
+  const renderGroupChecks = () => {
+    const selectedTeam = teamSel?.value || "";
+    const recurringRule = recurringSel?.value || "";
+    const restrictByTeam = Boolean(recurringRule && selectedTeam);
+    const availableGroups = restrictByTeam
+      ? state.meetingGroups.filter(g => g.team === selectedTeam)
+      : state.meetingGroups;
+
+    groupChecks.innerHTML = `<legend>&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D5;&#x05EA;</legend>${availableGroups.map(g => `
+      <label class="chip${selectedIds.includes(g.id) ? " chip-active" : ""}" style="display:inline-flex;align-items:center;gap:4px;margin:2px;">
+        <input type="checkbox" name="meetingGroupIds" value="${esc(g.id)}"${selectedIds.includes(g.id) ? " checked" : ""} />
+        <span class="group-color-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(g.color)};"></span>
+        <span>${esc(g.name)}</span>
+      </label>
+    `).join("")}${restrictByTeam && !availableGroups.length ? '<p class="muted small">אין קבוצות משויכות לצוות שנבחר.</p>' : ''}`;
+  };
 
   let durationEl = byId("meetingDuration");
   if (!durationEl) {
@@ -240,10 +257,13 @@ export function renderMeetingForm(meeting = null) {
   byId("meetingAgenda").value = meeting?.agenda || "";
   byId("meetingLink").value = meeting?.link || "";
 
-  const teamSel = byId("meetingTeam");
   if (teamSel) {
     teamSel.innerHTML = '<option value="">ללא</option>' + TEAMS.map(t => `<option value="${t}"${meeting?.team === t ? ' selected' : ''}>${t}</option>`).join("");
+    teamSel.onchange = () => renderGroupChecks();
   }
+
+  recurringSel.onchange = () => renderGroupChecks();
+  renderGroupChecks();
 
   const submitBtn = form.querySelector("button[type='submit']");
   if (submitBtn) submitBtn.textContent = isEdit ? "&#x05E2;&#x05D3;&#x05DB;&#x05D5;&#x05DF;" : "&#x05E9;&#x05DE;&#x05D9;&#x05E8;&#x05D4;";
@@ -339,7 +359,7 @@ export function renderMeetingTimeline() {
           <div class="admin-row-info">
             <span class="group-color-dot" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(g.color)};margin:0 0 0 6px;vertical-align:middle;"></span>
             <strong>${esc(g.name)}</strong>
-            <span class="muted small">${dl} · ${esc(g.defaultTime)}</span>
+            <span class="muted small">${g.team ? `${esc(g.team)} · ` : ""}${dl} · ${esc(g.defaultTime)}</span>
           </div>
           ${admin ? `<div class="admin-row-acts">
             <button class="btn-sm" data-action="edit-group" data-group-id="${g.id}">עריכה</button>

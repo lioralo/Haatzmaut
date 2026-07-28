@@ -50,7 +50,7 @@ import { DEFAULT_PERMISSIONS } from './staff/state.js';
 import { renderAdminUsers, renderAdminStaff, renderAdminResetRequests, renderStaffDirectory, renderStaffAccordion, renderStaffList } from './staff/render.js';
 import { initStaffEvents } from './staff/events.js';
 
-import { renderMeetingGroups, renderMeetingTimeline } from './meetings/render.js';
+import { renderMeetingGroups, renderMeetingTimeline, renderMeetingForm } from './meetings/render.js';
 import { initMeetingsEvents } from './meetings/events.js';
 import { autoMaintainMeetingWindow, normalizeMeeting, normalizeGroup } from './meetings/state.js';
 
@@ -153,6 +153,7 @@ function applyTabMode(tabId) {
     byId("meetingsEditMode")?.classList.toggle("hidden", targetMode !== "edit");
     byId("meetingsExportMode")?.classList.toggle("hidden", targetMode !== "export");
     if (targetMode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
+    if (targetMode === "edit") { renderMeetingForm(); }
   } else if (tabId === "resourcesTab") {
     byId("resourcesBrowseMode")?.classList.toggle("hidden", targetMode !== "browse");
     byId("resourcesUploadMode")?.classList.toggle("hidden", targetMode !== "upload");
@@ -205,6 +206,7 @@ function initModeToolbars() {
         byId("meetingsExportMode")?.classList.toggle("hidden", mode !== "export");
         state.modes.meetings = mode;
         if (mode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
+        if (mode === "edit") { renderMeetingForm(); }
       } else if (tabId === "resourcesTab") {
         byId("resourcesBrowseMode")?.classList.toggle("hidden", mode !== "browse");
         byId("resourcesUploadMode")?.classList.toggle("hidden", mode !== "upload");
@@ -523,6 +525,10 @@ async function initialize() {
   cleanExpiredWaitlist();
   expandRecurringEntries(8);
   autoMaintainMeetingWindow();
+
+  byId("loginSection")?.classList.remove("hidden");
+  byId("appSection")?.classList.add("hidden");
+  byId("appSection")?.style.setProperty("display", "none");
 
   startAutoBackup();
 
@@ -1281,7 +1287,7 @@ byId("cloudSaveBtn")?.addEventListener("click", async () => {
     const ok = await saveToCloud();
     if (status) status.textContent = ok
       ? `נשמר בהצלחה — ${new Date().toLocaleString("he-IL")}`
-      : "הנתונים לא השתנו / שמירה נכשלה";
+      : "שמירה נכשלה";
   } catch (e) {
     if (status) status.textContent = "שמירה נכשלה — " + (e.message || "שגיאת רשת");
   }

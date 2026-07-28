@@ -152,6 +152,7 @@ function logoutCurrentUser(message = "") {
   state.currentUser = null;
   clearSessionTimer();
   sessionStorage.removeItem(SESSION_USER_KEY);
+  localStorage.removeItem(SESSION_USER_KEY);
   localStorage.removeItem(LEGACY_SESSION_KEY);
   if (message) showToast(message, "warn");
 }
@@ -183,20 +184,7 @@ function renderSessionBar() {
    ---------------------------------------------------------- */
 
 function restoreSession() {
-  let stored = sessionStorage.getItem(SESSION_USER_KEY);
-  if (!stored) {
-    stored = localStorage.getItem(LEGACY_SESSION_KEY);
-    if (stored) sessionStorage.setItem(SESSION_USER_KEY, stored);
-  }
-  if (!stored) return false;
-  try {
-    const parsed = JSON.parse(stored);
-    state.currentUser = { username: parsed.username, role: parsed.role, label: parsed.username, staffId: parsed.staffId || "" };
-    return true;
-  } catch {
-    state.currentUser = { username: stored, role: stored === "admin" ? "admin" : "staff", label: stored };
-    return true;
-  }
+  return false;
 }
 
 /* ----------------------------------------------------------

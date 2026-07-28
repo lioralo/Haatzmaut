@@ -59,6 +59,7 @@ function bindGroupForm() {
     const id = form.querySelector("#groupFormId")?.value || "";
     const name = form.querySelector("#groupFormName")?.value || "";
     const color = form.querySelector("#groupFormColor")?.value || "#0072BC";
+    const team = form.querySelector("#groupFormTeam")?.value || "";
     const weeklyDay = Number(form.querySelector("#groupFormDay")?.value || 0);
     const defaultTime = form.querySelector("#groupFormTime")?.value || "09:00";
 
@@ -68,10 +69,10 @@ function bindGroupForm() {
     }
 
     if (id) {
-      updateGroup(id, { name, color, weeklyDay, defaultTime });
+      updateGroup(id, { name, color, team, weeklyDay, defaultTime });
       showToast(`הקבוצה "${name}" עודכנה.`, "info");
     } else {
-      createGroup({ name, color, weeklyDay, defaultTime });
+      createGroup({ name, color, team, weeklyDay, defaultTime });
       showToast(`נוספה קבוצה "${name}".`, "info");
     }
 
