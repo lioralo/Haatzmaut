@@ -534,11 +534,6 @@ async function initialize() {
 
   const loggedIn = restoreSession();
   if (loggedIn) {
-    const currentUrl = new URL(window.location.href);
-    if (currentUrl.searchParams.get("resume") === "1") {
-      currentUrl.searchParams.delete("resume");
-      window.history.replaceState({}, "", currentUrl.toString());
-    }
     byId("loginSection").classList.add("hidden");
     byId("appSection").classList.remove("hidden");
     byId("appSection").style.display = "";

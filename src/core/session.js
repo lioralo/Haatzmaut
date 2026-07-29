@@ -181,9 +181,8 @@ function renderSessionBar() {
 
 function canRestoreSession() {
   try {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("resume") === "1") return true;
     if (!document.referrer) return false;
+    const url = new URL(window.location.href);
     const ref = new URL(document.referrer, window.location.href);
     return ref.origin === url.origin && /\/display\.html$/i.test(ref.pathname);
   } catch {
