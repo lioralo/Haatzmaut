@@ -36,7 +36,7 @@ export const state = {
   requests: [],
   selectedTags: new Set(),
   weekISO: "",
-  activeDay: 0,
+  activeDay: new Date().getDay(),
 
   // Staff (will be populated by staff/state.js on init)
   staff: [],

@@ -354,7 +354,10 @@ function hydrateStoredState(stored) {
     state.displaySettings.messagesLog = stored.displaySettings.messagesLog.slice();
   }
   state.weekISO = weekISO;
-  state.activeDay = clampDay(stored.activeDay ?? todayDayIdx());
+  // Only restore saved day if on the same week; otherwise start on today
+  state.activeDay = (weekISO === sundayISO())
+    ? clampDay(stored.activeDay !== null && stored.activeDay !== undefined ? stored.activeDay : todayDayIdx())
+    : todayDayIdx();
 }
 
 function clearAppCookies() {
@@ -711,6 +714,9 @@ function initLogin() {
     renderSessionBar();
     registerActivity();
 
+    // Always start on today's day when logging in
+    state.weekISO = sundayISO();
+    state.activeDay = todayDayIdx();
     state.activeTab = role === "admin" ? "dashboardTab" : "dashboardTab";
     renderActiveTab();
   });
@@ -1340,32 +1346,27 @@ byId("cloudSaveBtn")?.addEventListener("click", async () => {
 byId("cloudSaveCurrentBtn")?.addEventListener("click", async () => {
   const btn = byId("cloudSaveCurrentBtn");
   const status = byId("cloudSyncStatus");
-  const backupSelect = byId("savedBackupSelect");
   if (!btn) return;
   btn.disabled = true;
-  btn.textContent = "יוצר גיבוי ושומר לענן…";
+  btn.textContent = "שומר מצב נוכחי לענן…";
   if (status) status.textContent = "";
 
   try {
-    const backup = await saveManagedBackup(`ענן ${new Date().toLocaleString("he-IL")}`);
-    renderManagedBackups();
-    if (backupSelect) backupSelect.value = backup.id;
-
-    const ok = await saveToCloud(backup.data, {
-      sourceType: "library",
-      sourceLabel: backup.label,
-      sourceCreatedAt: backup.createdAt
+    const ok = await saveToCloud(null, {
+      sourceType: "current",
+      sourceLabel: `מצב נוכחי ${new Date().toLocaleString("he-IL")}`,
+      sourceCreatedAt: new Date().toLocaleString("he-IL")
     });
 
     if (ok) {
       localStorage.setItem(LAST_CLOUD_SAVE_KEY, new Date().toISOString());
-      if (status) status.textContent = `נשמר מהמצב הנוכחי (${backup.label}) — ${new Date().toLocaleString("he-IL")}`;
+      if (status) status.textContent = `נשמר מצב נוכחי לענן — ${new Date().toLocaleString("he-IL")}`;
     } else if (status) {
       status.textContent = "שמירה נכשלה";
     }
   } catch (e) {
     if (status) status.textContent = "שמירה נכשלה — " + (e.message || "שגיאה לא ידועה");
-    showToast("יצירת גיבוי/שמירה לענן נכשלה.", "error");
+    showToast("שמירה לענן נכשלה.", "error");
   }
 
   btn.disabled = false;

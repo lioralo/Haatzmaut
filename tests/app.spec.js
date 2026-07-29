@@ -563,14 +563,16 @@ test.describe('Backup & Cloud Buttons', () => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
 
-    const before = await page.evaluate(() => JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length);
+    // Quick action saves current state directly to cloud without creating a local backup first
+    await page.evaluate(async () => {
+      const { setEncryptionPassword } = await import('/src/core/cloudSync.js');
+      await setEncryptionPassword('admin123');
+    });
     await page.locator('#cloudSaveCurrentBtn').click();
     await page.waitForTimeout(600);
-    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length);
 
-    expect(after).toBe(before + 1);
     expect(saveCalls).toBe(1);
-    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מהמצב הנוכחי');
+    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מצב נוכחי');
   });
 
   test('S: display screen loads all components', async ({ page }) => {

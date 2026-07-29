@@ -87,21 +87,29 @@ export function renderMeetingGroups() {
   const admin = isAdmin();
 
   container.innerHTML = `
-    <div class="section-head">
+    <div class="section-head" style="flex-wrap:wrap;gap:.5rem">
       <h3>&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D5;&#x05EA; &#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D5;&#x05EA;</h3>
-      ${admin ? `<button type="button" id="addGroupBtn" class="btn-sm">&#x05D4;&#x05D5;&#x05E1;&#x05E4;&#x05EA; &#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D4;</button>` : ""}
+      ${admin ? `<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <button type="button" data-action="create-other-meeting" class="btn-sm secondary">+ &#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D4; &#x05D7;&#x05D3;&#x05E9;&#x05D4;</button>
+        <button type="button" id="addGroupBtn" class="btn-sm">+ &#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D4;</button>
+      </div>` : ""}
     </div>
-    <div class="admin-list">
+    <div class="admin-list" style="display:grid;gap:.75rem">
       ${state.meetingGroups.map(g => {
         const dl = dayLabel(g.weeklyDay);
-        return `<div class="admin-row">
-          <div class="admin-row-info">
-            <span class="group-color-dot" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${esc(g.color)};margin:0 0 0 6px;vertical-align:middle;"></span>
-            <strong>${esc(g.name)}</strong>
-            <span class="muted small">${g.team ? `${esc(g.team)} · ` : ""}${dl} · ${esc(g.defaultTime)}</span>
+        const groupMeetings = (state.meetings || []).filter(m => (m.groupIds || []).includes(g.id));
+        const recMeeting = groupMeetings.find(m => m.recurringRule);
+        const meetingCount = groupMeetings.length;
+        return `<div class="meeting-group-card" style="border-right:4px solid ${esc(g.color)};padding:.75rem;border-radius:.5rem;background:var(--surface-2)">
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            <span class="group-color-dot" style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${esc(g.color)};flex-shrink:0"></span>
+            <strong style="font-size:1rem">${esc(g.name)}</strong>
+            ${g.team ? `<span class="badge">${esc(g.team)}</span>` : ""}
           </div>
-          ${admin ? `<div class="admin-row-acts">
-            <button class="btn-sm" data-action="edit-group" data-group-id="${g.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button>
+          <div class="muted small" style="margin:.25rem 0 .5rem 1.5rem">${dl} · ${esc(g.defaultTime)}${recMeeting ? ` · חוזר ${recurringRuleLabel(recMeeting.recurringRule)}` : ""}${meetingCount ? ` · ${meetingCount} ישיבות` : ""}</div>
+          ${admin ? `<div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="btn-sm" data-action="create-meeting-from-group" data-group-id="${g.id}">&#x05EA;&#x05E7;&#x05D5;&#x05DF; &#x05D9;&#x05E9;&#x05D9;&#x05D1;&#x05D4; &#x05D7;&#x05D5;&#x05D6;&#x05E8;&#x05EA;</button>
+            <button class="btn-sm secondary" data-action="edit-group" data-group-id="${g.id}">&#x05E2;&#x05E8;&#x05D9;&#x05DB;&#x05D4;</button>
             <button class="btn-sm danger" data-action="del-group" data-group-id="${g.id}">&#x05DE;&#x05D7;&#x05D9;&#x05E7;&#x05D4;</button>
           </div>` : ""}
         </div>`;
