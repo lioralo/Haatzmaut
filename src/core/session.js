@@ -181,8 +181,9 @@ function renderSessionBar() {
 
 function canRestoreSession() {
   try {
-    if (!document.referrer) return false;
     const url = new URL(window.location.href);
+    if (url.searchParams.get("resume") === "1") return true;
+    if (!document.referrer) return false;
     const ref = new URL(document.referrer, window.location.href);
     return ref.origin === url.origin && /\/display\.html$/i.test(ref.pathname);
   } catch {
@@ -197,7 +198,9 @@ function canRestoreSession() {
 function restoreSession() {
   if (!canRestoreSession()) return false;
 
-  const stored = sessionStorage.getItem(SESSION_USER_KEY);
+  const stored = sessionStorage.getItem(SESSION_USER_KEY)
+    || localStorage.getItem(LEGACY_SESSION_KEY)
+    || localStorage.getItem(SESSION_USER_KEY);
   if (!stored) return false;
 
   try {
