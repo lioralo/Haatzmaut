@@ -1,4 +1,4 @@
-const CACHE_NAME = "haatzmaut-dev-shell-v2";
+const CACHE_NAME = "haatzmaut-dev-shell-v3";
 const ASSETS = [
   "/", "/index.html", "/styles.css", "/display.html", "/display.css", "/display.js", "/accessibility.html",
   "/src/main.js", "/src/core/constants.js", "/src/core/utils.js", "/src/core/store.js", "/src/core/session.js", "/src/core/index.js",
@@ -34,8 +34,39 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
 
+  const url = new URL(e.request.url);
+  const isAppCodeAsset = url.origin === self.location.origin && (
+    url.pathname.startsWith("/src/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".html")
+  );
+
   if (e.request.mode === "navigate") {
-    e.respondWith(fetch(e.request, { cache: "no-store" }).catch(() => caches.match("/index.html")));
+    e.respondWith(
+      fetch(e.request, { cache: "no-store" })
+        .then(response => {
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, response.clone())).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match("/index.html"))
+    );
+    return;
+  }
+
+  if (isAppCodeAsset) {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetch(e.request, { cache: "no-store" });
+        if (response && response.status === 200) {
+          cache.put(e.request, response.clone()).catch(() => {});
+        }
+        return response;
+      } catch {
+        return cache.match(e.request, { ignoreSearch: false });
+      }
+    })());
     return;
   }
 

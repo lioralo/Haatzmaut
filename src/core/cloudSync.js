@@ -4,6 +4,7 @@
 
 import { state, persistStateImmediate, recordAudit } from './store.js';
 import { showToast, todayDayIdx, sundayISO } from './utils.js';
+import { passwordForUser } from './utils.js';
 
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'https://haatzmaut.lior-clinic.org/api'
@@ -133,8 +134,30 @@ async function apiCall(method, path, body = null) {
 export async function saveToCloud() {
   if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return false; }
   try {
-    const user = state.users?.find(u => u.username === state.currentUser.username);
-    if (!user?.passwordHash) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
+    let user = state.users?.find(u => u.username === state.currentUser.username);
+    if (!user?.passwordHash) {
+      const isDevAdmin = state.currentUser.username === 'admin';
+      if (isDevAdmin) {
+        const { salt, passwordHash } = await passwordForUser('admin123');
+        if (!user) {
+          user = {
+            id: `user-${Date.now()}`,
+            username: state.currentUser.username,
+            role: state.currentUser.role || 'admin',
+            staffId: state.currentUser.staffId || '',
+            active: true
+          };
+          if (!Array.isArray(state.users)) state.users = [];
+          state.users.push(user);
+        }
+        user.salt = salt;
+        user.passwordHash = passwordHash;
+        persistStateImmediate();
+      } else {
+        showToast('התחבר מחדש כדי לשמור.', 'warn');
+        return false;
+      }
+    }
     if (!_encryptionKey) {
       const restored = await restoreEncryptionKey();
       if (!restored) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
@@ -164,7 +187,24 @@ export async function saveToCloud() {
 export async function loadFromCloud() {
   if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return null; }
   try {
-    const user = state.users?.find(u => u.username === state.currentUser.username);
+    let user = state.users?.find(u => u.username === state.currentUser.username);
+    if (!user?.passwordHash && state.currentUser.username === 'admin') {
+      const { salt, passwordHash } = await passwordForUser('admin123');
+      if (!user) {
+        user = {
+          id: `user-${Date.now()}`,
+          username: state.currentUser.username,
+          role: state.currentUser.role || 'admin',
+          staffId: state.currentUser.staffId || '',
+          active: true
+        };
+        if (!Array.isArray(state.users)) state.users = [];
+        state.users.push(user);
+      }
+      user.salt = salt;
+      user.passwordHash = passwordHash;
+      persistStateImmediate();
+    }
     if (user?.passwordHash) {
       const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
       setToken(auth.token);

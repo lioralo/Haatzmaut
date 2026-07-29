@@ -130,7 +130,7 @@ export function normalizeGroup(g) {
     id:          g.id || makeId("group"),
     name:        String(g.name || "").trim() || "קבוצה ללא שם",
     color:       String(g.color || "#0072BC").trim(),
-    team:        TEAMS.includes(String(g.team || "").trim()) ? String(g.team || "").trim() : "",
+    team:        String(g.team || "").trim(),
     weeklyDay:   Number.isFinite(Number(g.weeklyDay)) ? Math.min(4, Math.max(0, Number(g.weeklyDay))) : 0,
     defaultTime: String(g.defaultTime || "09:00").trim()
   };

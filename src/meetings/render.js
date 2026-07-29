@@ -44,6 +44,15 @@ export function setMeetingSubTab(val) {
   meetingSubTab = val;
 }
 
+function getAvailableMeetingTeams() {
+  const merged = new Set(TEAMS);
+  (state.meetingGroups || []).forEach(group => {
+    const team = String(group?.team || "").trim();
+    if (team) merged.add(team);
+  });
+  return [...merged];
+}
+
 /* ============================================================
    GROUP RENDERING
    ============================================================ */
@@ -124,6 +133,7 @@ export function renderGroupForm(group = null) {
     const m = i % 2 === 0 ? "00" : "30";
     return `${h}:${m}`;
   });
+  const teamOpts = getAvailableMeetingTeams();
 
   formContainer.innerHTML = `
     <form id="groupForm" class="grid-form" style="margin-top:.5rem;">
@@ -131,10 +141,10 @@ export function renderGroupForm(group = null) {
       <label>&#x05E9;&#x05DD; &#x05D4;&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D4; <input id="groupFormName" value="${esc(group?.name || "")}" required /></label>
       <label>&#x05E6;&#x05D1;&#x05E2; <input id="groupFormColor" type="color" value="${esc(group?.color || "#0072BC")}" /></label>
       <label>&#x05E6;&#x05D5;&#x05D5;&#x05EA;
-        <select id="groupFormTeam">
-          <option value="">&#x05DC;&#x05DC;&#x05D0;</option>
-          ${TEAMS.map(team => `<option value="${esc(team)}"${group?.team === team ? " selected" : ""}>${esc(team)}</option>`).join("")}
-        </select>
+        <input id="groupFormTeam" list="groupFormTeamList" value="${esc(group?.team || "")}" placeholder="הזן/י צוות" />
+        <datalist id="groupFormTeamList">
+          ${teamOpts.map(team => `<option value="${esc(team)}"></option>`).join("")}
+        </datalist>
       </label>
       <label>&#x05D9;&#x05D5;&#x05DD; &#x05E9;&#x05D1;&#x05D5;&#x05E2;&#x05D9;
         <select id="groupFormDay">
@@ -258,7 +268,8 @@ export function renderMeetingForm(meeting = null) {
   byId("meetingLink").value = meeting?.link || "";
 
   if (teamSel) {
-    teamSel.innerHTML = '<option value="">ללא</option>' + TEAMS.map(t => `<option value="${t}"${meeting?.team === t ? ' selected' : ''}>${t}</option>`).join("");
+    const teamOptions = getAvailableMeetingTeams();
+    teamSel.innerHTML = '<option value="">ללא</option>' + teamOptions.map(t => `<option value="${esc(t)}"${meeting?.team === t ? ' selected' : ''}>${esc(t)}</option>`).join("");
     teamSel.onchange = () => renderGroupChecks();
   }
 

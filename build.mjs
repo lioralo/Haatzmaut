@@ -52,11 +52,37 @@ self.addEventListener("fetch", event => {
   const url = new URL(req.url);
   const isSameOrigin = url.origin === self.location.origin;
   if (!isSameOrigin) return;
+  const isAppCodeAsset =
+    url.pathname.startsWith("/src/") ||
+    url.pathname.endsWith(".js") ||
+    url.pathname.endsWith(".css") ||
+    url.pathname.endsWith(".html");
 
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req, { cache: "no-store" }).catch(() => caches.match("/index.html"))
+      fetch(req, { cache: "no-store" })
+        .then(response => {
+          caches.open(CACHE_NAME).then(cache => cache.put(req, response.clone())).catch(() => {});
+          return response;
+        })
+        .catch(() => caches.match("/index.html"))
     );
+    return;
+  }
+
+  if (isAppCodeAsset) {
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const response = await fetch(req, { cache: "no-store" });
+        if (response && response.status === 200) {
+          cache.put(req, response.clone()).catch(() => {});
+        }
+        return response;
+      } catch {
+        return cache.match(req, { ignoreSearch: false });
+      }
+    })());
     return;
   }
 

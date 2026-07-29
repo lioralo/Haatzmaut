@@ -179,12 +179,43 @@ function renderSessionBar() {
   document.getElementById("activeRole").textContent = state.currentUser.role === "admin" ? "מנהל מערכת" : "צוות";
 }
 
+function canRestoreSession() {
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("resume") === "1") return true;
+    if (!document.referrer) return false;
+    const ref = new URL(document.referrer, window.location.href);
+    return ref.origin === url.origin && /\/display\.html$/i.test(ref.pathname);
+  } catch {
+    return false;
+  }
+}
+
 /* ----------------------------------------------------------
    Session restore
    ---------------------------------------------------------- */
 
 function restoreSession() {
-  return false;
+  if (!canRestoreSession()) return false;
+
+  const stored = sessionStorage.getItem(SESSION_USER_KEY);
+  if (!stored) return false;
+
+  try {
+    const parsed = JSON.parse(stored);
+    const username = String(parsed?.username || "").trim().toLowerCase();
+    const role = parsed?.role === "admin" ? "admin" : "staff";
+    if (!username) return false;
+    state.currentUser = {
+      username,
+      role,
+      label: username,
+      staffId: String(parsed?.staffId || "")
+    };
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* ----------------------------------------------------------
