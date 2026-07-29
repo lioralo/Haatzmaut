@@ -10,6 +10,10 @@ import {
   triggerCsvDownload, buildCsv
 } from '../core/utils.js';
 
+function normalizeTeamName(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
 /* ============================================================
    DEFAULT GROUPS
    ============================================================ */
@@ -114,7 +118,7 @@ export function normalizeMeeting(m) {
     date:          String(m.date || localISO(new Date())).trim(),
     time:          String(m.time || "09:00").trim(),
     duration:      Math.max(30, Number(m.duration || 60)),
-    team:          String(m.team || "").trim() || "",
+    team:          normalizeTeamName(m.team),
     agenda:        String(m.agenda || m.specification || "").trim(),
     link:          String(m.link || m.url || "").trim(),
     files:         Array.isArray(m.files) ? m.files.map(String) : String(m.files || "").split(";").map(v => v.trim()).filter(Boolean),
@@ -130,7 +134,7 @@ export function normalizeGroup(g) {
     id:          g.id || makeId("group"),
     name:        String(g.name || "").trim() || "קבוצה ללא שם",
     color:       String(g.color || "#0072BC").trim(),
-    team:        String(g.team || "").trim(),
+    team:        normalizeTeamName(g.team),
     weeklyDay:   Number.isFinite(Number(g.weeklyDay)) ? Math.min(4, Math.max(0, Number(g.weeklyDay))) : 0,
     defaultTime: String(g.defaultTime || "09:00").trim()
   };

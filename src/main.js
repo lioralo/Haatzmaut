@@ -3,7 +3,7 @@
    Bootstraps core store, restores session, initializes all modules.
    ============================================================ */
 
-import { state, isAdmin, persistState, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, startAutoBackup, exportFullBackup, exportEncryptedBackup, applyImportedState, importEncryptedBackup, saveManagedBackup, getManagedBackups, restoreManagedBackup, deleteManagedBackup } from './core/store.js';
+import { state, isAdmin, persistState, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, startAutoBackup, exportFullBackup, exportEncryptedBackup, saveManagedBackup, getManagedBackups } from './core/store.js';
 import {
   DEV_LOGIN_ENABLED,
   DEFAULT_ROOMS,
@@ -28,7 +28,8 @@ import {
 import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 import {
   saveToCloud, loadFromCloud, loadFromCloudAndApply,
-  setEncryptionPassword, restoreEncryptionKey
+  setEncryptionPassword, restoreEncryptionKey,
+  runCloudSelfTest, getCloudSyncClientState
 } from './core/cloudSync.js';
 
 import {
@@ -825,10 +826,100 @@ function initAdminSubTabs() {
       if (content) {
         content.classList.remove("hidden");
         if (subtab === "display") renderAdminDisplayControls();
-        if (subtab === "audit") { renderAuditLog(); renderManagedBackups(); }
+        if (subtab === "audit") { renderAuditLog(); renderManagedBackups(); renderSystemStatusPanel(); }
       }
     });
   });
+}
+
+const LAST_CLOUD_SAVE_KEY = "haatzmaut_last_cloud_save";
+const LAST_CLOUD_LOAD_KEY = "haatzmaut_last_cloud_load";
+
+async function renderSystemStatusPanel() {
+  const grid = byId("systemStatusGrid");
+  if (!grid) return;
+
+  const cloudState = getCloudSyncClientState();
+  const lastSave = localStorage.getItem(LAST_CLOUD_SAVE_KEY);
+  const lastLoad = localStorage.getItem(LAST_CLOUD_LOAD_KEY);
+  let cacheSummary = "לא זמין";
+  if ("caches" in window) {
+    try {
+      const keys = await caches.keys();
+      const appCaches = keys.filter(k => k.startsWith("haatzmaut-"));
+      cacheSummary = appCaches.length ? appCaches.join(", ") : "ללא מטמון אפליקציה";
+    } catch {
+      cacheSummary = "שגיאה בקריאת מטמון";
+    }
+  }
+
+  const rows = [
+    { label: "גרסת אפליקציה", value: APP_BUILD_ID },
+    { label: "Cloud API", value: cloudState.apiBase },
+    { label: "מפתח ענן", value: cloudState.hasEncryptionKey || cloudState.hasStoredKeyBits ? "זמין" : "לא זמין" },
+    { label: "Token ענן", value: cloudState.hasToken ? "פעיל" : "לא פעיל" },
+    { label: "שמירה אחרונה לענן", value: lastSave ? new Date(lastSave).toLocaleString("he-IL") : "טרם נשמר" },
+    { label: "טעינה אחרונה מהענן", value: lastLoad ? new Date(lastLoad).toLocaleString("he-IL") : "טרם נטען" },
+    { label: "Service Worker", value: navigator.serviceWorker?.controller ? "פעיל" : "לא פעיל" },
+    { label: "מטמון אפליקציה", value: cacheSummary }
+  ];
+
+  grid.innerHTML = rows.map(row => `
+    <div class="admin-row">
+      <div class="admin-row-info">
+        <strong>${esc(row.label)}</strong>
+        <span class="muted small">${esc(String(row.value || ""))}</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function initDiagnosticsActions() {
+  const selfTestBtn = byId("runCloudSelfTestBtn");
+  const safeRefreshBtn = byId("safeRefreshBtn");
+  const selfTestStatus = byId("cloudSelfTestStatus");
+
+  if (selfTestBtn) {
+    selfTestBtn.addEventListener("click", async () => {
+      selfTestBtn.disabled = true;
+      selfTestBtn.textContent = "בודק…";
+      if (selfTestStatus) selfTestStatus.textContent = "מריץ בדיקה…";
+      try {
+        const result = await runCloudSelfTest();
+        const summary = result.steps.map(step => `${step.ok ? "✓" : "✗"} ${step.name}: ${step.detail}`).join(" | ");
+        if (selfTestStatus) selfTestStatus.textContent = summary;
+        showToast(result.ok ? "בדיקת ענן הצליחה" : "בדיקת ענן נכשלה", result.ok ? "info" : "warn");
+      } catch (err) {
+        if (selfTestStatus) selfTestStatus.textContent = `שגיאה: ${err.message || "לא ידוע"}`;
+        showToast("בדיקת ענן נכשלה", "error");
+      } finally {
+        selfTestBtn.disabled = false;
+        selfTestBtn.textContent = "בדיקת סנכרון ענן";
+        renderSystemStatusPanel();
+      }
+    });
+  }
+
+  if (safeRefreshBtn) {
+    safeRefreshBtn.addEventListener("click", async () => {
+      if (!confirm("הרענון הבטוח ינקה מטמון אפליקציה וירענן את הדף. להמשיך?")) return;
+      safeRefreshBtn.disabled = true;
+      safeRefreshBtn.textContent = "מנקה…";
+      try {
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(reg => reg.unregister()));
+        }
+        await clearBrowserCaches();
+        showToast("המטמון נוקה. הדף ירוענן…", "info");
+        setTimeout(() => window.location.reload(), 300);
+      } catch (err) {
+        showToast(`שגיאה ברענון בטוח: ${err.message || "לא ידוע"}`, "error");
+        safeRefreshBtn.disabled = false;
+        safeRefreshBtn.textContent = "רענון בטוח (ניקוי מטמון)";
+      }
+    });
+  }
 }
 
 /* ----------------------------------------------------------
@@ -842,90 +933,9 @@ function initBackupHandlers() {
   const exportEncBtn = byId("exportEncryptedBtn");
   if (exportEncBtn) exportEncBtn.addEventListener("click", () => { exportEncryptedBackup(); });
 
-  const backupNowBtn = byId("backupNowBtn");
-  if (backupNowBtn) {
-    backupNowBtn.addEventListener("click", async () => {
-      try {
-        const b = await saveManagedBackup("");
-        recordAudit("backup.manual", `${b.label} (${b.entries} הזמנות, ${b.meetings} ישיבות)`, "critical", true);
-        showToast(`גיבוי נשמר: ${b.label}`, "info");
-      } catch (err) {
-        showToast(`שגיאה ביצירת גיבוי: ${err.message || "שגיאה לא ידועה"}`, "error");
-      }
-      renderManagedBackups();
-    });
-  }
-
-  const restoreBtn = byId("restoreBackupBtn");
-  if (restoreBtn) {
-    restoreBtn.addEventListener("click", () => {
-      const sel = byId("savedBackupSelect");
-      if (!sel || !sel.value) return;
-      if (!confirm("שחזור גיבוי יחליף את כל הנתונים. להמשיך?")) return;
-      try {
-        restoreManagedBackup(sel.value);
-        showToast("גיבוי שוחזר, טוען מחדש...", "info");
-        setTimeout(() => window.location.reload(), 800);
-      } catch (err) { showToast(err.message, "error"); }
-    });
-  }
-
-  const deleteBtn = byId("deleteBackupBtn");
-  if (deleteBtn) {
-    deleteBtn.addEventListener("click", () => {
-      const sel = byId("savedBackupSelect");
-      if (!sel || !sel.value) return;
-      if (!confirm("למחוק את הגיבוי?")) return;
-      deleteManagedBackup(sel.value);
-      showToast("גיבוי נמחק.", "info");
-      renderManagedBackups();
-    });
-  }
-
-  const backupUpload = byId("backupUpload");
-  if (backupUpload) {
-    backupUpload.addEventListener("change", e => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      if (!confirm("שחזור גיבוי יחליף את כל הנתונים. להמשיך?")) { e.target.value = ""; return; }
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          applyImportedState(JSON.parse(reader.result));
-          showToast("גיבוי שוחזר, טוען מחדש...", "info");
-          setTimeout(() => window.location.reload(), 800);
-        } catch (err) { showToast("שגיאה בקובץ הגיבוי.", "error"); }
-      };
-      reader.readAsText(file);
-      e.target.value = "";
-    });
-  }
-
-  const encUpload = byId("encryptedUpload");
-  if (encUpload) {
-    encUpload.addEventListener("change", e => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      importEncryptedBackup(file).then(() => {
-        setTimeout(() => window.location.reload(), 800);
-      });
-      e.target.value = "";
-    });
-  }
-
-  const clearAudit = byId("clearAuditBtn");
-  if (clearAudit) {
-    clearAudit.addEventListener("click", () => {
-      if (!confirm("לנקות את יומן הבקרה?")) return;
-      state.auditLog = [];
-      persistStateImmediate();
-      renderAuditLog();
-      renderManagedBackups();
-    });
-  }
-
   renderManagedBackups();
   initDisplayManagement();
+  initDiagnosticsActions();
 }
 
 /* ----------------------------------------------------------
@@ -1125,10 +1135,14 @@ function renderManagedBackups() {
   const sel = byId("savedBackupSelect");
   const list = byId("savedBackupsList");
   const backups = getManagedBackups();
+  const selectedBackupId = sel?.value || "";
 
   if (sel) {
     sel.innerHTML = '<option value="">-- בחר גיבוי --</option>' +
       backups.map(b => `<option value="${b.id}">${esc(b.label)} (${esc(b.createdAt)})</option>`).join("");
+    if (selectedBackupId && backups.some(b => b.id === selectedBackupId)) {
+      sel.value = selectedBackupId;
+    }
   }
 
   if (list) {
@@ -1284,20 +1298,79 @@ renderActiveTab = function() {
 byId("cloudSaveBtn")?.addEventListener("click", async () => {
   const btn = byId("cloudSaveBtn");
   const status = byId("cloudSyncStatus");
+  const backupSelect = byId("savedBackupSelect");
   if (!btn) return;
+  if (!backupSelect?.value) {
+    if (status) status.textContent = "בחר/י גיבוי מהספרייה לפני שמירה לענן.";
+    showToast("יש לבחור גיבוי לשמירה לענן.", "warn");
+    return;
+  }
+
+  const selectedBackup = getManagedBackups().find(b => b.id === backupSelect.value);
+  if (!selectedBackup?.data || typeof selectedBackup.data !== "object") {
+    if (status) status.textContent = "הגיבוי שנבחר אינו זמין לשמירה.";
+    showToast("הגיבוי שנבחר אינו זמין. בחר/י גיבוי אחר.", "error");
+    renderManagedBackups();
+    return;
+  }
+
   btn.disabled = true;
-  btn.textContent = "שומר…";
+  btn.textContent = "שומר לענן…";
   if (status) status.textContent = "";
   try {
-    const ok = await saveToCloud();
+    const ok = await saveToCloud(selectedBackup.data, {
+      sourceType: "library",
+      sourceLabel: selectedBackup.label,
+      sourceCreatedAt: selectedBackup.createdAt
+    });
+    if (ok) {
+      localStorage.setItem(LAST_CLOUD_SAVE_KEY, new Date().toISOString());
+    }
     if (status) status.textContent = ok
-      ? `נשמר בהצלחה — ${new Date().toLocaleString("he-IL")}`
+      ? `נשמר מהספרייה (${selectedBackup.label}) — ${new Date().toLocaleString("he-IL")}`
       : "שמירה נכשלה";
   } catch (e) {
     if (status) status.textContent = "שמירה נכשלה — " + (e.message || "שגיאת רשת");
   }
   btn.disabled = false;
-  btn.textContent = "שמור לענן";
+  btn.textContent = "שמור גיבוי נבחר לענן";
+  renderSystemStatusPanel();
+});
+
+byId("cloudSaveCurrentBtn")?.addEventListener("click", async () => {
+  const btn = byId("cloudSaveCurrentBtn");
+  const status = byId("cloudSyncStatus");
+  const backupSelect = byId("savedBackupSelect");
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = "יוצר גיבוי ושומר לענן…";
+  if (status) status.textContent = "";
+
+  try {
+    const backup = await saveManagedBackup(`ענן ${new Date().toLocaleString("he-IL")}`);
+    renderManagedBackups();
+    if (backupSelect) backupSelect.value = backup.id;
+
+    const ok = await saveToCloud(backup.data, {
+      sourceType: "library",
+      sourceLabel: backup.label,
+      sourceCreatedAt: backup.createdAt
+    });
+
+    if (ok) {
+      localStorage.setItem(LAST_CLOUD_SAVE_KEY, new Date().toISOString());
+      if (status) status.textContent = `נשמר מהמצב הנוכחי (${backup.label}) — ${new Date().toLocaleString("he-IL")}`;
+    } else if (status) {
+      status.textContent = "שמירה נכשלה";
+    }
+  } catch (e) {
+    if (status) status.textContent = "שמירה נכשלה — " + (e.message || "שגיאה לא ידועה");
+    showToast("יצירת גיבוי/שמירה לענן נכשלה.", "error");
+  }
+
+  btn.disabled = false;
+  btn.textContent = "שמור מצב נוכחי והעלה לענן";
+  renderSystemStatusPanel();
 });
 
 byId("cloudLoadBtn")?.addEventListener("click", async () => {
@@ -1315,10 +1388,12 @@ byId("cloudLoadBtn")?.addEventListener("click", async () => {
     const ok = confirm(`נמצא מידע בענן מתאריך ${cloudDate} (${Math.round(info.sizeBytes / 1024)}KB).\n\nלטעון ולהחליף את המידע המקומי?`);
     if (!ok) { if (status) status.textContent = "טעינה בוטלה."; return; }
     await loadFromCloudAndApply();
+    localStorage.setItem(LAST_CLOUD_LOAD_KEY, new Date().toISOString());
     if (status) status.textContent = `נטען מהענן — ${new Date().toLocaleString("he-IL")}`;
   } catch (e) {
     if (status) status.textContent = "טעינה נכשלה — " + (e.message || "שגיאת רשת");
   }
+  renderSystemStatusPanel();
 });
 
 export { showTab, renderActiveTab, addNotification, renderBookingList, renderIssuesSummary, updateNotificationBell };

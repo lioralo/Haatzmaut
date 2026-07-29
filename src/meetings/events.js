@@ -78,6 +78,8 @@ function bindGroupForm() {
 
     hideGroupForm();
     renderAllMeetings();
+    const isEditMode = !byId("meetingsEditMode")?.classList.contains("hidden");
+    if (isEditMode) renderMeetingForm();
   });
 }
 
@@ -340,6 +342,8 @@ function deleteGroupHandler(groupId) {
   deleteGroup(groupId);
   hideGroupForm();
   renderAllMeetings();
+  const isEditMode = !byId("meetingsEditMode")?.classList.contains("hidden");
+  if (isEditMode) renderMeetingForm();
   showToast(shouldDeleteMeetings ? `הקבוצה ו-${meetingCount} ישיבות נמחקו.` : `הקבוצה "${group.name}" נמחקה.`, "info");
 }
 

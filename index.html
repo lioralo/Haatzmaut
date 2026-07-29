@@ -582,36 +582,41 @@
           </div>
           <div data-admin-subtab="audit" class="admin-subtab-content hidden">
             <article class="panel">
-              <h3>בקרה וגיבויים</h3>
+              <h3>בקרה וייצוא</h3>
               <div style="display:grid;gap:1rem">
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                  <button id="backupNowBtn" class="secondary">גיבוי עכשיו</button>
                   <button id="exportBackupBtn" class="secondary">ייצוא (JSON)</button>
                   <button id="exportEncryptedBtn" class="secondary">ייצוא מוצפן</button>
                 </div>
                 <div>
-                  <label style="font-weight:600;margin-bottom:.3rem">שחזור מגיבוי שמור:</label>
+                  <label style="font-weight:600;margin-bottom:.3rem">ספריית גיבויים מקומיים:</label>
                   <div style="display:flex;gap:.5rem;align-items:center">
                     <select id="savedBackupSelect" style="max-width:300px"><option value="">-- בחר גיבוי --</option></select>
-                    <button id="restoreBackupBtn" class="btn-sm">שחזר</button>
-                    <button id="deleteBackupBtn" class="btn-sm secondary">מחק</button>
                   </div>
                 </div>
-                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                  <label class="file-upload-label">טען מקובץ <input dir="auto" type="file" id="backupUpload" accept=".json" /></label>
-                  <label class="file-upload-label">טען מוצפן <input dir="auto" type="file" id="encryptedUpload" accept=".json" /></label>
-                </div>
-                <button id="clearAuditBtn" class="secondary">נקה יומן</button>
               </div>
             </article>
             <article class="panel" style="margin-top:.75rem">
               <h3 class="panel-title">סנכרון ענן</h3>
               <div style="display:grid;gap:.5rem">
+                <p class="muted small" style="margin:0">בחר/י גיבוי מהספריה ושמור/י לענן.</p>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                  <button id="cloudSaveBtn" class="secondary">שמור לענן</button>
+                  <button id="cloudSaveBtn" class="secondary">שמור גיבוי נבחר לענן</button>
+                  <button id="cloudSaveCurrentBtn" class="secondary">שמור מצב נוכחי והעלה לענן</button>
                   <button id="cloudLoadBtn" class="secondary">טען מהענן</button>
                 </div>
                 <p id="cloudSyncStatus" class="muted small" style="margin:0"></p>
+              </div>
+            </article>
+            <article class="panel" style="margin-top:.75rem">
+              <h3 class="panel-title">בדיקת מערכת</h3>
+              <div style="display:grid;gap:.6rem">
+                <div id="systemStatusGrid" class="admin-list"></div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                  <button id="runCloudSelfTestBtn" class="secondary">בדיקת סנכרון ענן</button>
+                  <button id="safeRefreshBtn" class="secondary">רענון בטוח (ניקוי מטמון)</button>
+                </div>
+                <p id="cloudSelfTestStatus" class="muted small" style="margin:0"></p>
               </div>
             </article>
             <article class="panel" style="margin-top:.75rem">

@@ -478,36 +478,99 @@ test.describe('Backup & Cloud Buttons', () => {
     await page.waitForTimeout(500);
   });
 
-  test('P: all backup buttons are visible', async ({ page }) => {
-    await expect(page.locator('#backupNowBtn')).toBeVisible();
+  test('P: audit backup library and export controls are visible', async ({ page }) => {
     await expect(page.locator('#exportBackupBtn')).toBeVisible();
     await expect(page.locator('#exportEncryptedBtn')).toBeVisible();
-    await expect(page.locator('#restoreBackupBtn')).toBeVisible();
-    await expect(page.locator('#deleteBackupBtn')).toBeVisible();
-    await expect(page.locator('#backupUpload')).toBeVisible();
-    await expect(page.locator('#encryptedUpload')).toBeVisible();
-    await expect(page.locator('#clearAuditBtn')).toBeVisible();
     await expect(page.locator('#savedBackupSelect')).toBeVisible();
     await expect(page.locator('#savedBackupsList')).toBeVisible();
+    await expect(page.locator('#backupNowBtn')).toHaveCount(0);
+    await expect(page.locator('#restoreBackupBtn')).toHaveCount(0);
+    await expect(page.locator('#deleteBackupBtn')).toHaveCount(0);
+    await expect(page.locator('#backupUpload')).toHaveCount(0);
+    await expect(page.locator('#encryptedUpload')).toHaveCount(0);
+    await expect(page.locator('#clearAuditBtn')).toHaveCount(0);
   });
 
   test('Q: cloud sync buttons are visible and enabled', async ({ page }) => {
     await expect(page.locator('#cloudSaveBtn')).toBeVisible();
+    await expect(page.locator('#cloudSaveCurrentBtn')).toBeVisible();
     await expect(page.locator('#cloudLoadBtn')).toBeVisible();
     expect(await page.locator('#cloudSaveBtn').isDisabled()).toBe(false);
+    expect(await page.locator('#cloudSaveCurrentBtn').isDisabled()).toBe(false);
     expect(await page.locator('#cloudLoadBtn').isDisabled()).toBe(false);
   });
 
-  test('R: backupNow creates a managed backup', async ({ page }) => {
-    const before = await page.evaluate(() => {
-      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
+  test('R: cloud save requires selecting backup snapshot first', async ({ page }) => {
+    await page.locator('#cloudSaveBtn').click();
+    await page.waitForTimeout(250);
+    await expect(page.locator('#cloudSyncStatus')).toContainText('בחר/י גיבוי מהספרייה');
+  });
+
+  test('R2: selected snapshot saves successfully to cloud', async ({ page }) => {
+    let saveCalls = 0;
+    await page.route('**/api/**', async route => {
+      const url = route.request().url();
+      if (url.endsWith('/auth/verify')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'test-token' }) });
+        return;
+      }
+      if (url.endsWith('/sync/save')) {
+        saveCalls += 1;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+        return;
+      }
+      if (url.endsWith('/sync/info')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
     });
-    await page.locator('#backupNowBtn').click();
-    await page.waitForTimeout(500);
-    const after = await page.evaluate(() => {
-      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
+
+    await page.evaluate(async () => {
+      const { setEncryptionPassword } = await import('/src/core/cloudSync.js');
+      const { saveManagedBackup } = await import('/src/core/store.js');
+      await setEncryptionPassword('admin123');
+      await saveManagedBackup('test-seeded-snapshot');
     });
+
+    await page.locator('button[data-admin-subtab=audit]').first().click();
+    await page.waitForTimeout(250);
+    await page.locator('#savedBackupSelect').selectOption({ index: 1 });
+    await page.locator('#cloudSaveBtn').click();
+    await page.waitForTimeout(400);
+
+    expect(saveCalls).toBe(1);
+    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מהספרייה');
+  });
+
+  test('R3: quick cloud action creates snapshot and uploads in one click', async ({ page }) => {
+    let saveCalls = 0;
+    await page.route('**/api/**', async route => {
+      const url = route.request().url();
+      if (url.endsWith('/auth/verify')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'test-token' }) });
+        return;
+      }
+      if (url.endsWith('/sync/save')) {
+        saveCalls += 1;
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+        return;
+      }
+      if (url.endsWith('/sync/info')) {
+        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) });
+        return;
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
+    });
+
+    const before = await page.evaluate(() => JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length);
+    await page.locator('#cloudSaveCurrentBtn').click();
+    await page.waitForTimeout(600);
+    const after = await page.evaluate(() => JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length);
+
     expect(after).toBe(before + 1);
+    expect(saveCalls).toBe(1);
+    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מהמצב הנוכחי');
   });
 
   test('S: display screen loads all components', async ({ page }) => {

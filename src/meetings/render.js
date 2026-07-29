@@ -45,12 +45,18 @@ export function setMeetingSubTab(val) {
 }
 
 function getAvailableMeetingTeams() {
-  const merged = new Set(TEAMS);
-  (state.meetingGroups || []).forEach(group => {
-    const team = String(group?.team || "").trim();
-    if (team) merged.add(team);
-  });
-  return [...merged];
+  const byKey = new Map();
+  const addTeam = value => {
+    const team = String(value || "").replace(/\s+/g, " ").trim();
+    if (!team) return;
+    const key = team.toLocaleLowerCase("he");
+    if (!byKey.has(key)) byKey.set(key, team);
+  };
+
+  (TEAMS || []).forEach(addTeam);
+  (state.meetingGroups || []).forEach(group => addTeam(group?.team));
+
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, "he"));
 }
 
 /* ============================================================
@@ -211,26 +217,43 @@ export function renderMeetingForm(meeting = null) {
     }
   }
 
-  const selectedIds = meeting?.groupIds || [];
+  const selectedGroupIds = new Set(meeting?.groupIds || []);
 
-  const teamSel = byId("meetingTeam");
-  const recurringSel = byId("meetingRecurring");
+  let teamSel = byId("meetingTeam");
+  let recurringSel = byId("meetingRecurring");
+
+  const teamKey = value => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase("he");
 
   const renderGroupChecks = () => {
+    const liveChecked = [...groupChecks.querySelectorAll("input[name='meetingGroupIds']:checked")]
+      .map(input => input.value)
+      .filter(Boolean);
+    if (liveChecked.length) {
+      liveChecked.forEach(id => selectedGroupIds.add(id));
+    }
+
     const selectedTeam = teamSel?.value || "";
     const recurringRule = recurringSel?.value || "";
     const restrictByTeam = Boolean(recurringRule && selectedTeam);
     const availableGroups = restrictByTeam
-      ? state.meetingGroups.filter(g => g.team === selectedTeam)
+      ? state.meetingGroups.filter(g => teamKey(g.team) === teamKey(selectedTeam))
       : state.meetingGroups;
 
     groupChecks.innerHTML = `<legend>&#x05E7;&#x05D1;&#x05D5;&#x05E6;&#x05D5;&#x05EA;</legend>${availableGroups.map(g => `
-      <label class="chip${selectedIds.includes(g.id) ? " chip-active" : ""}" style="display:inline-flex;align-items:center;gap:4px;margin:2px;">
-        <input type="checkbox" name="meetingGroupIds" value="${esc(g.id)}"${selectedIds.includes(g.id) ? " checked" : ""} />
+      <label class="chip${selectedGroupIds.has(g.id) ? " chip-active" : ""}" style="display:inline-flex;align-items:center;gap:4px;margin:2px;">
+        <input type="checkbox" name="meetingGroupIds" value="${esc(g.id)}"${selectedGroupIds.has(g.id) ? " checked" : ""} />
         <span class="group-color-dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(g.color)};"></span>
         <span>${esc(g.name)}</span>
       </label>
     `).join("")}${restrictByTeam && !availableGroups.length ? '<p class="muted small">אין קבוצות משויכות לצוות שנבחר.</p>' : ''}`;
+
+    groupChecks.querySelectorAll("input[name='meetingGroupIds']").forEach(input => {
+      input.addEventListener("change", () => {
+        if (input.checked) selectedGroupIds.add(input.value);
+        else selectedGroupIds.delete(input.value);
+        input.closest("label")?.classList.toggle("chip-active", input.checked);
+      });
+    });
   };
 
   let durationEl = byId("meetingDuration");
@@ -261,6 +284,7 @@ export function renderMeetingForm(meeting = null) {
     }
   }
   byId("meetingRecurring").value = meeting?.recurringRule || "";
+  recurringSel = byId("meetingRecurring");
 
   byId("meetingDate").value = meeting?.date || localISO(new Date());
   byId("meetingTime").value = meeting?.time || "09:00";
@@ -270,10 +294,11 @@ export function renderMeetingForm(meeting = null) {
   if (teamSel) {
     const teamOptions = getAvailableMeetingTeams();
     teamSel.innerHTML = '<option value="">ללא</option>' + teamOptions.map(t => `<option value="${esc(t)}"${meeting?.team === t ? ' selected' : ''}>${esc(t)}</option>`).join("");
+    teamSel = byId("meetingTeam");
     teamSel.onchange = () => renderGroupChecks();
   }
 
-  recurringSel.onchange = () => renderGroupChecks();
+  if (recurringSel) recurringSel.onchange = () => renderGroupChecks();
   renderGroupChecks();
 
   const submitBtn = form.querySelector("button[type='submit']");

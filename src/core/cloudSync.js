@@ -109,6 +109,15 @@ function toBase64(bytes) {
 function getToken() { return sessionStorage.getItem('clinic_cloud_token'); }
 function setToken(t) { sessionStorage.setItem('clinic_cloud_token', t); }
 
+export function getCloudSyncClientState() {
+  return {
+    apiBase: API_BASE,
+    hasEncryptionKey: Boolean(_encryptionKey),
+    hasStoredKeyBits: Boolean(sessionStorage.getItem('clinic_cloud_key_bits')),
+    hasToken: Boolean(getToken())
+  };
+}
+
 async function ensureSyncUserForCloud() {
   const currentUsername = String(state.currentUser?.username || '').trim();
   if (!currentUsername) return null;
@@ -158,8 +167,56 @@ async function apiCall(method, path, body = null) {
   }
 }
 
+export async function runCloudSelfTest() {
+  const steps = [];
+  try {
+    if (!state.currentUser) {
+      steps.push({ name: 'user', ok: false, detail: 'אין משתמש מחובר' });
+      return { ok: false, steps };
+    }
+    steps.push({ name: 'user', ok: true, detail: state.currentUser.username });
+
+    const user = await ensureSyncUserForCloud();
+    if (!user?.passwordHash) {
+      steps.push({ name: 'credentials', ok: false, detail: 'חסר passwordHash' });
+      return { ok: false, steps };
+    }
+    steps.push({ name: 'credentials', ok: true, detail: 'hash זמין' });
+
+    if (!_encryptionKey) {
+      const restored = await restoreEncryptionKey();
+      steps.push({ name: 'key', ok: restored, detail: restored ? 'מפתח שוחזר' : 'מפתח לא זמין' });
+      if (!restored) return { ok: false, steps };
+    } else {
+      steps.push({ name: 'key', ok: true, detail: 'מפתח פעיל בזיכרון' });
+    }
+
+    const auth = await apiCall('POST', '/auth/verify', {
+      username: user.username,
+      passwordHash: user.passwordHash
+    });
+    setToken(auth.token);
+    steps.push({ name: 'auth', ok: true, detail: 'auth תקין' });
+
+    const info = await apiCall('GET', '/sync/info');
+    steps.push({
+      name: 'sync-info',
+      ok: true,
+      detail: info.exists ? `קיים גיבוי (${Math.round((info.sizeBytes || 0) / 1024)}KB)` : 'אין גיבוי שמור'
+    });
+
+    const health = await fetch(`${API_BASE}/healthz`).then(r => r.ok ? r.json().catch(() => ({})) : null).catch(() => null);
+    steps.push({ name: 'health', ok: Boolean(health?.status === 'ok'), detail: health?.status || 'ללא תגובה' });
+
+    return { ok: steps.every(step => step.ok), steps };
+  } catch (err) {
+    steps.push({ name: 'error', ok: false, detail: err.message || 'שגיאה לא ידועה' });
+    return { ok: false, steps };
+  }
+}
+
 /* --- Public API --- */
-export async function saveToCloud() {
+export async function saveToCloud(snapshotPayload = null, context = {}) {
   if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return false; }
   try {
     const user = await ensureSyncUserForCloud();
@@ -172,14 +229,21 @@ export async function saveToCloud() {
     const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
     setToken(auth.token);
 
-    const plain = serializedStateForSync();
+    const plain = snapshotPayload === null
+      ? serializedStateForSync()
+      : JSON.stringify(snapshotPayload);
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
     const hashHex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
 
     const { iv, encryptedData } = await encryptPayload(_encryptionKey, plain);
     await apiCall('POST', '/sync/save', { encryptedData, iv, dataHash: hashHex });
-    const entryCount = (state.schedule || []).length;
-    recordAudit('cloud.save.success', `נשמר לענן: ${entryCount} הזמנות, ${(state.staff||[]).length} אנשי צוות.`, 'critical', true);
+
+    const payload = snapshotPayload && typeof snapshotPayload === 'object' ? snapshotPayload : state;
+    const entryCount = Array.isArray(payload?.schedule) ? payload.schedule.length : (state.schedule || []).length;
+    const staffCount = Array.isArray(payload?.staff) ? payload.staff.length : (state.staff || []).length;
+    const action = context?.sourceType === 'library' ? 'cloud.save.snapshot' : 'cloud.save.success';
+    const source = context?.sourceLabel ? ` (${context.sourceLabel})` : '';
+    recordAudit(action, `נשמר לענן${source}: ${entryCount} הזמנות, ${staffCount} אנשי צוות.`, 'critical', true);
     persistStateImmediate();
     showToast('נשמר לענן בהצלחה.', 'info');
     return true;
