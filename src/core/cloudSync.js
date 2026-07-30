@@ -120,43 +120,6 @@ function toBase64(bytes) {
 function getToken() { return sessionStorage.getItem('clinic_cloud_token'); }
 function setToken(t) { sessionStorage.setItem('clinic_cloud_token', t); }
 
-export function getCloudSyncClientState() {
-  return {
-    apiBase: API_BASE,
-    hasEncryptionKey: Boolean(_encryptionKey),
-    hasStoredKeyBits: Boolean(sessionStorage.getItem('clinic_cloud_key_bits')),
-    hasToken: Boolean(getToken())
-  };
-}
-
-async function ensureSyncUserForCloud() {
-  const currentUsername = String(state.currentUser?.username || '').trim();
-  if (!currentUsername) return null;
-
-  let user = state.users?.find(u => u.username === currentUsername);
-  if (user?.passwordHash) return user;
-
-  if (currentUsername !== 'admin') return user || null;
-
-  const { salt, passwordHash } = await passwordForUser('admin123');
-  if (!user) {
-    user = {
-      id: `user-${Date.now()}`,
-      username: currentUsername,
-      role: state.currentUser.role || 'admin',
-      staffId: state.currentUser.staffId || '',
-      active: true
-    };
-    if (!Array.isArray(state.users)) state.users = [];
-    state.users.push(user);
-  }
-
-  user.salt = salt;
-  user.passwordHash = passwordHash;
-  persistStateImmediate();
-  return user;
-}
-
 async function apiCall(method, path, body = null) {
   const headers = { 'Content-Type': 'application/json' };
   const token = getToken();

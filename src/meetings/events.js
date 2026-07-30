@@ -68,17 +68,15 @@ function bindGroupForm() {
     }
 
     if (id) {
-      updateGroup(id, { name, color, team, weeklyDay, defaultTime });
+      updateGroup(id, { name, color, weeklyDay, defaultTime });
       showToast(`הקבוצה "${name}" עודכנה.`, "info");
     } else {
-      createGroup({ name, color, team, weeklyDay, defaultTime });
+      createGroup({ name, color, weeklyDay, defaultTime });
       showToast(`נוספה קבוצה "${name}".`, "info");
     }
 
     hideGroupForm();
     renderAllMeetings();
-    const isEditMode = !byId("meetingsEditMode")?.classList.contains("hidden");
-    if (isEditMode) renderMeetingForm();
   });
 }
 
@@ -293,48 +291,8 @@ function bindDelegatedClicks() {
       case "del-selected-meetings":
         bulkDeleteHandler();
         break;
-
-      case "create-meeting-from-group":
-        createMeetingFromGroupHandler(groupId);
-        break;
-
-      case "create-other-meeting":
-        createOtherMeetingHandler();
-        break;
     }
   });
-}
-
-function createMeetingFromGroupHandler(groupId) {
-  const group = state.meetingGroups.find(g => g.id === groupId);
-  if (!group) return;
-  byId("meetingsViewMode")?.classList.add("hidden");
-  byId("meetingsEditMode")?.classList.remove("hidden");
-  const prefill = {
-    groupIds: [groupId],
-    team: group.team || "",
-    date: localISO(new Date()),
-    time: group.defaultTime,
-    recurringRule: "weekly"
-  };
-  renderMeetingForm(prefill);
-  const submitBtn = byId("meetingForm")?.querySelector("button[type='submit']");
-  if (submitBtn) submitBtn.textContent = "צור ישיבה";
-}
-
-function createOtherMeetingHandler() {
-  byId("meetingsViewMode")?.classList.add("hidden");
-  byId("meetingsEditMode")?.classList.remove("hidden");
-  const prefill = {
-    groupIds: [],
-    team: "",
-    date: localISO(new Date()),
-    time: "09:00",
-    recurringRule: ""
-  };
-  renderMeetingForm(prefill);
-  const submitBtn = byId("meetingForm")?.querySelector("button[type='submit']");
-  if (submitBtn) submitBtn.textContent = "צור ישיבה";
 }
 
 
@@ -375,8 +333,6 @@ function deleteGroupHandler(groupId) {
   deleteGroup(groupId);
   hideGroupForm();
   renderAllMeetings();
-  const isEditMode = !byId("meetingsEditMode")?.classList.contains("hidden");
-  if (isEditMode) renderMeetingForm();
   showToast(shouldDeleteMeetings ? `הקבוצה ו-${meetingCount} ישיבות נמחקו.` : `הקבוצה "${group.name}" נמחקה.`, "info");
 }
 

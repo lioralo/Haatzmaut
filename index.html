@@ -431,7 +431,6 @@
                   <label>שעה <input dir="auto" id="meetingTime" type="time" /></label>
                   <label>משך (דקות) <input dir="auto" id="meetingDuration" type="number" min="30" value="60" /></label>
                   <label>חזרה <select id="meetingRecurring"><option value="">חד-פעמית</option><option value="weekly">שבועית</option><option value="biweekly">דו-שבועית</option><option value="monthly-first">חודשית ראשונה</option></select></label>
-                  <fieldset id="meetingGroupChecks" class="full"><legend>קבוצות</legend></fieldset>
                   <label class="full">סדר יום <textarea dir="auto" id="meetingAgenda"></textarea></label>
                   <label class="full">קישור <input dir="auto" id="meetingLink" type="url" /></label>
                   <label>קבצים <input dir="auto" id="meetingFiles" type="file" multiple /></label>
@@ -586,8 +585,7 @@
               <div class="cloud-status-panel" style="display:grid;gap:.5rem">
                 <div id="cloudSyncInfo" class="muted small">לא מחובר</div>
                 <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
-                  <button id="cloudSaveBtn" class="secondary">שמור גיבוי נבחר לענן</button>
-                  <button id="cloudSaveCurrentBtn" class="secondary">שמור מצב נוכחי והעלה לענן</button>
+                  <button id="cloudSaveBtn" class="secondary">שמור לענן</button>
                   <button id="cloudLoadBtn" class="secondary">טען מהענן</button>
                   <button id="cloudVersionsBtn" class="secondary" style="display:none">גרסאות</button>
                 </div>

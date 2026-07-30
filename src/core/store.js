@@ -36,7 +36,7 @@ export const state = {
   requests: [],
   selectedTags: new Set(),
   weekISO: "",
-  activeDay: new Date().getDay(),
+  activeDay: 0,
 
   // Staff (will be populated by staff/state.js on init)
   staff: [],
@@ -172,55 +172,6 @@ let _persistTimer = null;
 let _persistFailed = false;
 const _persistHooks = [];
 
-function isQuotaExceededError(error) {
-  return Boolean(
-    error && (
-      error.name === "QuotaExceededError" ||
-      String(error).toLowerCase().includes("quota")
-    )
-  );
-}
-
-function readStoredArray(key) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(key) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function pruneStoredBackups({ keepManaged = MAX_MANAGED, keepAuto = AUTOBACKUP_MAX } = {}) {
-  const managed = readStoredArray(MANAGED_BACKUPS_KEY);
-  const auto = readStoredArray(AUTOBACKUP_KEY);
-  const trimmedManaged = managed.slice(0, Math.max(0, keepManaged));
-  const trimmedAuto = auto.slice(Math.max(0, auto.length - keepAuto));
-
-  if (keepManaged === 0) localStorage.removeItem(MANAGED_BACKUPS_KEY);
-  else localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(trimmedManaged));
-
-  if (keepAuto === 0) localStorage.removeItem(AUTOBACKUP_KEY);
-  else localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(trimmedAuto));
-}
-
-export async function getStorageEstimate() {
-  try {
-    if (!navigator.storage?.estimate) return null;
-    const estimate = await navigator.storage.estimate();
-    const quota = Number(estimate.quota || 0);
-    const usage = Number(estimate.usage || 0);
-    if (!quota) return null;
-    return {
-      quota,
-      usage,
-      available: Math.max(0, quota - usage),
-      usageRatio: usage / quota
-    };
-  } catch {
-    return null;
-  }
-}
-
 export function onPersist(fn) {
   _persistHooks.push(fn);
 }
@@ -250,27 +201,19 @@ function _writeStorage() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
     _persistFailed = false;
   } catch (e) {
-    if (isQuotaExceededError(e)) {
+    if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
-        pruneStoredBackups({ keepManaged: 2, keepAuto: 1 });
+        try { const ab = JSON.parse(localStorage.getItem(AUTOBACKUP_KEY) || "[]"); if (Array.isArray(ab) && ab.length > 1) { localStorage.setItem(AUTOBACKUP_KEY, JSON.stringify(ab.slice(-1))); } } catch {}
         localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
         _persistFailed = false;
         showToast("פונה מקום אחסון — גיבויים ישנים נמחקו.", "info");
         return;
       } catch {
-        try {
-          pruneStoredBackups({ keepManaged: 1, keepAuto: 0 });
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(serializedState()));
-          _persistFailed = false;
-          showToast("בוצע ניקוי עמוק לאחסון המקומי כדי להשלים שמירה.", "warn");
-          return;
-        } catch {
-          if (!_persistFailed) {
-            showToast("האחסון המקומי מלא. יש לנקות נתונים ישנים (פגישות, יומן בקרה, גיבויים).", "error");
-            _persistFailed = true;
-          }
-          return;
+        if (!_persistFailed) {
+          showToast("האחסון המקומי מלא. יש לנקות נתונים ישנים (פגישות, יומן בקרה, גיבויים).", "error");
+          _persistFailed = true;
         }
+        return;
       }
     }
     if (!_persistFailed) {
@@ -412,15 +355,9 @@ export function autoBackup() {
 
 export function applyImportedState(rawState) {
   if (!rawState || typeof rawState !== "object") throw new Error("קובץ גיבוי לא תקין.");
-<<<<<<< HEAD
-  const candidate = normalizeStateSnapshot(rawState);
-  if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule)) {
-    throw new Error("גיבוי חסר שדות חובה (rooms/schedule).");
-=======
   const candidate = rawState.data && typeof rawState.data === "object" ? rawState.data : rawState;
   if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule) || !Array.isArray(candidate.staff)) {
     throw new Error("גיבוי חסר שדות חובה (rooms/schedule/staff).");
->>>>>>> 4370c0b (cloud-first backup rewrite: auto-sync engine, version history, store.js fixes, UI cleanup)
   }
   state.rooms = candidate.rooms || [];
   state.staff = candidate.staff || [];
@@ -521,15 +458,9 @@ export function runIntegrityAssistant() {
    MANAGED BACKUPS (localStorage)
    ============================================================ */
 
-export async function saveManagedBackup(label = "") {
+export function saveManagedBackup(label = "") {
   const payload = serializedState();
   const payloadJson = JSON.stringify(payload);
-  const estimate = await getStorageEstimate();
-
-  if (estimate && estimate.available < (payloadJson.length + 80_000)) {
-    try { pruneStoredBackups({ keepManaged: 2, keepAuto: 1 }); } catch {}
-  }
-
   const backup = {
     id: makeId("backup"),
     label: label || `גיבוי ${new Date().toLocaleString("he-IL")}`,
@@ -546,8 +477,7 @@ export async function saveManagedBackup(label = "") {
   try { backups = JSON.parse(localStorage.getItem(MANAGED_BACKUPS_KEY) || "[]"); } catch {}
   if (!Array.isArray(backups)) backups = [];
   backups.unshift(backup);
-  const dynamicMax = estimate && estimate.usageRatio > 0.8 ? 3 : MAX_MANAGED;
-  if (backups.length > dynamicMax) backups = backups.slice(0, dynamicMax);
+  if (backups.length > MAX_MANAGED) backups = backups.slice(0, MAX_MANAGED);
 
   const tryWrite = () => {
     localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
@@ -556,7 +486,7 @@ export async function saveManagedBackup(label = "") {
   try {
     tryWrite();
   } catch (e) {
-    if (isQuotaExceededError(e)) {
+    if (e.name === "QuotaExceededError" || String(e).includes("quota")) {
       try {
         try { localStorage.removeItem(AUTOBACKUP_KEY); } catch {}
         while (backups.length > 2) backups.pop();

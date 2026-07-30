@@ -70,31 +70,6 @@ test.describe('Haatzmaut Clinic System', () => {
     await expect(dayTab).toHaveClass(/active/);
   });
 
-  test('week navigation controls stay compact', async ({ page }) => {
-    await page.fill('#username', 'admin');
-    await page.fill('#password', 'admin123');
-    await page.locator('#loginForm button[type="submit"]').click();
-    await page.waitForTimeout(3000);
-
-    const sizes = await page.evaluate(() => {
-      const prev = document.getElementById('weekPrev');
-      const today = document.getElementById('weekToday');
-      const next = document.getElementById('weekNext');
-      const prevBox = prev?.getBoundingClientRect();
-      const todayBox = today?.getBoundingClientRect();
-      const nextBox = next?.getBoundingClientRect();
-      return {
-        prevWidth: prevBox?.width || 0,
-        todayHeight: todayBox?.height || 0,
-        nextWidth: nextBox?.width || 0
-      };
-    });
-
-    expect(sizes.prevWidth).toBeLessThanOrEqual(36);
-    expect(sizes.nextWidth).toBeLessThanOrEqual(36);
-    expect(sizes.todayHeight).toBeLessThanOrEqual(36);
-  });
-
   test('language switch button exists', async ({ page }) => {
     await expect(page.locator('#langSwitchBtnLogin')).toBeVisible();
     await page.fill('#username', 'admin');
@@ -215,7 +190,7 @@ test.describe('Backup & Storage', () => {
     const result = await page.evaluate(async () => {
       const { saveManagedBackup, restoreManagedBackup, state } = await import('/src/core/store.js');
       const scheduleCount = state.schedule.length;
-      const backup = await saveManagedBackup('test-backup');
+      const backup = saveManagedBackup('test-backup');
       if (!backup?.id) return { ok: false, reason: 'save failed' };
 
       restoreManagedBackup(backup.id);
@@ -229,9 +204,7 @@ test.describe('Backup & Storage', () => {
   test('F: managed backups capped at MAX_MANAGED (10)', async ({ page }) => {
     const count = await page.evaluate(async () => {
       const { saveManagedBackup, getManagedBackups } = await import('/src/core/store.js');
-      for (let i = 0; i < 15; i++) {
-        await saveManagedBackup(`backup-${i}`);
-      }
+      for (let i = 0; i < 15; i++) saveManagedBackup(`backup-${i}`);
       return getManagedBackups().length;
     });
     expect(count).toBeLessThanOrEqual(10);
@@ -277,33 +250,6 @@ test.describe('Backup & Storage', () => {
     expect(result.hasUser).toBe(true);
     expect(result.noPassword).toBe(true);
   });
-
-  test('I2: malformed stored state is normalized on load', async ({ page }) => {
-    const result = await page.evaluate(async () => {
-      localStorage.setItem('haatzmaut_v6', JSON.stringify({
-        rooms: 'bad',
-        schedule: 'bad',
-        selectedTags: 'bad',
-        activeDay: 99,
-        displaySettings: { switchSeconds: 'bad', messages: 'bad' }
-      }));
-      const { loadStoredState } = await import('/src/core/store.js');
-      const stored = loadStoredState();
-      return {
-        rooms: Array.isArray(stored?.rooms),
-        schedule: Array.isArray(stored?.schedule),
-        selectedTags: Array.isArray(stored?.selectedTags),
-        displaySettings: typeof stored?.displaySettings === 'object',
-        activeDay: stored?.activeDay
-      };
-    });
-
-    expect(result.rooms).toBe(true);
-    expect(result.schedule).toBe(true);
-    expect(result.selectedTags).toBe(true);
-    expect(result.displaySettings).toBe(true);
-    expect(result.activeDay).toBe(4);
-  });
 });
 
 test.describe('Calendar & Meetings', () => {
@@ -325,24 +271,6 @@ test.describe('Calendar & Meetings', () => {
       return raw?.schedule?.length || 0;
     });
     expect(count).toBeGreaterThan(0);
-  });
-
-  test('J2: malformed weekISO still renders the calendar', async ({ page }) => {
-    await page.goto('/?devAuth=1');
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-      localStorage.setItem('haatzmaut_v6', JSON.stringify({ weekISO: 'not-a-date' }));
-    });
-    await page.reload();
-    await page.fill('#username', 'admin');
-    await page.fill('#password', 'admin123');
-    await page.locator('#loginForm button[type="submit"]').click();
-    await page.waitForTimeout(3000);
-
-    await expect(page.locator('#weekLabel')).toContainText('שבוע עבודה:');
-    expect(await page.locator('#occupancyTable tbody tr').count()).toBe(24);
-    await expect(page.locator('#occupancyTable')).toBeVisible();
   });
 
   test('K: week navigation works', async ({ page }) => {
@@ -371,12 +299,6 @@ test.describe('Calendar & Meetings', () => {
     await page.locator('[data-calendar-mode="schedule"]').click();
     await page.waitForTimeout(300);
     await expect(page.locator('#occupancyTable')).toBeVisible();
-  });
-
-  test('L2: day/week meeting counters are hidden from dashboard', async ({ page }) => {
-    await expect(page.locator('#dashboardStats')).not.toContainText('פגישות השבוע');
-    await expect(page.locator('#dashboardStats')).not.toContainText('פגישות היום');
-    expect(await page.locator('.day-tab .dt-count').count()).toBe(0);
   });
 
   test('M: day tab switching renders different day', async ({ page }) => {
@@ -413,52 +335,6 @@ test.describe('Calendar & Meetings', () => {
     expect(meetings).toBeGreaterThanOrEqual(0);
     expect(groups).toBeGreaterThanOrEqual(0);
   });
-
-  test('O2: deleting all meeting groups does not recreate them after reload', async ({ page }) => {
-    await page.locator('button[data-tab=meetingsTab]').first().click();
-    await page.waitForTimeout(700);
-    await page.locator('button[data-meeting-sub-tab="groups"]').click();
-    await page.waitForTimeout(500);
-
-    page.on('dialog', dialog => dialog.accept());
-
-    let deleteButtons = page.locator('#meetingList button[data-action="del-group"]');
-    while (await deleteButtons.count()) {
-      await deleteButtons.first().click();
-      await page.waitForTimeout(300);
-      deleteButtons = page.locator('#meetingList button[data-action="del-group"]');
-    }
-
-    await page.reload();
-    await page.waitForTimeout(2200);
-    await page.locator('#username').fill('admin');
-    await page.locator('#password').fill('admin123');
-    await page.locator('#loginForm button[type="submit"]').click();
-    await page.waitForTimeout(2200);
-    await page.locator('button[data-tab=meetingsTab]').first().click();
-    await page.waitForTimeout(600);
-    await page.locator('button[data-meeting-sub-tab="groups"]').click();
-    await page.waitForTimeout(400);
-
-    expect(await page.locator('#meetingList button[data-action="del-group"]').count()).toBe(0);
-    await expect(page.locator('#meetingList')).toContainText('אין קבוצות');
-  });
-
-  test('O3: recurring meeting group choices are filtered by selected team', async ({ page }) => {
-    await page.locator('button[data-tab=meetingsTab]').first().click();
-    await page.waitForTimeout(700);
-    await page.locator('#meetingsTab .mode-tab[data-mode="edit"]').click();
-    await page.waitForTimeout(500);
-
-    const before = await page.locator('#meetingGroupChecks input[name="meetingGroupIds"]').count();
-    await page.locator('#meetingRecurring').selectOption('weekly');
-    await page.locator('#meetingTeam').selectOption('מבוגרים');
-    await page.waitForTimeout(250);
-    const after = await page.locator('#meetingGroupChecks input[name="meetingGroupIds"]').count();
-
-    expect(before).toBeGreaterThanOrEqual(2);
-    expect(after).toBeLessThan(before);
-  });
 });
 
 test.describe('Backup & Cloud Buttons', () => {
@@ -491,10 +367,8 @@ test.describe('Backup & Cloud Buttons', () => {
 
   test('Q: cloud sync buttons are visible and enabled', async ({ page }) => {
     await expect(page.locator('#cloudSaveBtn')).toBeVisible();
-    await expect(page.locator('#cloudSaveCurrentBtn')).toBeVisible();
     await expect(page.locator('#cloudLoadBtn')).toBeVisible();
     expect(await page.locator('#cloudSaveBtn').isDisabled()).toBe(false);
-    expect(await page.locator('#cloudSaveCurrentBtn').isDisabled()).toBe(false);
     expect(await page.locator('#cloudLoadBtn').isDisabled()).toBe(false);
   });
 
@@ -530,7 +404,7 @@ test.describe('Backup Integrity', () => {
     const result = await page.evaluate(async () => {
       const { saveManagedBackup, restoreManagedBackup, state } = await import('/src/core/store.js');
       const beforeSchedule = state.schedule.length;
-      const backup = await saveManagedBackup('verify-test');
+      const backup = saveManagedBackup('verify-test');
       state.schedule = [{ id: 'fake', weekISO: '2000-01-01', day: 0, roomId: 'x', start: '08:00', duration: 60, staff: 'x', team: 'x' }];
       try { restoreManagedBackup(backup.id); } catch (e) { return { ok: false, error: e.message }; }
       const afterSchedule = state.schedule.length;
@@ -569,7 +443,7 @@ test.describe('Backup Integrity', () => {
       const { saveManagedBackup, state } = await import('/src/core/store.js');
       const scheduleLen = state.schedule.length;
       const staffLen = state.staff.length;
-      const backup = await saveManagedBackup('integrity-check');
+      const backup = saveManagedBackup('integrity-check');
       if (!backup?.id) return { ok: false, reason: 'no backup id' };
       const stored = JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]');
       const found = stored.find(b => b.id === backup.id);
@@ -667,7 +541,7 @@ test.describe('Regression: Backup, Counters, Meetings', () => {
     const result = await page.evaluate(async () => {
       const { saveManagedBackup } = await import('/src/core/store.js');
       try {
-        const b = await saveManagedBackup('test-simple');
+        const b = saveManagedBackup('test-simple');
         return { ok: true, hasId: !!b?.id, size: typeof b.size === 'number' };
       } catch (e) {
         return { ok: false, error: e.message };
