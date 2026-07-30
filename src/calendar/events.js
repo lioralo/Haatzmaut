@@ -3,14 +3,11 @@
    ============================================================ */
 
 import {
-  WORK_END,
-  TEAMS
+  WORK_END
 } from '../core/constants.js';
 
 import {
   byId,
-  esc,
-  minToTime,
   timeToMin,
   makeId,
   showToast,
@@ -46,7 +43,6 @@ import {
   mergeStaffWithLinkedPriority,
   templateFromEntries,
   applyTemplateScope,
-  importScheduleFromFile,
   exportBookingsCSV,
   exportStaffCSV,
   exportRoomsCSV,
@@ -62,9 +58,10 @@ import {
   renderWeekHeader,
   renderStats,
   renderRequests,
-  renderRoomStatusStrip,
-  addNotification
+  renderRoomStatusStrip
 } from './render.js';
+
+import { addNotification } from '../ui/notifications.js';
 
 /* ============================================================
    INIT CALENDAR EVENTS

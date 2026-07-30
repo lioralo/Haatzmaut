@@ -7,7 +7,7 @@ import {
   showToast, byId, enforceMaxLength
 } from '../core/index.js';
 import {
-  state, isAdmin
+  state
 } from '../core/index.js';
 import {
   ensureDefaultGroups,
@@ -17,7 +17,7 @@ import {
   importMeetingsFromFile, exportMeetingsCSV
 } from './state.js';
 import {
-  renderMeetingGroups, renderGroupForm,
+  renderGroupForm,
   renderMeetingForm, renderAllMeetings,
   setMeetingGroupFilter, renderMeetingTimeline,
   setMeetingSubTab, showMeetingInfoDialog
@@ -56,12 +56,11 @@ function bindGroupForm() {
     if (form.id !== "groupForm") return;
     e.preventDefault();
 
-    const id = form.querySelector("#groupFormId")?.value || "";
-    const name = form.querySelector("#groupFormName")?.value || "";
-    const color = form.querySelector("#groupFormColor")?.value || "#0072BC";
-    const team = form.querySelector("#groupFormTeam")?.value || "";
-    const weeklyDay = Number(form.querySelector("#groupFormDay")?.value || 0);
-    const defaultTime = form.querySelector("#groupFormTime")?.value || "09:00";
+    const id = form.querySelector("#groupId")?.value || "";
+    const name = form.querySelector("#groupName")?.value || "";
+    const color = form.querySelector("#groupColor")?.value || "#0072BC";
+    const weeklyDay = Number(form.querySelector("#groupDay")?.value || 0);
+    const defaultTime = form.querySelector("#groupTime")?.value || "09:00";
 
     if (!name.trim()) {
       showToast("יש להזין שם קבוצה.", "error");
@@ -205,7 +204,7 @@ function bindMeetingUpload() {
    ============================================================ */
 
 function bindExportBtn() {
-  const btn = byId("exportMeetingsBtn");
+  const btn = byId("exportMeetingsCSVBtn");
   if (!btn) return;
   btn.addEventListener("click", () => {
     exportMeetingsCSV();
@@ -302,12 +301,6 @@ function bindDelegatedClicks() {
       case "create-other-meeting":
         createOtherMeetingHandler();
         break;
-    }
-  });
-
-  document.addEventListener("click", e => {
-    if (e.target.id === "addGroupBtn") {
-      renderGroupForm();
     }
   });
 }

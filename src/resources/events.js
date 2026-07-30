@@ -2,8 +2,8 @@ import { byId, esc, showToast, safeRender } from '../core/index.js';
 import { state } from '../core/store.js';
 import {
   createFolder, renameFolder, deleteFolder,
-  uploadFile, deleteFileMeta, renameFile, moveFile,
-  getChildFolders, getFilesInFolder
+  uploadFile, deleteFileMeta, moveFile,
+  getChildFolders
 } from './state.js';
 import {
   renderResourceBrowser, renderFolderTree,
@@ -102,7 +102,7 @@ export function initResourcesEvents() {
       }
       try {
         await downloadFileFromDB(fileObj.dbId, fileName);
-      } catch (err) {
+      } catch {
         showToast("שגיאה בהורדת הקובץ.", "error");
       }
       return;

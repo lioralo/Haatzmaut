@@ -1,7 +1,8 @@
-import { byId, esc, generatePassword, passwordForUser, showToast, makeId } from '../core/index.js';
+import { byId, esc, generatePassword, passwordForUser, showToast } from '../core/index.js';
 import { state, isAdmin, getStaffById, persistState, recordAudit } from '../core/index.js';
 import { t } from '../core/i18n.js';
 import { DEFAULT_PERMISSIONS } from './state.js';
+import { addNotification } from '../ui/notifications.js';
 
 export function renderAdminUsers() {
   const list = byId("adminUserList");
@@ -273,11 +274,6 @@ export function renderPermissionMatrix() {
       }
     });
   });
-}
-
-function addNotification(text, critical = false) {
-  state.notifications.unshift({ id: makeId("note"), text, critical, at: new Date().toLocaleString("he-IL") });
-  persistState();
 }
 
 function repopulateSelects() {

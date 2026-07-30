@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { state, persistState, recordAudit } from '../core/store.js';
-import { makeId, esc, enforceMaxLength, showToast } from '../core/utils.js';
+import { makeId, enforceMaxLength, showToast } from '../core/utils.js';
 
 /* ============================================================
    CONSTANTS

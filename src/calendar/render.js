@@ -5,9 +5,7 @@
 import {
   DAY_DEFS,
   TEAMS,
-  WORK_START,
   WORK_END,
-  SLOT_MIN,
   SLOT_COUNT
 } from '../core/constants.js';
 
@@ -29,20 +27,18 @@ import {
   dayLabel,
   teamColorClass,
   roomColorClass,
-  showToast,
-  safeRender,
-  makeId
+  showToast
 } from '../core/utils.js';
 
 import {
   state,
   isAdmin,
-  persistState,
-  recordAudit
+  persistState
 } from '../core/store.js';
 
+import { addNotification } from '../ui/notifications.js';
+
 import {
-  getRoomById,
   getRoomName,
   getEntryById,
   ensureSyncedScheduleWindow,
@@ -51,32 +47,11 @@ import {
   filteredRooms,
   weekRange,
   normalizeEntry,
-  normalizeRequest,
   getWeeklyOccupancy,
   getNoShowRate,
   getResolutionTimeAvg,
   getTherapistStats
 } from './state.js';
-
-/* ============================================================
-   NOTIFICATIONS (convenience)
-   ============================================================ */
-
-export function addNotification(text, critical = false) {
-  state.notifications = state.notifications || [];
-  state.notifications.unshift({ id: makeId("note"), text, critical, at: new Date().toLocaleString("he-IL") });
-  persistState();
-  showToast(text, critical ? "warn" : "info");
-  /* Update bell badge */
-  const badge = document.getElementById("notificationBadge");
-  const bell = document.getElementById("notificationBell");
-  if (badge && bell) {
-    const count = state.notifications.length;
-    badge.textContent = count;
-    badge.classList.toggle("hidden", count === 0);
-    bell.classList.toggle("hidden", !state.currentUser);
-  }
-}
 
 /* ============================================================
    GRID BUILDER
@@ -357,7 +332,6 @@ export function renderWeekHeader() {
   if (wl) wl.textContent = `שבוע עבודה: ${weekRange()}`;
   const dh = byId("dayHeading");
   if (dh) {
-    const d = DAY_DEFS[state.activeDay];
     const dayKey = ["day.sunday","day.monday","day.tuesday","day.wednesday","day.thursday"][state.activeDay] || "day.sunday";
     dh.textContent = `${t(dayKey)} · ${fmtDate(activeDayDate())}`;
   }

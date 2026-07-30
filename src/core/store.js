@@ -14,7 +14,7 @@ import {
   triggerJsonDownload,
   showToast,
   normalizeDisplaySettings,
-  clampDay
+  passwordForUser
 } from './utils.js';
 
 /* ============================================================
@@ -26,7 +26,7 @@ export const state = {
   currentUser: null,
   auditLog: [],
   loginSecurity: { failures: [], lockUntil: 0 },
-  activeTab: "dashboard",
+  activeTab: "dashboardTab",
 
   // Calendar (will be populated by calendar/state.js on init)
   schedule: [],
@@ -82,76 +82,62 @@ export const state = {
    LOCALSTORAGE READ / WRITE
    ============================================================ */
 
-export function loadStoredState() {
+export async function loadStoredState() {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
     if (!raw) return null;
-    return normalizeStateSnapshot(migrateState(raw));
+    return await migrateState(raw);
   } catch { return null; }
 }
 
-function isPlainObject(value) {
-  return Boolean(value) && Object.prototype.toString.call(value) === "[object Object]";
+export function hydrateState(stored) {
+  if (!stored) return;
+  const src = stored.data && typeof stored.data === "object" ? stored.data : stored;
+
+  state.auditLog        = Array.isArray(src.auditLog) ? src.auditLog : [];
+  state.loginSecurity   = src.loginSecurity && typeof src.loginSecurity === "object"
+    ? { failures: Array.isArray(src.loginSecurity.failures) ? src.loginSecurity.failures : [], lockUntil: Number(src.loginSecurity.lockUntil) || 0 }
+    : { failures: [], lockUntil: 0 };
+  state.activeTab       = typeof src.activeTab === "string" && src.activeTab ? src.activeTab : "dashboardTab";
+  state.schedule        = Array.isArray(src.schedule) ? src.schedule : [];
+  state.rooms           = Array.isArray(src.rooms) ? src.rooms : [];
+  state.defaultTemplate = Array.isArray(src.defaultTemplate) ? src.defaultTemplate : [];
+  state.weekTemplates   = src.weekTemplates && typeof src.weekTemplates === "object" ? src.weekTemplates : {};
+  state.requests        = Array.isArray(src.requests) ? src.requests : [];
+  state.selectedTags    = new Set(Array.isArray(src.selectedTags) ? src.selectedTags : []);
+  state.staff           = Array.isArray(src.staff) ? src.staff : [];
+  state.users           = Array.isArray(src.users) ? src.users : [];
+  state.passwordResets  = Array.isArray(src.passwordResets) ? src.passwordResets : [];
+  state.folders         = Array.isArray(src.folders) ? src.folders : [];
+  state.files           = Array.isArray(src.files) ? src.files : [];
+  state.meetingGroups   = Array.isArray(src.meetingGroups) ? src.meetingGroups : [];
+  state.meetings        = Array.isArray(src.meetings) ? src.meetings : [];
+  state.issues          = Array.isArray(src.issues) ? src.issues : [];
+  state.waitlist        = Array.isArray(src.waitlist) ? src.waitlist : [];
+  state.settings        = src.settings && typeof src.settings === "object" ? src.settings : state.settings;
+  state.displaySettings = normalizeDisplaySettings(src.displaySettings);
 }
 
-function safeArray(value) {
-  return Array.isArray(value) ? value : [];
-}
-
-function safeObject(value, fallback = {}) {
-  return isPlainObject(value) ? value : fallback;
-}
-
-function normalizeStateSnapshot(rawState) {
-  const candidate = rawState?.data && typeof rawState.data === "object" ? rawState.data : rawState;
-  const source = safeObject(candidate, {});
-  const settings = safeObject(source.settings, state.settings);
-  const displaySettings = normalizeDisplaySettings(source.displaySettings);
-
-  return {
-    auditLog: safeArray(source.auditLog),
-    loginSecurity: safeObject(source.loginSecurity, { failures: [], lockUntil: 0 }),
-    activeTab: typeof source.activeTab === "string" && source.activeTab ? source.activeTab : "dashboardTab",
-    schedule: safeArray(source.schedule),
-    rooms: safeArray(source.rooms),
-    defaultTemplate: safeArray(source.defaultTemplate),
-    weekTemplates: safeObject(source.weekTemplates, {}),
-    requests: safeArray(source.requests),
-    selectedTags: source.selectedTags instanceof Set ? [...source.selectedTags] : safeArray(source.selectedTags),
-    staff: safeArray(source.staff),
-    users: safeArray(source.users),
-    passwordResets: safeArray(source.passwordResets),
-    folders: safeArray(source.folders),
-    files: safeArray(source.files),
-    meetingGroups: safeArray(source.meetingGroups),
-    meetings: safeArray(source.meetings),
-    issues: safeArray(source.issues),
-    waitlist: safeArray(source.waitlist),
-    settings,
-    displaySettings,
-    weekISO: typeof source.weekISO === "string" ? source.weekISO : "",
-    activeDay: clampDay(source.activeDay ?? 0)
-  };
-}
-
-export function migrateState(raw) {
+export async function migrateState(raw) {
   let data = raw;
   const ver = data._schemaVersion || 1;
   if (ver < 2) {
     if (Array.isArray(data.users)) {
-      data.users = data.users.map(u => {
+      for (const u of data.users) {
         if (u.password && !u.passwordHash) {
-          return { ...u, password: u.password };
+          const { salt, passwordHash } = await passwordForUser(u.password);
+          u.passwordHash = passwordHash;
+          u.salt = salt;
+          delete u.password;
         }
-        return u;
-      });
+      }
     }
     data._schemaVersion = 2;
   }
   return data;
 }
 
-function serializedState() {
+export function serializedState() {
   return {
     _schemaVersion: STORAGE_VERSION,
     auditLog: state.auditLog,
@@ -173,7 +159,12 @@ function serializedState() {
     issues: state.issues,
     waitlist: state.waitlist,
     settings: state.settings,
-    displaySettings: state.displaySettings
+    displaySettings: state.displaySettings,
+    weekISO: state.weekISO,
+    activeDay: state.activeDay,
+    modes: state.modes,
+    sidebarCollapsed: state.sidebarCollapsed,
+    searchQuery: state.searchQuery
   };
 }
 
@@ -316,7 +307,6 @@ export function recordAudit(action, detail = "", severity = "info", shouldPersis
 }
 
 const AUTOBACKUP_KEY = "haatzmaut_autobackup";
-const AUTOBACKUP_INTERVAL_MS = 60 * 60 * 1000;
 const AUTOBACKUP_MAX = 3;
 const MANAGED_BACKUPS_KEY = "haatzmaut_managed_backups";
 const MAX_MANAGED = 10;
@@ -330,30 +320,7 @@ export function exportFullBackup() {
     _schemaVersion: STORAGE_VERSION,
     exportedAt: new Date().toISOString(),
     app: "haatzmaut",
-    data: {
-      auditLog: state.auditLog,
-      loginSecurity: state.loginSecurity,
-      activeTab: state.activeTab,
-      rooms: state.rooms,
-      staff: state.staff,
-      schedule: state.schedule,
-      defaultTemplate: state.defaultTemplate,
-      weekTemplates: state.weekTemplates,
-      requests: state.requests,
-      meetings: state.meetings,
-      meetingGroups: state.meetingGroups,
-      folders: state.folders,
-      files: state.files,
-      issues: state.issues,
-      waitlist: state.waitlist,
-      settings: state.settings,
-      displaySettings: state.displaySettings,
-      users: state.users,
-      passwordResets: state.passwordResets,
-      selectedTags: [...state.selectedTags],
-      weekISO: state.weekISO,
-      activeDay: state.activeDay
-    }
+    data: serializedState()
   };
   const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   triggerJsonDownload(`haatzmaut_backup_${ts}.json`, payload);
@@ -395,7 +362,7 @@ export async function exportEncryptedBackup() {
 
 export async function importEncryptedBackup(file) {
   const password = prompt("הזן סיסמה לפענוח הגיבוי:");
-  if (!password) return;
+  if (!password) return false;
   try {
     const text = await file.text();
     const blob = JSON.parse(text);
@@ -407,11 +374,16 @@ export async function importEncryptedBackup(file) {
     const json = new TextDecoder().decode(decrypted);
     const payload = JSON.parse(json);
     applyImportedState(payload);
-    showToast("גיבוי מוצפן שוחזר בהצלחה.", "info");
-  } catch (err) { showToast("שגיאה בפענוח - ייתכן שהסיסמה שגויה.", "error"); }
+    return true;
+  } catch (err) {
+    if (err.name === "OperationError" || String(err.message).toLowerCase().includes("decrypt")) {
+      showToast("סיסמה שגויה או קובץ פגום.", "error");
+    } else {
+      showToast("שגיאה בטעינת הגיבוי: " + (err.message || "לא ידוע"), "error");
+    }
+    return false;
+  }
 }
-
-let _autoBackupTimer = null;
 
 export function autoBackup() {
   try {
@@ -438,42 +410,42 @@ export function autoBackup() {
   }
 }
 
-export function startAutoBackup() {
-  if (_autoBackupTimer) return;
-  autoBackup();
-  _autoBackupTimer = setInterval(autoBackup, AUTOBACKUP_INTERVAL_MS);
-}
-
 export function applyImportedState(rawState) {
   if (!rawState || typeof rawState !== "object") throw new Error("קובץ גיבוי לא תקין.");
+<<<<<<< HEAD
   const candidate = normalizeStateSnapshot(rawState);
   if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule)) {
     throw new Error("גיבוי חסר שדות חובה (rooms/schedule).");
+=======
+  const candidate = rawState.data && typeof rawState.data === "object" ? rawState.data : rawState;
+  if (!Array.isArray(candidate.rooms) || !Array.isArray(candidate.schedule) || !Array.isArray(candidate.staff)) {
+    throw new Error("גיבוי חסר שדות חובה (rooms/schedule/staff).");
+>>>>>>> 4370c0b (cloud-first backup rewrite: auto-sync engine, version history, store.js fixes, UI cleanup)
   }
   state.rooms = candidate.rooms || [];
   state.staff = candidate.staff || [];
   state.schedule = candidate.schedule || [];
-  state.users = candidate.users || [];
-  state.defaultTemplate = candidate.defaultTemplate || [];
-  state.weekTemplates = candidate.weekTemplates || {};
-  state.requests = candidate.requests || [];
-  state.meetings = candidate.meetings || [];
-  state.meetingGroups = candidate.meetingGroups || [];
-  state.issues = candidate.issues || [];
-  state.settings = candidate.settings || state.settings;
-  state.displaySettings = candidate.displaySettings || {};
-  state.weekISO = candidate.weekISO || '';
-  state.activeDay = candidate.activeDay ?? 0;
-  state.auditLog = candidate.auditLog || [];
-  state.loginSecurity = candidate.loginSecurity || { failures: [], lockUntil: 0 };
-  state.passwordResets = candidate.passwordResets || [];
-  state.waitlist = candidate.waitlist || [];
-  state.folders = candidate.folders || [];
-  state.files = candidate.files || [];
+  state.users = Array.isArray(candidate.users) ? candidate.users : [];
+  state.defaultTemplate = Array.isArray(candidate.defaultTemplate) ? candidate.defaultTemplate : [];
+  state.weekTemplates = candidate.weekTemplates && typeof candidate.weekTemplates === "object" ? candidate.weekTemplates : {};
+  state.requests = Array.isArray(candidate.requests) ? candidate.requests : [];
+  state.meetings = Array.isArray(candidate.meetings) ? candidate.meetings : [];
+  state.meetingGroups = Array.isArray(candidate.meetingGroups) ? candidate.meetingGroups : [];
+  state.issues = Array.isArray(candidate.issues) ? candidate.issues : [];
+  state.waitlist = Array.isArray(candidate.waitlist) ? candidate.waitlist : [];
+  state.settings = candidate.settings && typeof candidate.settings === "object" ? candidate.settings : state.settings;
+  state.displaySettings = candidate.displaySettings && typeof candidate.displaySettings === "object" ? candidate.displaySettings : {};
+  state.weekISO = typeof candidate.weekISO === "string" ? candidate.weekISO : "";
+  state.activeDay = typeof candidate.activeDay === "number" ? candidate.activeDay : 0;
+  state.auditLog = Array.isArray(candidate.auditLog) ? candidate.auditLog : [];
+  state.loginSecurity = candidate.loginSecurity && typeof candidate.loginSecurity === "object" ? candidate.loginSecurity : { failures: [], lockUntil: 0 };
+  state.passwordResets = Array.isArray(candidate.passwordResets) ? candidate.passwordResets : [];
+  state.folders = Array.isArray(candidate.folders) ? candidate.folders : [];
+  state.files = Array.isArray(candidate.files) ? candidate.files : [];
   state.selectedTags = candidate.selectedTags ? new Set(candidate.selectedTags) : new Set();
-  state.activeTab = candidate.activeTab || 'dashboardTab';
+  state.activeTab = typeof candidate.activeTab === "string" && candidate.activeTab ? candidate.activeTab : "dashboardTab";
+  recordAudit("state.import", "בוצע ייבוא גיבוי.", "warn", true);
   persistStateImmediate();
-  recordAudit("state.import", "בוצע ייבוא גיבוי — טוען מחדש.", "warn", false);
   window.location.reload();
 }
 
@@ -586,10 +558,11 @@ export async function saveManagedBackup(label = "") {
   } catch (e) {
     if (isQuotaExceededError(e)) {
       try {
-        pruneStoredBackups({ keepManaged: 2, keepAuto: 0 });
-        backups = [backup, ...getManagedBackups().filter(b => b.id !== backup.id)].slice(0, 2);
+        try { localStorage.removeItem(AUTOBACKUP_KEY); } catch {}
+        while (backups.length > 2) backups.pop();
         tryWrite();
-        showToast("פונה מקום — גיבויים אוטומטיים נמחקו.", "info");
+        showToast("פונה מקום — גיבויים ישנים נמחקו.", "info");
+        return backup;
       } catch {
         throw new Error("האחסון המקומי מלא. יש לייצא גיבוי ידני (JSON) ולפנות מקום.");
       }
@@ -614,40 +587,46 @@ export function restoreManagedBackup(backupId) {
   const backups = getManagedBackups();
   const backup = backups.find(b => b.id === backupId);
   if (!backup || !backup.data) throw new Error("גיבוי לא נמצא.");
-  const data = normalizeStateSnapshot(backup.data);
+  const data = backup.data;
   if (!Array.isArray(data.rooms) || !Array.isArray(data.schedule)) {
     throw new Error("גיבוי פגום — חסרים שדות חובה.");
   }
   state.rooms = data.rooms || [];
   state.staff = data.staff || [];
   state.schedule = data.schedule || [];
-  state.users = data.users || [];
-  state.defaultTemplate = data.defaultTemplate || [];
-  state.weekTemplates = data.weekTemplates || {};
-  state.requests = data.requests || [];
-  state.meetings = data.meetings || [];
-  state.meetingGroups = data.meetingGroups || [];
-  state.issues = data.issues || [];
-  state.settings = data.settings || state.settings;
-  state.displaySettings = data.displaySettings || {};
-  state.weekISO = data.weekISO || '';
-  state.activeDay = data.activeDay ?? 0;
-  state.auditLog = data.auditLog || [];
-  state.loginSecurity = data.loginSecurity || { failures: [], lockUntil: 0 };
-  state.passwordResets = data.passwordResets || [];
-  state.waitlist = data.waitlist || [];
-  state.folders = data.folders || [];
-  state.files = data.files || [];
+  state.users = Array.isArray(data.users) ? data.users : [];
+  state.defaultTemplate = Array.isArray(data.defaultTemplate) ? data.defaultTemplate : [];
+  state.weekTemplates = data.weekTemplates && typeof data.weekTemplates === "object" ? data.weekTemplates : {};
+  state.requests = Array.isArray(data.requests) ? data.requests : [];
+  state.meetings = Array.isArray(data.meetings) ? data.meetings : [];
+  state.meetingGroups = Array.isArray(data.meetingGroups) ? data.meetingGroups : [];
+  state.issues = Array.isArray(data.issues) ? data.issues : [];
+  state.waitlist = Array.isArray(data.waitlist) ? data.waitlist : [];
+  state.settings = data.settings && typeof data.settings === "object" ? data.settings : state.settings;
+  state.displaySettings = data.displaySettings && typeof data.displaySettings === "object" ? data.displaySettings : {};
+  state.weekISO = typeof data.weekISO === "string" ? data.weekISO : "";
+  state.activeDay = typeof data.activeDay === "number" ? data.activeDay : 0;
+  state.auditLog = Array.isArray(data.auditLog) ? data.auditLog : [];
+  state.loginSecurity = data.loginSecurity && typeof data.loginSecurity === "object" ? data.loginSecurity : { failures: [], lockUntil: 0 };
+  state.passwordResets = Array.isArray(data.passwordResets) ? data.passwordResets : [];
+  state.folders = Array.isArray(data.folders) ? data.folders : [];
+  state.files = Array.isArray(data.files) ? data.files : [];
   state.selectedTags = data.selectedTags ? new Set(data.selectedTags) : new Set();
-  state.activeTab = data.activeTab || 'dashboardTab';
-  persistStateImmediate();
+  state.activeTab = typeof data.activeTab === "string" && data.activeTab ? data.activeTab : "dashboardTab";
   const restoredCount = (data.schedule || []).length;
-  recordAudit("state.restore", `שוחזר גיבוי: ${backup.label} (${restoredCount} הזמנות).`, "critical", false);
+  recordAudit("state.restore", `שוחזר גיבוי: ${backup.label} (${restoredCount} הזמנות).`, "critical", true);
+  persistStateImmediate();
   return { label: backup.label, entries: restoredCount };
 }
 
 export function deleteManagedBackup(backupId) {
-  let backups = getManagedBackups();
-  backups = backups.filter(b => b.id !== backupId);
-  localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+  try {
+    let backups = getManagedBackups();
+    const existed = backups.some(b => b.id === backupId);
+    backups = backups.filter(b => b.id !== backupId);
+    localStorage.setItem(MANAGED_BACKUPS_KEY, JSON.stringify(backups));
+    if (existed) recordAudit("backup.delete", `גיבוי נמחק: ${backupId}.`, "warn", true);
+  } catch (err) {
+    throw new Error("מחיקת גיבוי נכשלה: " + (err.message || "שגיאה לא ידועה"));
+  }
 }

@@ -3,7 +3,7 @@
    ============================================================ */
 
 import {
-  esc, sanitizeUrl, safeFileDisplayName, localISO,
+  esc, localISO,
   byId
 } from '../core/index.js';
 import { TEAMS } from '../core/constants.js';
@@ -13,7 +13,6 @@ import {
 import { t } from '../core/i18n.js';
 import {
   ensureDefaultGroups,
-  getGroupById,
   getUpcomingMeetings, getPastMeetings,
   dayLabel, recurringRuleLabel,
   getStaffNamesByIds
@@ -362,7 +361,7 @@ export function renderMeetingTimeline() {
   };
 
   const renderCard = (m) => {
-    const [y, mo, d] = (m.date || "").split("-");
+    const [, mo, d] = (m.date || "").split("-");
     const dateStr = d && mo ? `${d}/${mo}` : "";
     const isJoint = (m.groupIds || []).length > 1;
     return `
@@ -383,9 +382,6 @@ export function renderMeetingTimeline() {
   const filteredUpcoming = meetingGroupFilter
     ? upcoming.filter(m => (m.groupIds || []).includes(meetingGroupFilter))
     : upcoming;
-  const filteredPast = meetingGroupFilter
-    ? past.filter(m => (m.groupIds || []).includes(meetingGroupFilter))
-    : past;
 
   let html = '';
 

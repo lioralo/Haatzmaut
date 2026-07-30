@@ -3,8 +3,8 @@
    ============================================================ */
 
 import { state, persistState, recordAudit } from '../core/store.js';
-import { makeId, esc, showToast } from '../core/utils.js';
-import { putFile, getFile, deleteFile, downloadFile } from './db.js';
+import { makeId } from '../core/utils.js';
+import { putFile, deleteFile, downloadFile } from './db.js';
 
 const nowISO = () => new Date().toLocaleString("he-IL");
 

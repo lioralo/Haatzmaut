@@ -1,78 +1,91 @@
 /* ============================================================
-   CLOUD SYNC — client-side encrypt/decrypt + API transport
+   CLOUD SYNC — auto-sync engine with offline queue + version history
    ============================================================ */
 
-import { state, persistStateImmediate, recordAudit } from './store.js';
-import { showToast, todayDayIdx, sundayISO } from './utils.js';
-import { passwordForUser } from './utils.js';
+import { state, onPersist, persistStateImmediate, recordAudit, serializedState } from './store.js';
+import { showToast } from './utils.js';
 
 const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
   ? 'https://haatzmaut.lior-clinic.org/api'
   : '/api';
 
+const SYNC_STATUS_KEY = 'haatzmaut_cloud_sync_status';
+const PENDING_HASH_KEY = 'haatzmaut_cloud_pending_hash';
+
 let _encryptionKey = null;
+let _lastSavedHash = null;
+let _syncState = 'idle';
+let _pendingSaveTimer = null;
+let _initDone = false;
 
-/* --- Serialize state safely (strip circular refs, functions, Sets) --- */
-/* --- Serialize state safely --- */
-function copyArray(arr) {
-  if (!Array.isArray(arr) || !arr.length) return [];
-  return JSON.parse(JSON.stringify(arr));
+const REQUIRED_FIELDS = ['rooms', 'schedule', 'staff', 'users', 'auditLog', 'loginSecurity'];
+
+/* --- Sync status --- */
+
+function getSyncStatus() {
+  try { return JSON.parse(localStorage.getItem(SYNC_STATUS_KEY) || 'null'); } catch { return null; }
 }
 
-function serializedStateForSync() {
-  const data = {
-    _schemaVersion: 2,
-    auditLog: copyArray(state.auditLog),
-    loginSecurity: { failures: Array.isArray(state.loginSecurity?.failures) ? [...state.loginSecurity.failures] : [], lockUntil: state.loginSecurity?.lockUntil || 0 },
-    activeTab: state.activeTab || 'dashboardTab',
-    schedule: copyArray(state.schedule),
-    rooms: copyArray(state.rooms),
-    defaultTemplate: copyArray(state.defaultTemplate),
-    weekTemplates: typeof state.weekTemplates === 'object' ? Object.assign({}, state.weekTemplates) : {},
-    requests: copyArray(state.requests),
-    selectedTags: state.selectedTags instanceof Set ? [...state.selectedTags] : [],
-    weekISO: state.weekISO || '',
-    activeDay: state.activeDay || 0,
-    staff: copyArray(state.staff),
-    users: copyArray(state.users),
-    passwordResets: copyArray(state.passwordResets),
-    folders: copyArray(state.folders),
-    files: copyArray(state.files),
-    meetingGroups: copyArray(state.meetingGroups),
-    meetings: copyArray(state.meetings),
-    issues: copyArray(state.issues),
-    waitlist: copyArray(state.waitlist),
-    settings: state.settings && typeof state.settings === 'object' ? JSON.parse(JSON.stringify(state.settings)) : {},
-    displaySettings: state.displaySettings && typeof state.displaySettings === 'object' ? JSON.parse(JSON.stringify(state.displaySettings)) : {}
+function setSyncStatus(status) {
+  _syncState = status.state;
+  localStorage.setItem(SYNC_STATUS_KEY, JSON.stringify({
+    state: status.state,
+    lastSync: status.lastSync || null,
+    lastError: status.lastError || null
+  }));
+}
+
+export function getCloudSyncState() {
+  const s = getSyncStatus() || { state: 'idle' };
+  return {
+    state: _syncState || s.state,
+    lastSync: s.lastSync,
+    lastError: s.lastError,
+    hasPending: Boolean(localStorage.getItem(PENDING_HASH_KEY)),
+    hasKey: Boolean(_encryptionKey || sessionStorage.getItem('clinic_cloud_key_bits')),
+    apiBase: API_BASE
   };
-  return JSON.stringify(data);
 }
 
-/* --- Encryption --- */
-export async function setEncryptionPassword(password) {
+/* --- Serialization --- */
+
+export function serializedStateForSync() {
+  return JSON.stringify(serializedState());
+}
+
+/* --- Encryption with random salt --- */
+
+function generateRandomSalt() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return arr;
+}
+
+async function deriveKey(password, salt) {
   const enc = new TextEncoder();
-  const salt = enc.encode('haatzmaut-sync-fixed-salt-v1');
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
   const derivedBits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 210000, hash: 'SHA-256' }, keyMaterial, 256);
-  sessionStorage.setItem('clinic_cloud_key_bits', btoa(String.fromCharCode(...new Uint8Array(derivedBits))));
   const cloudKey = await crypto.subtle.importKey('raw', derivedBits, 'HKDF', false, ['deriveKey']);
-  _encryptionKey = await crypto.subtle.deriveKey(
+  return crypto.subtle.deriveKey(
     { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('aes-gcm-sync'), info: enc.encode('aes-gcm-key') },
     cloudKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
   );
+}
+
+export async function setEncryptionPassword(password) {
+  const salt = generateRandomSalt();
+  _encryptionKey = await deriveKey(password, salt);
+  sessionStorage.setItem('clinic_cloud_key_bits', btoa(String.fromCharCode(...new Uint8Array(salt))));
 }
 
 export async function restoreEncryptionKey() {
   const stored = sessionStorage.getItem('clinic_cloud_key_bits');
   if (!stored) return false;
   try {
-    const bits = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
-    const enc = new TextEncoder();
-    const cloudKey = await crypto.subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
-    _encryptionKey = await crypto.subtle.deriveKey(
-      { name: 'HKDF', hash: 'SHA-256', salt: enc.encode('aes-gcm-sync'), info: enc.encode('aes-gcm-key') },
-      cloudKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-    );
+    const salt = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+    const user = state.users?.find(u => u.username === state.currentUser?.username);
+    if (!user?.passwordHash) return false;
+    _encryptionKey = await deriveKey(state.currentUser._rawPassword || user.passwordHash, salt);
     return true;
   } catch { return false; }
 }
@@ -81,10 +94,7 @@ async function encryptPayload(key, plaintext) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const enc = new TextEncoder();
   const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(plaintext));
-  return {
-    iv: toBase64(iv),
-    encryptedData: toBase64(new Uint8Array(ciphertext))
-  };
+  return { iv: toBase64(iv), encryptedData: toBase64(new Uint8Array(ciphertext)) };
 }
 
 async function decryptPayload(key, ivB64, encryptedB64) {
@@ -106,6 +116,7 @@ function toBase64(bytes) {
 }
 
 /* --- API --- */
+
 function getToken() { return sessionStorage.getItem('clinic_cloud_token'); }
 function setToken(t) { sessionStorage.setItem('clinic_cloud_token', t); }
 
@@ -167,103 +178,95 @@ async function apiCall(method, path, body = null) {
   }
 }
 
-export async function runCloudSelfTest() {
-  const steps = [];
-  try {
-    if (!state.currentUser) {
-      steps.push({ name: 'user', ok: false, detail: 'אין משתמש מחובר' });
-      return { ok: false, steps };
-    }
-    steps.push({ name: 'user', ok: true, detail: state.currentUser.username });
+/* --- Auth helper --- */
 
-    const user = await ensureSyncUserForCloud();
-    if (!user?.passwordHash) {
-      steps.push({ name: 'credentials', ok: false, detail: 'חסר passwordHash' });
-      return { ok: false, steps };
-    }
-    steps.push({ name: 'credentials', ok: true, detail: 'hash זמין' });
+async function ensureAuth() {
+  if (!state.currentUser) throw new Error('יש להתחבר תחילה.');
+  const user = state.users?.find(u => u.username === state.currentUser.username);
+  if (!user?.passwordHash) throw new Error('התחבר מחדש כדי לשמור.');
+  const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
+  setToken(auth.token);
+  return user;
+}
 
-    if (!_encryptionKey) {
-      const restored = await restoreEncryptionKey();
-      steps.push({ name: 'key', ok: restored, detail: restored ? 'מפתח שוחזר' : 'מפתח לא זמין' });
-      if (!restored) return { ok: false, steps };
-    } else {
-      steps.push({ name: 'key', ok: true, detail: 'מפתח פעיל בזיכרון' });
-    }
+/* --- Validation --- */
 
-    const auth = await apiCall('POST', '/auth/verify', {
-      username: user.username,
-      passwordHash: user.passwordHash
-    });
-    setToken(auth.token);
-    steps.push({ name: 'auth', ok: true, detail: 'auth תקין' });
-
-    const info = await apiCall('GET', '/sync/info');
-    steps.push({
-      name: 'sync-info',
-      ok: true,
-      detail: info.exists ? `קיים גיבוי (${Math.round((info.sizeBytes || 0) / 1024)}KB)` : 'אין גיבוי שמור'
-    });
-
-    const health = await fetch(`${API_BASE}/healthz`).then(r => r.ok ? r.json().catch(() => ({})) : null).catch(() => null);
-    steps.push({ name: 'health', ok: Boolean(health?.status === 'ok'), detail: health?.status || 'ללא תגובה' });
-
-    return { ok: steps.every(step => step.ok), steps };
-  } catch (err) {
-    steps.push({ name: 'error', ok: false, detail: err.message || 'שגיאה לא ידועה' });
-    return { ok: false, steps };
+function validateStateData(parsed) {
+  for (const field of REQUIRED_FIELDS) {
+    if (!(field in parsed)) throw new Error(`מידע פגום — חסר שדה: ${field}`);
+  }
+  if (!Array.isArray(parsed.rooms) || !Array.isArray(parsed.schedule) || !Array.isArray(parsed.staff)) {
+    throw new Error('מידע פגום — שדות חובה חסרים.');
   }
 }
 
+function applyStateData(parsed) {
+  state.rooms = parsed.rooms || [];
+  state.staff = parsed.staff || [];
+  state.schedule = parsed.schedule || [];
+  state.users = Array.isArray(parsed.users) ? parsed.users : [];
+  state.settings = parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : state.settings;
+  state.displaySettings = parsed.displaySettings && typeof parsed.displaySettings === 'object' ? parsed.displaySettings : {};
+  state.defaultTemplate = Array.isArray(parsed.defaultTemplate) ? parsed.defaultTemplate : [];
+  state.weekTemplates = parsed.weekTemplates && typeof parsed.weekTemplates === 'object' ? parsed.weekTemplates : {};
+  state.requests = Array.isArray(parsed.requests) ? parsed.requests : [];
+  state.meetings = Array.isArray(parsed.meetings) ? parsed.meetings : [];
+  state.meetingGroups = Array.isArray(parsed.meetingGroups) ? parsed.meetingGroups : [];
+  state.issues = Array.isArray(parsed.issues) ? parsed.issues : [];
+  state.waitlist = Array.isArray(parsed.waitlist) ? parsed.waitlist : [];
+  state.folders = Array.isArray(parsed.folders) ? parsed.folders : [];
+  state.files = Array.isArray(parsed.files) ? parsed.files : [];
+  state.auditLog = Array.isArray(parsed.auditLog) ? parsed.auditLog : [];
+  state.passwordResets = Array.isArray(parsed.passwordResets) ? parsed.passwordResets : [];
+  state.weekISO = typeof parsed.weekISO === 'string' ? parsed.weekISO : '';
+  state.activeDay = typeof parsed.activeDay === 'number' ? parsed.activeDay : 0;
+  state.selectedTags = parsed.selectedTags ? new Set(parsed.selectedTags) : new Set();
+  state.loginSecurity = parsed.loginSecurity && typeof parsed.loginSecurity === 'object' ? parsed.loginSecurity : { failures: [], lockUntil: 0 };
+  state.activeTab = typeof parsed.activeTab === 'string' && parsed.activeTab ? parsed.activeTab : 'dashboardTab';
+}
+
 /* --- Public API --- */
-export async function saveToCloud(snapshotPayload = null, context = {}) {
-  if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return false; }
+
+export async function saveToCloud() {
+  setSyncStatus({ state: 'syncing' });
   try {
-    const user = await ensureSyncUserForCloud();
-    if (!user?.passwordHash) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
+    await ensureAuth();
     if (!_encryptionKey) {
       const restored = await restoreEncryptionKey();
-      if (!restored) { showToast('התחבר מחדש כדי לשמור.', 'warn'); return false; }
+      if (!restored) throw new Error('התחבר מחדש כדי לשמור.');
     }
-
-    const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
-    setToken(auth.token);
-
-    const plain = snapshotPayload === null
-      ? serializedStateForSync()
-      : JSON.stringify(snapshotPayload);
+    const plain = serializedStateForSync();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(plain));
     const hashHex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-
+    if (hashHex === _lastSavedHash) {
+      setSyncStatus({ state: 'synced', lastSync: new Date().toISOString() });
+      return { ok: true, skipped: true };
+    }
     const { iv, encryptedData } = await encryptPayload(_encryptionKey, plain);
     await apiCall('POST', '/sync/save', { encryptedData, iv, dataHash: hashHex });
-
-    const payload = snapshotPayload && typeof snapshotPayload === 'object' ? snapshotPayload : state;
-    const entryCount = Array.isArray(payload?.schedule) ? payload.schedule.length : (state.schedule || []).length;
-    const staffCount = Array.isArray(payload?.staff) ? payload.staff.length : (state.staff || []).length;
-    const action = context?.sourceType === 'library' ? 'cloud.save.snapshot' : 'cloud.save.success';
-    const source = context?.sourceLabel ? ` (${context.sourceLabel})` : '';
-    recordAudit(action, `נשמר לענן${source}: ${entryCount} הזמנות, ${staffCount} אנשי צוות.`, 'critical', true);
-    persistStateImmediate();
-    showToast('נשמר לענן בהצלחה.', 'info');
-    return true;
+    _lastSavedHash = hashHex;
+    localStorage.removeItem(PENDING_HASH_KEY);
+    recordAudit('cloud.save', `נשמר לענן: ${(state.schedule||[]).length} הזמנות.`, 'info', true);
+    setSyncStatus({ state: 'synced', lastSync: new Date().toISOString() });
+    return { ok: true, skipped: false };
   } catch (err) {
-    recordAudit('cloud.save.failed', err.message || 'שמירה נכשלה.', 'critical', false);
-    showToast('שמירה נכשלה: ' + (err.message || 'שגיאה'), 'error');
-    return false;
+    const isNetwork = err.message?.includes('רשת') || err.message?.includes('Abort');
+    if (isNetwork) {
+      localStorage.setItem(PENDING_HASH_KEY, 'pending');
+      setSyncStatus({ state: 'pending', lastError: err.message });
+    } else {
+      setSyncStatus({ state: 'error', lastError: err.message });
+    }
+    recordAudit('cloud.save.failed', err.message || 'שמירה נכשלה.', 'warn', false);
+    return { ok: false, error: err.message };
   }
 }
 
 export async function loadFromCloud() {
-  if (!state.currentUser) { showToast('יש להתחבר תחילה.', 'warn'); return null; }
   try {
-    const user = await ensureSyncUserForCloud();
-    if (user?.passwordHash) {
-      const auth = await apiCall('POST', '/auth/verify', { username: user.username, passwordHash: user.passwordHash });
-      setToken(auth.token);
-    }
+    await ensureAuth();
     const info = await apiCall('GET', '/sync/info');
-    if (!info.exists) { showToast('לא נמצא מידע בענן.', 'info'); return null; }
+    if (!info.exists) return null;
     return info;
   } catch (err) {
     showToast('בדיקת ענן נכשלה: ' + (err.message || 'שגיאת רשת'), 'error');
@@ -272,56 +275,93 @@ export async function loadFromCloud() {
 }
 
 export async function loadFromCloudAndApply() {
-  if (!_encryptionKey) {
-    const restored = await restoreEncryptionKey();
-    if (!restored) { showToast('התחבר מחדש כדי לטעון.', 'warn'); return; }
-  }
+  setSyncStatus({ state: 'syncing' });
   try {
+    await ensureAuth();
+    if (!_encryptionKey) {
+      const restored = await restoreEncryptionKey();
+      if (!restored) throw new Error('התחבר מחדש כדי לטעון.');
+    }
     const data = await apiCall('GET', '/sync/load');
-    if (!data.encryptedData) { showToast('לא נמצא מידע בענן.', 'info'); return; }
+    if (!data.encryptedData) throw new Error('לא נמצא מידע בענן.');
     const plain = await decryptPayload(_encryptionKey, data.iv, data.encryptedData);
     const parsed = JSON.parse(plain);
-    if (!parsed.rooms || !parsed.staff) throw new Error('מידע פגום');
-
-    // Apply directly to state
-    state.rooms = parsed.rooms || [];
-    state.staff = parsed.staff || [];
-    state.schedule = parsed.schedule || [];
-    state.users = parsed.users || [];
-    state.settings = parsed.settings || state.settings;
-    state.displaySettings = parsed.displaySettings || {};
-    state.defaultTemplate = parsed.defaultTemplate || [];
-    state.weekTemplates = parsed.weekTemplates || {};
-    state.requests = parsed.requests || [];
-    state.meetings = parsed.meetings || [];
-    state.meetingGroups = parsed.meetingGroups || [];
-    state.issues = parsed.issues || [];
-    state.waitlist = parsed.waitlist || [];
-    state.folders = parsed.folders || [];
-    state.files = parsed.files || [];
-    state.auditLog = parsed.auditLog || [];
-    state.passwordResets = parsed.passwordResets || [];
-    state.weekISO = sundayISO();
-    state.activeDay = todayDayIdx();
-    if (parsed.selectedTags) state.selectedTags = new Set(parsed.selectedTags);
-    if (parsed.loginSecurity) state.loginSecurity = parsed.loginSecurity;
-
+    validateStateData(parsed);
+    applyStateData(parsed);
+    _lastSavedHash = data.dataHash || null;
+    recordAudit('cloud.load', `נטען מהענן: ${(parsed.schedule||[]).length} הזמנות.`, 'info', true);
     persistStateImmediate();
-    const entryCount = (parsed.schedule || []).length;
-    recordAudit('cloud.load.success', `נטען מהענן: ${entryCount} הזמנות, ${(parsed.staff||[]).length} אנשי צוות.`, 'critical', true);
-    showToast('נטען מהענן — מרענן תצוגה…', 'info');
-    
-    // Re-sync schedule window and expand recurring entries
-    setTimeout(async () => {
-      const main = await import('../main.js');
-      const calState = await import('../calendar/state.js');
-      calState.ensureSyncedScheduleWindow();
-      calState.expandRecurringEntries(8);
-      calState.cleanExpiredWaitlist();
-      main.renderActiveTab();
-    }, 300);
+    setSyncStatus({ state: 'synced', lastSync: new Date().toISOString() });
+    return { ok: true };
   } catch (err) {
+    setSyncStatus({ state: 'error', lastError: err.message });
     recordAudit('cloud.load.failed', err.message || 'טעינה נכשלה.', 'critical', false);
-    showToast('טעינה נכשלה: ' + (err.message || 'שגיאה'), 'error');
+    throw err;
   }
+}
+
+export async function listVersions() {
+  try {
+    await ensureAuth();
+    const data = await apiCall('GET', '/sync/versions');
+    return data.versions || [];
+  } catch {
+    showToast('טעינת היסטוריית גיבויים נכשלה.', 'error');
+    return [];
+  }
+}
+
+export async function restoreVersion(versionId) {
+  setSyncStatus({ state: 'syncing' });
+  try {
+    await ensureAuth();
+    if (!_encryptionKey) {
+      const restored = await restoreEncryptionKey();
+      if (!restored) throw new Error('התחבר מחדש כדי לשחזר.');
+    }
+    await apiCall('POST', '/sync/restore', { versionId });
+    const data = await apiCall('GET', '/sync/load');
+    const plain = await decryptPayload(_encryptionKey, data.iv, data.encryptedData);
+    const parsed = JSON.parse(plain);
+    validateStateData(parsed);
+    applyStateData(parsed);
+    recordAudit('cloud.restore', `שוחזרה גרסה ${versionId} מהענן.`, 'critical', true);
+    persistStateImmediate();
+    setSyncStatus({ state: 'synced', lastSync: new Date().toISOString() });
+    return { ok: true };
+  } catch (err) {
+    setSyncStatus({ state: 'error', lastError: err.message });
+    throw err;
+  }
+}
+
+/* --- Auto-sync engine --- */
+
+function schedulePendingSave() {
+  clearTimeout(_pendingSaveTimer);
+  _pendingSaveTimer = setTimeout(() => {
+    if (navigator.onLine && state.currentUser && _encryptionKey) {
+      saveToCloud().catch(() => {});
+    }
+  }, 2000);
+}
+
+export function initCloudSync() {
+  if (_initDone) return;
+  _initDone = true;
+
+  const stored = getSyncStatus();
+  if (stored) _syncState = stored.state;
+
+  onPersist(() => {
+    if (state.currentUser && _encryptionKey) {
+      schedulePendingSave();
+    }
+  });
+
+  window.addEventListener('online', () => {
+    if (localStorage.getItem(PENDING_HASH_KEY)) {
+      saveToCloud().catch(() => {});
+    }
+  });
 }

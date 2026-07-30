@@ -3,42 +3,24 @@
    Bootstraps core store, restores session, initializes all modules.
    ============================================================ */
 
-import { state, isAdmin, persistState, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, startAutoBackup, exportFullBackup, exportEncryptedBackup, saveManagedBackup, getManagedBackups } from './core/store.js';
+import { state, isAdmin, persistStateImmediate, recordAudit, runIntegrityAssistant, loadStoredState, hydrateState } from './core/store.js';
+import { DEV_LOGIN_ENABLED, DEFAULT_ROOMS, DEFAULT_STAFF, DAY_DEFS } from './core/constants.js';
 import {
-  DEV_LOGIN_ENABLED,
-  DEFAULT_ROOMS,
-  DEFAULT_STAFF,
-  DAY_DEFS,
-  APP_BUILD_ID,
-  APP_VERSION_KEY,
-  SESSION_USER_KEY,
-  LEGACY_SESSION_KEY,
-  CLOUD_KEY_BITS_KEY
-} from './core/constants.js';
-import {
-  byId, showToast, generatePassword, passwordForUser, makeId,
-  localISO, minToTime, timeToMin, sundayISO, todayDayIdx, clampDay, esc,
-  enforceMaxLength, normalizeDisplayMessage, normalizeDisplaySettings, activeDisplayMessages,
-  normalizeUser
+  byId, showToast, passwordForUser, makeId,
+  minToTime, timeToMin, sundayISO, todayDayIdx, clampDay, esc
 } from './core/utils.js';
 import {
   restoreSession, registerActivity, applyAccessControl,
-  renderSessionBar, logoutCurrentUser, clearSessionTimer
+  renderSessionBar, logoutCurrentUser
 } from './core/session.js';
-import { t, setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
+import { setLanguage, restoreLanguage, updateAllI18nBindings } from './core/i18n.js';
 import {
-  saveToCloud, loadFromCloud, loadFromCloudAndApply,
-  setEncryptionPassword, restoreEncryptionKey,
-  runCloudSelfTest, getCloudSyncClientState
+  setEncryptionPassword, restoreEncryptionKey, initCloudSync
 } from './core/cloudSync.js';
 
 import {
-  ensureSyncedScheduleWindow, getRoomName, activeDayEntries,
-  normalizeRoom, normalizeStaff, normalizeEntry, normalizeRequest,
-  templateFromEntries, normalizeTemplateEntry,
-  expandRecurringEntries, cleanExpiredWaitlist, deleteRecurringSeries,
-  updateRecurringInstance, addToWaitlist, removeFromWaitlist,
-  getWeeklyOccupancy, getTherapistStats, getNoShowRate, getResolutionTimeAvg
+  ensureSyncedScheduleWindow, getRoomName,
+  expandRecurringEntries, cleanExpiredWaitlist
 } from './calendar/state.js';
 import {
   renderOccupancy, renderDayTabs, renderWeekHeader, renderStats,
@@ -47,20 +29,23 @@ import {
 } from './calendar/render.js';
 import { initCalendarEvents } from './calendar/events.js';
 
-import { DEFAULT_PERMISSIONS } from './staff/state.js';
-import { renderAdminUsers, renderAdminStaff, renderAdminResetRequests, renderStaffDirectory, renderStaffAccordion, renderStaffList } from './staff/render.js';
+import { renderStaffDirectory, renderStaffAccordion, renderStaffList } from './staff/render.js';
 import { initStaffEvents } from './staff/events.js';
 
 import { renderMeetingGroups, renderMeetingTimeline, renderMeetingForm } from './meetings/render.js';
 import { initMeetingsEvents } from './meetings/events.js';
 import { autoMaintainMeetingWindow, normalizeMeeting, normalizeGroup } from './meetings/state.js';
 
-import { ISSUE_TYPES, STATUS_LABELS, normalizeIssue } from './issues/state.js';
+
 import { renderIssuesBoard } from './issues/render.js';
 import { initIssuesEvents } from './issues/events.js';
 
 import { renderResourceBrowser, renderFolderTree } from './resources/render.js';
 import { initResourcesEvents } from './resources/events.js';
+
+import { initAdminSubTabs, initBackupHandlers, initCloudSyncButtons } from './admin/audit.js';
+import { updateNotificationBell, initNotificationCenter } from './ui/notifications.js';
+import { initMobileNav, syncMobileState } from './ui/mobileNav.js';
 
 /* ----------------------------------------------------------
    Shared UI
@@ -78,173 +63,103 @@ function showTab(tabId) {
   sidebarBtn.classList.add("active");
 }
 
-function addNotification(text, critical = false) {
-  if (!state.notifications) state.notifications = [];
-  state.notifications.unshift({
-    id: makeId("note"), text, critical,
-    at: new Date().toLocaleString("he-IL")
-  });
-}
-
 /* ----------------------------------------------------------
    Mode Management
    ---------------------------------------------------------- */
 
+function getModeKey(tabId) {
+  if (tabId === "dashboardTab") return "calendar";
+  if (tabId === "requestsTab") return "requests";
+  if (tabId === "staffTab" || tabId === "adminTab") return "staff";
+  if (tabId === "meetingsTab") return "meetings";
+  if (tabId === "resourcesTab") return "resources";
+  if (tabId === "issuesTab") return "issues";
+  return null;
+}
+
+const MODE_DEFAULTS = {
+  calendar: "schedule", requests: "view", staff: "view",
+  meetings: "view", resources: "browse", issues: "board"
+};
+
+function setTabMode(tabId, mode) {
+  if (tabId === "dashboardTab") {
+    byId("scheduleView")?.classList.toggle("hidden", mode !== "schedule");
+    byId("listView")?.classList.toggle("hidden", mode !== "list");
+    byId("printView")?.classList.toggle("hidden", mode !== "print");
+    byId("statsDashboard")?.classList.toggle("hidden", mode !== "stats");
+    if (mode === "list") renderBookingList();
+    if (mode === "print") window.print();
+    if (mode === "stats") renderStatsDashboard();
+  } else if (tabId === "requestsTab") {
+    byId("requestsViewMode")?.classList.toggle("hidden", mode !== "view");
+    byId("requestsExportMode")?.classList.toggle("hidden", mode !== "export");
+  } else if (tabId === "staffTab" || tabId === "adminTab") {
+    byId("staffViewMode")?.classList.toggle("hidden", mode !== "view");
+    byId("staffListMode")?.classList.toggle("hidden", mode !== "list");
+    byId("staffEditMode")?.classList.toggle("hidden", mode !== "edit");
+    byId("staffExportMode")?.classList.toggle("hidden", mode !== "export");
+    if (mode === "view") renderStaffDirectory();
+    if (mode === "list") renderStaffList();
+    if (mode === "edit") renderStaffAccordion();
+  } else if (tabId === "meetingsTab") {
+    byId("meetingsViewMode")?.classList.toggle("hidden", mode !== "view");
+    byId("meetingsEditMode")?.classList.toggle("hidden", mode !== "edit");
+    byId("meetingsExportMode")?.classList.toggle("hidden", mode !== "export");
+    if (mode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
+  } else if (tabId === "resourcesTab") {
+    byId("resourcesBrowseMode")?.classList.toggle("hidden", mode !== "browse");
+    byId("resourcesUploadMode")?.classList.toggle("hidden", mode !== "upload");
+    byId("resourcesDownloadMode")?.classList.toggle("hidden", mode !== "download");
+  } else if (tabId === "issuesTab") {
+    byId("issuesBoardMode")?.classList.toggle("hidden", mode !== "board");
+    byId("issuesReportMode")?.classList.toggle("hidden", mode !== "report");
+    byId("issuesSummaryMode")?.classList.toggle("hidden", mode !== "summary");
+    if (mode === "summary") renderIssuesSummary();
+  }
+}
+
 function applyTabMode(tabId) {
-  // Ensure modes exist with defaults
   state.modes = state.modes || {};
-  if (!state.modes.calendar) state.modes.calendar = "schedule";
-  if (!state.modes.requests) state.modes.requests = "view";
-  if (!state.modes.staff) state.modes.staff = "view";
-  if (!state.modes.meetings) state.modes.meetings = "view";
-  if (!state.modes.resources) state.modes.resources = "browse";
-  if (!state.modes.issues) state.modes.issues = "board";
+  const modeKey = getModeKey(tabId);
+  if (!modeKey) return;
+
+  if (!state.modes[modeKey]) state.modes[modeKey] = MODE_DEFAULTS[modeKey];
+  const targetMode = state.modes[modeKey];
 
   const toolbar = document.querySelector(`#${tabId} .mode-toolbar`);
-  if (!toolbar) return;
-
-  let modeKey, targetMode;
-  if (tabId === "dashboardTab") {
-    targetMode = state.modes.calendar;
-    modeKey = "calendar";
-  } else if (tabId === "requestsTab") {
-    targetMode = state.modes.requests;
-    modeKey = "requests";
-  } else if (tabId === "staffTab" || tabId === "adminTab") {
-    targetMode = state.modes.staff;
-    modeKey = "staff";
-  } else if (tabId === "meetingsTab") {
-    targetMode = state.modes.meetings;
-    modeKey = "meetings";
-  } else if (tabId === "resourcesTab") {
-    targetMode = state.modes.resources;
-    modeKey = "resources";
-  } else if (tabId === "issuesTab") {
-    targetMode = state.modes.issues;
-    modeKey = "issues";
+  if (toolbar) {
+    toolbar.querySelectorAll(".mode-tab").forEach(b => {
+      b.classList.toggle("active", (b.dataset.mode || b.dataset.calendarMode) === targetMode);
+    });
   }
 
-  if (!targetMode) return;
-
-  toolbar.querySelectorAll(".mode-tab").forEach(b => {
-    b.classList.toggle("active", (b.dataset.mode || b.dataset.calendarMode) === targetMode);
-  });
-
-  if (tabId === "dashboardTab") {
-    byId("scheduleView")?.classList.toggle("hidden", targetMode !== "schedule");
-    byId("listView")?.classList.toggle("hidden", targetMode !== "list");
-    byId("printView")?.classList.toggle("hidden", targetMode !== "print");
-    byId("statsDashboard")?.classList.toggle("hidden", targetMode !== "stats");
-    if (targetMode === "list") renderBookingList();
-    if (targetMode === "print") window.print();
-    if (targetMode === "stats") renderStatsDashboard();
-  } else if (tabId === "requestsTab") {
-    byId("requestsViewMode")?.classList.toggle("hidden", targetMode !== "view");
-    byId("requestsExportMode")?.classList.toggle("hidden", targetMode !== "export");
-  } else if (tabId === "staffTab" || tabId === "adminTab") {
-    byId("staffViewMode")?.classList.toggle("hidden", targetMode !== "view");
-    byId("staffListMode")?.classList.toggle("hidden", targetMode !== "list");
-    byId("staffEditMode")?.classList.toggle("hidden", targetMode !== "edit");
-    byId("staffExportMode")?.classList.toggle("hidden", targetMode !== "export");
-    if (targetMode === "view") { renderStaffDirectory(); }
-    if (targetMode === "list") { renderStaffList(); }
-    if (targetMode === "edit") { renderStaffAccordion(); }
-  } else if (tabId === "meetingsTab") {
-    byId("meetingsViewMode")?.classList.toggle("hidden", targetMode !== "view");
-    byId("meetingsEditMode")?.classList.toggle("hidden", targetMode !== "edit");
-    byId("meetingsExportMode")?.classList.toggle("hidden", targetMode !== "export");
-    if (targetMode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
-    if (targetMode === "edit") { renderMeetingForm(); }
-  } else if (tabId === "resourcesTab") {
-    byId("resourcesBrowseMode")?.classList.toggle("hidden", targetMode !== "browse");
-    byId("resourcesUploadMode")?.classList.toggle("hidden", targetMode !== "upload");
-    byId("resourcesDownloadMode")?.classList.toggle("hidden", targetMode !== "download");
-  } else if (tabId === "issuesTab") {
-    byId("issuesBoardMode")?.classList.toggle("hidden", targetMode !== "board");
-    byId("issuesReportMode")?.classList.toggle("hidden", targetMode !== "report");
-    byId("issuesSummaryMode")?.classList.toggle("hidden", targetMode !== "summary");
-    if (targetMode === "summary") renderIssuesSummary();
-  }
+  setTabMode(tabId, targetMode);
 }
 
 function initModeToolbars() {
   document.querySelectorAll(".mode-tab").forEach(btn => {
     btn.addEventListener("click", () => {
-      const toolbar = btn.closest(".mode-toolbar");
       const tab = btn.closest(".card.tab-content, .tab-content");
       const mode = btn.dataset.mode || btn.dataset.calendarMode;
-      if (!mode) return;
+      if (!mode || !tab?.id) return;
 
-      toolbar.querySelectorAll(".mode-tab").forEach(b => b.classList.remove("active"));
+      const tabId = tab.id;
+      const modeKey = getModeKey(tabId);
+      if (!modeKey) return;
+
+      state.modes = state.modes || {};
+      state.modes[modeKey] = mode;
+
+      const toolbar = btn.closest(".mode-toolbar");
+      if (toolbar) {
+        toolbar.querySelectorAll(".mode-tab").forEach(b => b.classList.remove("active"));
+      }
       btn.classList.add("active");
 
-      const tabId = tab?.id;
-      if (tabId === "dashboardTab") {
-        byId("scheduleView")?.classList.toggle("hidden", mode !== "schedule");
-        byId("listView")?.classList.toggle("hidden", mode !== "list");
-        byId("printView")?.classList.toggle("hidden", mode !== "print");
-        byId("statsDashboard")?.classList.toggle("hidden", mode !== "stats");
-        if (mode === "list") renderBookingList();
-        if (mode === "print") window.print();
-        if (mode === "stats") renderStatsDashboard();
-        state.modes.calendar = mode;
-      } else if (tabId === "requestsTab") {
-        byId("requestsViewMode")?.classList.toggle("hidden", mode !== "view");
-        byId("requestsExportMode")?.classList.toggle("hidden", mode !== "export");
-        state.modes.requests = mode;
-      } else if (tabId === "staffTab") {
-        byId("staffViewMode")?.classList.toggle("hidden", mode !== "view");
-        byId("staffListMode")?.classList.toggle("hidden", mode !== "list");
-        byId("staffEditMode")?.classList.toggle("hidden", mode !== "edit");
-        byId("staffExportMode")?.classList.toggle("hidden", mode !== "export");
-        state.modes.staff = mode;
-        if (mode === "view") { renderStaffDirectory(); }
-        if (mode === "list") { renderStaffList(); }
-        if (mode === "edit") { renderStaffAccordion(); }
-      } else if (tabId === "meetingsTab") {
-        byId("meetingsViewMode")?.classList.toggle("hidden", mode !== "view");
-        byId("meetingsEditMode")?.classList.toggle("hidden", mode !== "edit");
-        byId("meetingsExportMode")?.classList.toggle("hidden", mode !== "export");
-        state.modes.meetings = mode;
-        if (mode === "view") { renderMeetingGroups(); renderMeetingTimeline(); }
-        if (mode === "edit") { renderMeetingForm(); }
-      } else if (tabId === "resourcesTab") {
-        byId("resourcesBrowseMode")?.classList.toggle("hidden", mode !== "browse");
-        byId("resourcesUploadMode")?.classList.toggle("hidden", mode !== "upload");
-        byId("resourcesDownloadMode")?.classList.toggle("hidden", mode !== "download");
-        state.modes.resources = mode;
-      } else if (tabId === "issuesTab") {
-        byId("issuesBoardMode")?.classList.toggle("hidden", mode !== "board");
-        byId("issuesReportMode")?.classList.toggle("hidden", mode !== "report");
-        byId("issuesSummaryMode")?.classList.toggle("hidden", mode !== "summary");
-        state.modes.issues = mode;
-        if (mode === "summary") renderIssuesSummary();
-      }
+      setTabMode(tabId, mode);
     });
   });
-}
-
-/* ----------------------------------------------------------
-   Notifications
-   ---------------------------------------------------------- */
-
-function updateNotificationBell() {
-  const badge = byId("notificationBadge");
-  const bell = byId("notificationBell");
-  if (!badge || !bell) return;
-  const count = state.notifications?.length || 0;
-  badge.textContent = count;
-  badge.classList.toggle("hidden", count === 0);
-  bell.classList.toggle("hidden", !state.currentUser);
-}
-
-function renderNotificationPanel() {
-  const list = byId("notificationList");
-  if (!list) return;
-  const items = state.notifications?.slice(0, 20) || [];
-  list.innerHTML = items.map(n =>
-    `<div class="notif-item${n.critical ? " critical" : ""}">${n.text}<small>${n.at}</small></div>`
-  ).join("") || '<div class="notif-item muted">אין התראות</div>';
 }
 
 /* ----------------------------------------------------------
@@ -496,6 +411,7 @@ function renderActiveTab() {
   applyTabMode(tab);
   updateNotificationBell();
   updateAllI18nBindings();
+  syncMobileState();
 }
 
 /* ----------------------------------------------------------
@@ -507,9 +423,11 @@ async function initialize() {
   restoreLanguage();
   updateLangSwitchButton();
 
-  /* Restore persisted state from localStorage */
-  const stored = loadStoredState();
-  hydrateStoredState(stored);
+  const stored = await loadStoredState();
+  hydrateState(stored);
+
+  if (!state.weekISO) state.weekISO = sundayISO();
+  state.activeDay = todayDayIdx();
   if (!state.rooms || !state.rooms.length) state.rooms = DEFAULT_ROOMS.map(r => ({ ...r }));
   if (!state.staff || !state.staff.length) state.staff = DEFAULT_STAFF.map(s => ({ ...s }));
   if (!state.defaultTemplate || !state.defaultTemplate.length) {
@@ -530,11 +448,7 @@ async function initialize() {
   expandRecurringEntries(8);
   autoMaintainMeetingWindow();
 
-  byId("loginSection")?.classList.remove("hidden");
-  byId("appSection")?.classList.add("hidden");
-  byId("appSection")?.style.setProperty("display", "none");
-
-  startAutoBackup();
+  initCloudSync();
 
   const loggedIn = restoreSession();
   if (loggedIn) {
@@ -655,7 +569,6 @@ function initLogin() {
     const { users } = state;
     const sysUser = Array.isArray(users) ? users.find(x => x.username === u && x.active) : null;
     let role, label, staffId = "", verified = false;
-    let effectiveUser = sysUser;
 
     // Dev auth bypass
     if (DEV_LOGIN_ENABLED) {
@@ -663,7 +576,6 @@ function initLogin() {
       const match = legacy[u];
       if (match && match.pass === p) {
         role = match.role; label = match.label; verified = true;
-        effectiveUser = effectiveUser || { role, staffId: "" };
         recordAudit("auth.login.legacy", `התחברות נתיב פיתוח: ${u}.`, "warn", false);
       }
     }
@@ -777,24 +689,6 @@ document.addEventListener("keydown", e => {
 });
 
 /* ----------------------------------------------------------
-   Notification center events
-   ---------------------------------------------------------- */
-
-byId("notificationBell")?.addEventListener("click", () => {
-  const panel = byId("notificationPanel");
-  panel.classList.toggle("hidden");
-  const expanded = !panel.classList.contains("hidden");
-  byId("notificationBell").setAttribute("aria-expanded", String(expanded));
-  if (!panel.classList.contains("hidden")) renderNotificationPanel();
-});
-
-document.querySelector(".notif-clear")?.addEventListener("click", () => {
-  state.notifications = [];
-  updateNotificationBell();
-  renderNotificationPanel();
-});
-
-/* ----------------------------------------------------------
    Search events
    ---------------------------------------------------------- */
 
@@ -818,6 +712,7 @@ byId("sidebarToggle")?.addEventListener("click", () => {
 });
 
 /* ----------------------------------------------------------
+<<<<<<< HEAD
    Admin sub-tabs
    ---------------------------------------------------------- */
 
@@ -1183,19 +1078,32 @@ function renderAuditLog() {
 /* ----------------------------------------------------------
    Boot
    ---------------------------------------------------------- */
+=======
+    Boot
+    ---------------------------------------------------------- */
+>>>>>>> 4370c0b (cloud-first backup rewrite: auto-sync engine, version history, store.js fixes, UI cleanup)
 
 window.addEventListener("beforeunload", persistStateImmediate);
 
 initNavigation();
 initLogin();
 await initialize();
+<<<<<<< HEAD
 initMobileNav();
 registerServiceWorker();
+=======
+initNotificationCenter();
+initMobileNav({ showTab, renderActiveTab, switchLang });
+initCloudSyncButtons();
 
-/* ----------------------------------------------------------
-   Mobile bottom navigation
-   ---------------------------------------------------------- */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+>>>>>>> 4370c0b (cloud-first backup rewrite: auto-sync engine, version history, store.js fixes, UI cleanup)
 
+export { showTab, renderActiveTab, renderBookingList };
+
+<<<<<<< HEAD
 function initMobileNav() {
   const mobileNav = byId("mobileNav");
   const moreBtn = byId("mobileMoreBtn");
@@ -1398,3 +1306,5 @@ byId("cloudLoadBtn")?.addEventListener("click", async () => {
 });
 
 export { showTab, renderActiveTab, addNotification, renderBookingList, renderIssuesSummary, updateNotificationBell };
+=======
+>>>>>>> 4370c0b (cloud-first backup rewrite: auto-sync engine, version history, store.js fixes, UI cleanup)

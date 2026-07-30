@@ -1,8 +1,6 @@
-const STORAGE_KEY = "haatzmaut_v6";
-const DISPLAY_PAGE_VERSION = "20260610f";
-const WORK_START = 8 * 60;
-const WORK_END = 20 * 60;
-const SLOT_MIN = 30;
+import { STORAGE_KEY, WORK_START, WORK_END, SLOT_MIN } from './src/core/constants.js';
+import { byId, localISO, sundayISO, timeToMin, minToTime, esc } from './src/core/utils.js';
+
 const DEFAULT_SETTINGS = {
   switchSeconds: 30,
   hoursBefore: 1,
@@ -20,49 +18,12 @@ let refreshIntervalId = null;
 let messageScrollIntervalId = null;
 let settingsSignature = "";
 
-function byId(id) {
-  return document.getElementById(id);
-}
-
-function pad2(n) {
-  return String(n).padStart(2, "0");
-}
-
-function localISO(date) {
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-}
-
-function sundayISO(date = new Date()) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - d.getDay());
-  return localISO(d);
-}
-
-function timeToMin(t) {
-  const [h, m] = String(t || "00:00").split(":").map(Number);
-  return (h * 60) + (m || 0);
-}
-
-function minToTime(m) {
-  const n = ((m % 1440) + 1440) % 1440;
-  return `${pad2(Math.floor(n / 60))}:${pad2(n % 60)}`;
-}
-
 function floorToSlot(min) {
   return Math.floor(min / SLOT_MIN) * SLOT_MIN;
 }
 
 function ceilToSlot(min) {
   return Math.ceil(min / SLOT_MIN) * SLOT_MIN;
-}
-
-function esc(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function loadState() {
@@ -103,7 +64,7 @@ function activeMessages(state) {
     displaySettings.messages = active;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
   return active;
 }

@@ -27,12 +27,25 @@ db.exec(`
     FOREIGN KEY (username) REFERENCES users(username)
   );
 
+  CREATE TABLE IF NOT EXISTS sync_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    encrypted_data TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    data_hash TEXT NOT NULL,
+    size_bytes INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (username) REFERENCES users(username)
+  );
+
   CREATE TABLE IF NOT EXISTS sync_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     username TEXT NOT NULL,
     action TEXT NOT NULL,
     timestamp TEXT DEFAULT (datetime('now'))
   );
+
+  CREATE INDEX IF NOT EXISTS idx_sync_versions_username ON sync_versions(username);
 `);
 
 const app = express();
@@ -119,7 +132,7 @@ app.post('/api/sync/save', requireAuth, (req, res) => {
   const hash = dataHash || '';
   const size = Buffer.byteLength(encryptedData, 'utf8');
 
-  db.prepare(`
+  const insertSync = db.prepare(`
     INSERT INTO sync_data (username, encrypted_data, iv, data_hash, size_bytes, updated_at)
     VALUES (?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(username) DO UPDATE SET
@@ -128,7 +141,25 @@ app.post('/api/sync/save', requireAuth, (req, res) => {
       data_hash = excluded.data_hash,
       size_bytes = excluded.size_bytes,
       updated_at = excluded.updated_at
-  `).run(req.username, encryptedData, iv, hash, size);
+  `);
+
+  const insertVersion = db.prepare(`
+    INSERT INTO sync_versions (username, encrypted_data, iv, data_hash, size_bytes)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+
+  const pruneVersions = db.prepare(`
+    DELETE FROM sync_versions WHERE username = ? AND id NOT IN (
+      SELECT id FROM sync_versions WHERE username = ? ORDER BY id DESC LIMIT 10
+    )
+  `);
+
+  const tx = db.transaction(() => {
+    insertSync.run(req.username, encryptedData, iv, hash, size);
+    insertVersion.run(req.username, encryptedData, iv, hash, size);
+    pruneVersions.run(req.username, req.username);
+  });
+  tx();
 
   db.prepare('INSERT INTO sync_log (username, action) VALUES (?, ?)').run(req.username, 'save');
   res.json({ ok: true, size, timestamp: new Date().toISOString() });
@@ -145,6 +176,38 @@ app.get('/api/sync/load', requireAuth, (req, res) => {
     updatedAt: row.updated_at,
     sizeBytes: row.size_bytes
   });
+});
+
+app.get('/api/sync/versions', requireAuth, (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, size_bytes, created_at FROM sync_versions WHERE username = ? ORDER BY id DESC LIMIT 10'
+  ).all(req.username);
+  const versions = rows.map(r => ({ id: r.id, sizeBytes: r.size_bytes, timestamp: r.created_at }));
+  res.json({ versions });
+});
+
+app.post('/api/sync/restore', requireAuth, (req, res) => {
+  const { versionId } = req.body || {};
+  if (!versionId) return res.status(400).json({ error: 'missing versionId' });
+
+  const version = db.prepare(
+    'SELECT encrypted_data, iv, data_hash, size_bytes FROM sync_versions WHERE id = ? AND username = ?'
+  ).get(versionId, req.username);
+  if (!version) return res.status(404).json({ error: 'version not found' });
+
+  db.prepare(`
+    INSERT INTO sync_data (username, encrypted_data, iv, data_hash, size_bytes, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(username) DO UPDATE SET
+      encrypted_data = excluded.encrypted_data,
+      iv = excluded.iv,
+      data_hash = excluded.data_hash,
+      size_bytes = excluded.size_bytes,
+      updated_at = excluded.updated_at
+  `).run(req.username, version.encrypted_data, version.iv, version.data_hash, version.size_bytes);
+
+  db.prepare('INSERT INTO sync_log (username, action) VALUES (?, ?)').run(req.username, 'restore');
+  res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

@@ -21,7 +21,6 @@ import {
 } from './store.js';
 
 import {
-  byId,
   normalizeUsernameInput,
   verifyPassword,
   migrateUserPassword,

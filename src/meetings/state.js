@@ -3,7 +3,7 @@
    ============================================================ */
 
 import { state, persistState, persistStateImmediate, recordAudit } from '../core/store.js';
-import { DAY_DEFS, TEAMS } from '../core/constants.js';
+import { DAY_DEFS } from '../core/constants.js';
 import {
   makeId, localISO, showToast,
   parseCsvRows, ensureUploadAllowed, confirmImportPreview,
@@ -374,12 +374,16 @@ export function expandRecurringMeetings(weeksAhead = 12) {
       } else if (parent.recurringRule === "biweekly") {
         currentDate = new Date(currentDate.getTime() + 14 * 86400000);
       } else if (parent.recurringRule === "monthly-first") {
-        currentDate = new Date(currentDate);
+        const targetDay = new Date(parent.date).getDay();
         currentDate.setMonth(currentDate.getMonth() + 1);
         currentDate.setDate(1);
-        while (currentDate.getDay() !== parent.date ? new Date(parent.date).getDay() : 0) {
+        while (currentDate.getDay() !== targetDay) {
           currentDate.setDate(currentDate.getDate() + 1);
         }
+      } else if (parent.recurringRule === "monthly-nth") {
+        const dayOfMonth = baseDate.getDate();
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        currentDate.setDate(dayOfMonth);
       } else {
         break;
       }

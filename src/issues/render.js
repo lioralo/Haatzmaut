@@ -7,18 +7,13 @@ import {
   isAdmin,
   getStaffById
 } from '../core/store.js';
-import { getRoomById, getRoomName } from '../calendar/state.js';
-import { byId, esc, safeRender, showToast } from '../core/utils.js';
+import { getRoomName } from '../calendar/state.js';
+import { byId, esc, safeRender } from '../core/utils.js';
 import {
   ISSUE_TYPES,
   STATUS_LABELS,
   PRIORITY_LABELS,
-  VALID_TRANSITIONS,
-  normalizeIssue,
-  createIssue,
-  updateIssueStatus,
-  addComment,
-  assignIssue
+  VALID_TRANSITIONS
 } from './state.js';
 
 /* ============================================================
@@ -44,19 +39,6 @@ export function setExpanded(id) {
 /* ============================================================
    HELPERS
    ============================================================ */
-
-function priorityColor(priority) {
-  return {
-    low: "prio-grey",
-    medium: "prio-blue",
-    high: "prio-orange",
-    critical: "prio-red"
-  }[priority] || "prio-blue";
-}
-
-function statusClass(status) {
-  return `status-${status}`;
-}
 
 function filteredIssues() {
   const currentStaffId = state.currentUser?.staffId || "";

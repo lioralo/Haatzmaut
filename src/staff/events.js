@@ -1,42 +1,28 @@
 import {
   byId,
-  makeId,
   esc,
-  generatePassword,
-  passwordForUser,
-  normalizeUser,
-  enforceMaxLength,
   normalizeUsernameInput,
   showToast,
-  validatePhoneIL,
-  formatPhoneForDisplay
+  validatePhoneIL
 } from '../core/index.js';
 import {
   state,
   isAdmin,
-  persistState,
-  recordAudit
+  persistState
 } from '../core/index.js';
+import { addNotification } from '../ui/notifications.js';
 import {
-  normalizeStaff,
   createStaff,
   updateStaff,
   deleteStaff,
   createUser,
-  toggleUserActive,
-  resetUserPassword,
-  requestPasswordReset,
-  resolvePasswordReset,
-  dismissPasswordReset,
-  DEFAULT_PERMISSIONS
+  requestPasswordReset
 } from './state.js';
 import {
   renderAdminUsers,
   renderAdminStaff,
-  renderAdminResetRequests,
-  showNewPassword,
-  renderStaffProfile,
-  renderPermissionMatrix
+  renderStaffDirectory,
+  showNewPassword
 } from './render.js';
 
 export function initStaffEvents() {
@@ -123,7 +109,11 @@ export function initStaffEvents() {
       phone:    byId("adminStaffPhone").value,
       email:    byId("adminStaffEmail").value,
       role:     byId("adminStaffRole").value,
-      team:     byId("adminStaffTeam").value
+      team:     byId("adminStaffTeam").value,
+      color:    byId("adminStaffColor")?.value || "#0072BC",
+      maxSessionsPerDay: Math.max(1, Number(byId("adminStaffMaxSessions")?.value || 8)),
+      workStart: byId("adminStaffWorkStart")?.value || "08:00",
+      workEnd:   byId("adminStaffWorkEnd")?.value   || "20:00"
     };
 
     const phoneValidation = validatePhoneIL(formData.phone);
@@ -184,11 +174,6 @@ export function initStaffEvents() {
   });
 }
 
-function addNotification(text, critical = false) {
-  state.notifications.unshift({ id: makeId("note"), text, critical, at: new Date().toLocaleString("he-IL") });
-  persistState();
-}
-
 function repopulateSelects() {
   const userStaffSel = byId("adminUserStaff");
   if (userStaffSel) {
@@ -196,4 +181,47 @@ function repopulateSelects() {
     userStaffSel.innerHTML = `<option value="">ללא שיוך</option>${state.staff.map(p => `<option value="${p.id}">${esc(p.fullName)}</option>`).join("")}`;
     if (state.staff.some(s => s.id === cur)) userStaffSel.value = cur;
   }
+}
+
+export function editStaff(staffId) {
+  const person = state.staff.find(p => p.id === staffId);
+  if (!person) return;
+  const staffIdEl = byId("adminStaffId");
+  const nameEl = byId("adminStaffName");
+  const phoneEl = byId("adminStaffPhone");
+  const emailEl = byId("adminStaffEmail");
+  const roleEl = byId("adminStaffRole");
+  const teamEl = byId("adminStaffTeam");
+  const colorEl = byId("adminStaffColor");
+  const maxEl = byId("adminStaffMaxSessions");
+  const startEl = byId("adminStaffWorkStart");
+  const endEl = byId("adminStaffWorkEnd");
+  const saveBtn = byId("adminStaffSaveBtn");
+  const clearBtn = byId("adminStaffClearBtn");
+
+  if (staffIdEl) staffIdEl.value = person.id;
+  if (nameEl) nameEl.value = person.fullName;
+  if (phoneEl) phoneEl.value = person.phone || "";
+  if (emailEl) emailEl.value = person.email || "";
+  if (roleEl) roleEl.value = person.role || "";
+  if (teamEl) teamEl.value = person.team || "";
+  if (colorEl) colorEl.value = person.color || "#0072BC";
+  if (maxEl) maxEl.value = person.maxSessionsPerDay || 8;
+  if (startEl) startEl.value = person.workStart || "08:00";
+  if (endEl) endEl.value = person.workEnd || "20:00";
+  if (saveBtn) saveBtn.textContent = "עדכון איש צוות";
+  if (clearBtn) clearBtn.classList.remove("hidden");
+  nameEl?.focus();
+}
+
+export function deleteStaffById(staffId) {
+  const person = state.staff.find(p => p.id === staffId);
+  if (!person) return;
+  if (!confirm(`למחוק את ${person.fullName}?`)) return;
+  deleteStaff(staffId);
+  renderAdminStaff();
+  renderStaffDirectory();
+  renderAdminUsers();
+  repopulateSelects();
+  addNotification(`${person.fullName} הוסר/ה.`);
 }

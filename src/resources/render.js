@@ -2,24 +2,15 @@
    RESOURCES RENDER - file browser & folder tree views
    ============================================================ */
 
-import { esc, byId, showToast, safeRender, isAdmin, state } from '../core/index.js';
+import { esc, byId, isAdmin, state } from '../core/index.js';
 import {
   getChildFolders, getFilesInFolder, getFolderPath, getFileTree
 } from './state.js';
-import { downloadFile as downloadFileFromDB } from './db.js';
 
 export let _currentFolderId = null;
-let _searchQuery = "";
 
 export function setCurrentFolderId(id) {
   _currentFolderId = id || null;
-}
-
-function formatSize(bytes) {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function fileIcon(type) {
@@ -202,7 +193,6 @@ export function hideUploadProgress() {
 }
 
 export function setSearchQuery(q) {
-  _searchQuery = q;
 }
 
 export function getCurrentFolderId() {

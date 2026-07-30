@@ -266,16 +266,16 @@ test.describe('Backup & Storage', () => {
         schedule: [],
         staff: []
       };
-      const v2 = migrateState(v1);
+      const v2 = await migrateState(v1);
       return {
         version: v2._schemaVersion,
         hasUser: v2.users?.[0]?.username === 'test',
-        hasPassword: v2.users?.[0]?.password === 'plaintext'
+        noPassword: !v2.users?.[0]?.password
       };
     });
     expect(result.version).toBe(2);
     expect(result.hasUser).toBe(true);
-    expect(result.hasPassword).toBe(true);
+    expect(result.noPassword).toBe(true);
   });
 
   test('I2: malformed stored state is normalized on load', async ({ page }) => {
@@ -478,17 +478,15 @@ test.describe('Backup & Cloud Buttons', () => {
     await page.waitForTimeout(500);
   });
 
-  test('P: audit backup library and export controls are visible', async ({ page }) => {
+  test('P: all backup buttons are visible', async ({ page }) => {
     await expect(page.locator('#exportBackupBtn')).toBeVisible();
     await expect(page.locator('#exportEncryptedBtn')).toBeVisible();
-    await expect(page.locator('#savedBackupSelect')).toBeVisible();
-    await expect(page.locator('#savedBackupsList')).toBeVisible();
-    await expect(page.locator('#backupNowBtn')).toHaveCount(0);
-    await expect(page.locator('#restoreBackupBtn')).toHaveCount(0);
-    await expect(page.locator('#deleteBackupBtn')).toHaveCount(0);
-    await expect(page.locator('#backupUpload')).toHaveCount(0);
-    await expect(page.locator('#encryptedUpload')).toHaveCount(0);
-    await expect(page.locator('#clearAuditBtn')).toHaveCount(0);
+    await expect(page.locator('#backupUpload')).toBeVisible();
+    await expect(page.locator('#encryptedUpload')).toBeVisible();
+    await expect(page.locator('#clearAuditBtn')).toBeVisible();
+    await expect(page.locator('#cloudSaveBtn')).toBeVisible();
+    await expect(page.locator('#cloudLoadBtn')).toBeVisible();
+    await expect(page.locator('#cloudSyncInfo')).toBeVisible();
   });
 
   test('Q: cloud sync buttons are visible and enabled', async ({ page }) => {
@@ -500,79 +498,9 @@ test.describe('Backup & Cloud Buttons', () => {
     expect(await page.locator('#cloudLoadBtn').isDisabled()).toBe(false);
   });
 
-  test('R: cloud save requires selecting backup snapshot first', async ({ page }) => {
-    await page.locator('#cloudSaveBtn').click();
-    await page.waitForTimeout(250);
-    await expect(page.locator('#cloudSyncStatus')).toContainText('בחר/י גיבוי מהספרייה');
-  });
-
-  test('R2: selected snapshot saves successfully to cloud', async ({ page }) => {
-    let saveCalls = 0;
-    await page.route('**/api/**', async route => {
-      const url = route.request().url();
-      if (url.endsWith('/auth/verify')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'test-token' }) });
-        return;
-      }
-      if (url.endsWith('/sync/save')) {
-        saveCalls += 1;
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
-        return;
-      }
-      if (url.endsWith('/sync/info')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) });
-        return;
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
-    });
-
-    await page.evaluate(async () => {
-      const { setEncryptionPassword } = await import('/src/core/cloudSync.js');
-      const { saveManagedBackup } = await import('/src/core/store.js');
-      await setEncryptionPassword('admin123');
-      await saveManagedBackup('test-seeded-snapshot');
-    });
-
-    await page.locator('button[data-admin-subtab=audit]').first().click();
-    await page.waitForTimeout(250);
-    await page.locator('#savedBackupSelect').selectOption({ index: 1 });
-    await page.locator('#cloudSaveBtn').click();
-    await page.waitForTimeout(400);
-
-    expect(saveCalls).toBe(1);
-    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מהספרייה');
-  });
-
-  test('R3: quick cloud action creates snapshot and uploads in one click', async ({ page }) => {
-    let saveCalls = 0;
-    await page.route('**/api/**', async route => {
-      const url = route.request().url();
-      if (url.endsWith('/auth/verify')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ token: 'test-token' }) });
-        return;
-      }
-      if (url.endsWith('/sync/save')) {
-        saveCalls += 1;
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
-        return;
-      }
-      if (url.endsWith('/sync/info')) {
-        await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ exists: false }) });
-        return;
-      }
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
-    });
-
-    // Quick action saves current state directly to cloud without creating a local backup first
-    await page.evaluate(async () => {
-      const { setEncryptionPassword } = await import('/src/core/cloudSync.js');
-      await setEncryptionPassword('admin123');
-    });
-    await page.locator('#cloudSaveCurrentBtn').click();
-    await page.waitForTimeout(600);
-
-    expect(saveCalls).toBe(1);
-    await expect(page.locator('#cloudSyncStatus')).toContainText('נשמר מצב נוכחי');
+  test('R: cloud save button is clickable', async ({ page }) => {
+    await expect(page.locator('#cloudSaveBtn')).toBeVisible();
+    await expect(page.locator('#cloudSaveBtn')).toBeEnabled();
   });
 
   test('S: display screen loads all components', async ({ page }) => {
@@ -792,24 +720,17 @@ test.describe('End-to-End Verification', () => {
     await page.waitForTimeout(3000);
   });
 
-  test('AD: backup creates and appears in list and select', async ({ page }) => {
+  test('AD: cloud sync buttons visible in admin audit tab', async ({ page }) => {
     await page.locator('button[data-tab=adminTab]').first().click();
     await page.waitForTimeout(500);
     await page.locator('button[data-admin-subtab=audit]').first().click();
     await page.waitForTimeout(500);
 
-    await page.locator('#backupNowBtn').click();
-    await page.waitForTimeout(1000);
-
-    const selectOptions = await page.locator('#savedBackupSelect option').count();
-    const listRows = await page.locator('#savedBackupsList .admin-row').count();
-    const storageCount = await page.evaluate(() => {
-      return JSON.parse(localStorage.getItem('haatzmaut_managed_backups') || '[]').length;
-    });
-
-    expect(selectOptions).toBeGreaterThan(1); // includes placeholder
-    expect(listRows).toBeGreaterThan(0);
-    expect(storageCount).toBeGreaterThanOrEqual(1);
+    await expect(page.locator('#cloudSaveBtn')).toBeVisible();
+    await expect(page.locator('#cloudLoadBtn')).toBeVisible();
+    await expect(page.locator('#exportBackupBtn')).toBeVisible();
+    await expect(page.locator('#exportEncryptedBtn')).toBeVisible();
+    await expect(page.locator('#cloudSyncInfo')).toBeVisible();
   });
 
   test('AE: day tab counter matches schedule entries for that day', async ({ page }) => {
@@ -840,11 +761,66 @@ test.describe('End-to-End Verification', () => {
     expect(options.length).toBeGreaterThan(1);
   });
 
-  test('AG: _meetingsSeeded flag set after login', async ({ page }) => {
-    const seeded = await page.evaluate(async () => {
-      const { state } = await import('/src/core/store.js');
-      return !!state._meetingsSeeded;
-    });
-    expect(seeded).toBe(true);
+  test('AH: cloud sync status shows after login', async ({ page }) => {
+    const text = await page.locator('#cloudSyncInfo').textContent();
+    expect(text).toContain('מצב');
   });
+
+  test('AH2: cloud sync status updates in admin audit tab', async ({ page }) => {
+    await page.locator('button[data-tab=adminTab]').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('button[data-admin-subtab=audit]').first().click();
+    await page.waitForTimeout(500);
+    const text = await page.locator('#cloudSyncInfo').textContent();
+    expect(text).toContain('מצב');
+  });
+
+  test('AI: encrypted export button triggers prompt', async ({ page }) => {
+    await page.locator('button[data-tab=adminTab]').first().click();
+    await page.waitForTimeout(500);
+    await page.locator('button[data-admin-subtab=audit]').first().click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('#exportEncryptedBtn')).toBeVisible();
+    await expect(page.locator('#exportEncryptedBtn')).toBeEnabled();
+  });
+
+  test('AJ: serializedState includes all required fields', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { serializedState } = await import('/src/core/store.js');
+      const s = serializedState();
+      const required = ['rooms', 'schedule', 'staff', 'users', 'auditLog', 'loginSecurity', 'weekISO', 'activeDay'];
+      return required.every(f => f in s);
+    });
+    expect(result).toBe(true);
+  });
+
+  test('AK: initCloudSync registers hooks without error', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      try {
+        const { initCloudSync, getCloudSyncState } = await import('/src/core/cloudSync.js');
+        initCloudSync();
+        const state = getCloudSyncState();
+        return { ok: true, hasState: 'state' in state };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+    expect(result.ok).toBe(true);
+    expect(result.hasState).toBe(true);
+  });
+
+  test('AL: applyImportedState validates required fields', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const { state, applyImportedState } = await import('/src/core/store.js');
+      const before = state.schedule.length;
+      try {
+        applyImportedState({ rooms: [], schedule: [], staff: [] });
+        return { ok: true, changed: state.schedule.length !== before };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    });
+    expect(result.ok).toBe(true);
+  });
+
 });

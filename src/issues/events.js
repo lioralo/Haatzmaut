@@ -4,12 +4,10 @@
 
 import {
   state,
-  isAdmin,
-  persistState,
-  recordAudit
+  persistState
 } from '../core/store.js';
 import { getRoomName } from '../calendar/state.js';
-import { byId, esc, showToast, enforceMaxLength } from '../core/utils.js';
+import { byId, showToast, enforceMaxLength } from '../core/utils.js';
 import {
   createIssue,
   updateIssueStatus,
@@ -19,7 +17,6 @@ import {
 } from './state.js';
 import {
   renderIssuesBoard,
-  renderIssueDetail,
   renderIssueForm,
   setFilter,
   setExpanded

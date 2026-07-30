@@ -1,14 +1,8 @@
 import {
   WORK_START,
-  WORK_END,
   SLOT_MIN,
-  SLOT_COUNT,
-  TEAMS,
   DAY_DEFS,
-  MAX_UPLOAD_SIZE,
-  AUDIT_LOG_MAX,
-  DEFAULT_ROOMS,
-  DEV_LOGIN_ENABLED
+  MAX_UPLOAD_SIZE
 } from './constants.js';
 
 export const byId = id => document.getElementById(id);
